@@ -21,6 +21,8 @@ def clean_text(value: str | None) -> str:
         return ""
     value = html.unescape(str(value))
     value = _ZERO_WIDTH_RE.sub("", value).replace("\xa0", " ")
+    # Some CMSes leak escaped punctuation ("campaign\\, a community...").
+    value = value.replace("\\,", ",").replace("\\;", ";")
     return _WS_RE.sub(" ", value).strip()
 
 

@@ -112,11 +112,14 @@ def test_story_text_from_embedded_page_state():
     }
     import json
 
+    # Like KUAM's, the blob is a JavaScript literal with a non-JSON escape ("\\!").
+    state = json.dumps(model).replace('"padding"', '"head": "<\\!-- gtm -->", "padding"')
+    assert "\\!" in state
     html = f"""<html><head><meta property="og:type" content="article">
     <meta property="og:title" content="Guam hosting TB conference - KUAM">
     <meta property="og:description" content="Guam hosting TB conference"></head>
     <body><main><h1>Guam hosting TB conference</h1></main>
-    <script>window.__PAGE_MODEL__ = {json.dumps(model)};</script></body></html>"""
+    <script>window.__PAGE_MODEL__ = {state};</script></body></html>"""
     data = extract_article(html.encode(), "https://www.kuam.com/story/1/tb", source_name="KUAM")
     assert data.title == "Guam hosting TB conference"
     assert data.intro.startswith("Guam will host the 2026 Tuberculosis Controllers")

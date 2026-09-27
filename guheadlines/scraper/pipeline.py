@@ -191,6 +191,16 @@ class Scraper:
             result.candidates = len(candidates)
             with session_scope() as session:
                 fresh = self.filter_new(session, candidates)
+            # Cheap decisions from feed data first, so they do not use up the cap.
+            kept = []
+            for candidate in fresh:
+                try:
+                    self.prefilter(source, candidate)
+                    kept.append(candidate)
+                except Skip as skip:
+                    self._remember(source_id, candidate.key, skip.status, skip.reason)
+                    result.rejected += 1
+            fresh = kept
             limit = self.settings.max_new_per_source
             capped = len(fresh) > limit
             for done, candidate in enumerate(fresh[:limit]):
@@ -400,9 +410,8 @@ class Scraper:
 
     # ------------------------------------------------------------ processing
 
-    def build_draft(self, source: SourceConfig, source_id: int | None, cand: Candidate) -> Draft:
-        """Fetch and extract one article. Raises Skip when it should not be stored."""
-        # Decide from the feed alone when possible, to avoid fetching the page.
+    def prefilter(self, source: SourceConfig, cand: Candidate) -> None:
+        """Reject from feed data alone, without fetching the page. Raises Skip."""
         excluded = source.excluded_section(*cand.tags)
         if excluded:
             raise Skip("rejected", f"excluded section: {excluded}")
@@ -416,6 +425,9 @@ class Scraper:
         ):
             raise Skip("rejected", "not about Guam")
 
+    def build_draft(self, source: SourceConfig, source_id: int | None, cand: Candidate) -> Draft:
+        """Fetch and extract one article. Raises Skip when it should not be stored."""
+        self.prefilter(source, cand)
         page: FetchResult | None = None
         data = None
         try:

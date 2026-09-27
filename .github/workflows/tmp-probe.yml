@@ -13,7 +13,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install httpx beautifulsoup4 lxml
+      - uses: actions/checkout@v4
+      - run: pip install -r requirements.txt && pip install -e .
       - name: Structure of KUAM's __PAGE_MODEL__
         run: |
           python - <<'PY'
@@ -29,12 +30,9 @@ jobs:
                   continue
               raw = t[m.end():].lstrip()
               print("starts:", raw[:80])
-              try:
-                  data, end = json.JSONDecoder().raw_decode(raw)
-                  print("decoded OK, rest:", raw[end:end+40])
-              except ValueError as e:
-                  print("DECODE ERROR", e, raw[max(0, e.pos-80):e.pos+80])
-                  continue
+              from guheadlines.scraper.extract import _decode_js_object, extract_article
+              data = _decode_js_object(raw)
+              print("INTRO:", extract_article(html.encode(), url).intro)
               def walk(n, path):
                   if isinstance(n, dict):
                       for k, v in n.items(): walk(v, f"{path}.{k}")

@@ -67,7 +67,8 @@ _JUNK_PARAGRAPH_RE = re.compile(
     r"listen (to|live)|watch (the|live|below)|this (story|article) (was|has been|is)|"
     r"story continues|continue reading|for more (news|information)|email:|tel:|phone:|"
     r"you (must|need to) be logged in|to continue reading|already a subscriber|"
-    r"support local journalism|get (unlimited|full) access)",
+    r"support local journalism|get (unlimited|full) access|for immediate release|"
+    r"press release\b|media contact)",
     re.IGNORECASE,
 )
 _BAD_IMAGE_RE = re.compile(
@@ -257,9 +258,29 @@ def _json_strings(node, out: list[str], limit: int = 5000) -> None:
             _json_strings(value, out, limit)
 
 
+_JS_ESCAPE_RE = re.compile(r"\\\\|\\(.)", re.S)
+
+
+def _decode_js_object(text: str):
+    """Decode the JSON value at the start of text. JavaScript allows escapes that
+    JSON does not (e.g. "\\!"), so retry once with those backslashes dropped."""
+    decoder = json.JSONDecoder()
+    try:
+        return decoder.raw_decode(text)[0]
+    except ValueError:
+        pass
+
+    def fix(match: re.Match) -> str:
+        char = match.group(1)
+        if char is None or char in '"\\/bfnrtu':
+            return match.group(0)
+        return char
+
+    return decoder.raw_decode(_JS_ESCAPE_RE.sub(fix, text))[0]
+
+
 def _paragraphs_from_embedded_json(soup: BeautifulSoup) -> list[str]:
     """Story paragraphs from JSON page state (window.__PAGE_MODEL__, __NEXT_DATA__...)."""
-    decoder = json.JSONDecoder()
     for script in soup.find_all("script"):
         text = script.string or ""
         if len(text) < 500:
@@ -271,7 +292,7 @@ def _paragraphs_from_embedded_json(soup: BeautifulSoup) -> list[str]:
             else:
                 match = _STATE_ASSIGN_RE.search(text)
                 if match:
-                    data, _ = decoder.raw_decode(text[match.end() :].lstrip())
+                    data = _decode_js_object(text[match.end() :].lstrip())
         except ValueError:
             continue
         if data is None:

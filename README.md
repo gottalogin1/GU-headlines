@@ -35,29 +35,37 @@ article from three years ago is as easy to find as today's.
 
 ## Sources
 
-Configured in [`config/sources.yaml`](config/sources.yaml):
+Configured in [`config/sources.yaml`](config/sources.yaml). Every source was
+tested against the live sites from GitHub's servers (see
+[Live source check](#live-source-check)):
 
-| Source | How it is read | Default topic |
-|---|---|---|
-| The Guam Daily Post (postguam.com) | RSS + section pages | by keywords |
-| Pacific Daily News (guampdn.com) | section pages + advertised feeds | by keywords |
-| KUAM News (kuam.com) | news pages + advertised feeds | by keywords |
-| PNC News First (pncguam.com) | RSS + front page | by keywords |
-| KANDIT News Group (kanditnews.com) | RSS + front page | by keywords |
-| Marianas Business Journal (mbjguam.com) | RSS + section pages | Business |
-| Pacific Island Times | RSS + front page, Guam stories only | by keywords |
-| Marianas Variety | RSS, Guam stories only | by keywords |
-| Stars and Stripes (Asia-Pacific) | RSS, Guam stories only | Military |
-| DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz) | unit pages + feeds | Military |
-| Andersen Air Force Base | news page | Military |
-| Guam Department of Labor | RSS | Labor |
-| Guam Business Magazine | RSS + front page | Business |
-| Office of the Governor (off by default) | RSS + press releases | by keywords |
+| Source | How it is read | Topic | From GitHub's servers |
+|---|---|---|---|
+| The Guam Daily Post | RSS (local news, business) + section page | by keywords | works |
+| Pacific Daily News | RSS + section page | by keywords | works |
+| KUAM News | news pages (story text read from the page's JSON) | by keywords | works |
+| KANDIT News Group | RSS (opinion, notices, obituaries skipped) | by keywords | works |
+| Pacific Island Times | RSS, Guam stories only | by keywords | works |
+| Stars and Stripes (Asia-Pacific) | RSS, Guam stories only | Military | works |
+| DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz, Andersen) | unit news pages | Military | works |
+| Guam Department of Labor | RSS | Labor | works (posts infrequently) |
+| PNC News First | RSS | by keywords | Cloudflare challenge* |
+| Marianas Business Journal | section pages | Business | Cloudflare challenge* |
+| Guam Business Magazine | RSS + front page | Business | Cloudflare challenge* |
+| Andersen Air Force Base | news page | Military | blocked by Akamai* |
+| Marianas Variety (off) | RSS, Guam stories only | by keywords | robots.txt disallows crawlers |
+| Office of the Governor (off) | press-release RSS | by keywords | works |
 
-News sites change their layouts. After you deploy, run `guheadlines check`
-(below) on each source; if one finds nothing, adjust its feed URL or
-`article_pattern` in `sources.yaml`. Edits take effect on the next hourly run
-without a restart.
+\* These sites refuse requests from data-center IP addresses (Cloudflare's
+JavaScript challenge or Akamai), whatever the user agent. They usually load
+normally from a home or business connection, so they are left on: after you
+deploy, `/status` shows whether they work from your server. GU Headlines does
+not try to get around these blocks, and it honours `robots.txt`
+(including `Crawl-delay`).
+
+News sites change their layouts. If a source stops finding stories, run
+`guheadlines check` and `guheadlines probe` (below) and adjust its entry in
+`sources.yaml`. Edits take effect on the next hourly run without a restart.
 
 ## Quick start (Docker)
 
@@ -126,6 +134,25 @@ docker compose exec worker guheadlines backfill --source pnc --since 2025-01-01 
 `robots.txt`, or set `sitemaps:` on the source), so the archive can start
 before the day you installed it.
 
+`probe` describes any page or feed, which helps when adding or fixing a
+source: its CMS, advertised feeds, the most common link shapes (to write an
+`article_pattern`), and what the extractor gets from it:
+
+```sh
+docker compose exec worker guheadlines probe https://www.postguam.com/news/local/
+docker compose exec worker guheadlines probe --source kuam
+```
+
+### Live source check
+
+The repository's GitHub Actions include a **Live source check** workflow
+(Actions tab → *Live source check* → *Run workflow*). It runs `probe` on
+every configured URL, dry-runs each source, and does two full scrapes into a
+throwaway database, then prints a summary of what was stored. Use it after
+editing `sources.yaml`, or to see whether a site changed. A normal **CI**
+workflow runs lint, the test suite against PostgreSQL, and a Docker Compose
+smoke test on every push.
+
 ## How the hourly update works
 
 For each enabled source, each run:
@@ -141,12 +168,16 @@ For each enabled source, each run:
    first). From each page it extracts the headline, canonical URL, main
    image, publish time, byline, section/tags and the first paragraph(s),
    using OpenGraph/JSON-LD metadata, common CMS layouts (WordPress, BLOX,
-   Drupal, Wix, DVIDS, af.mil) and [trafilatura](https://trafilatura.readthedocs.io)
-   as a fallback.
+   Drupal, Wix, DVIDS, af.mil), story text embedded as JSON by
+   JavaScript-rendered sites, and [trafilatura](https://trafilatura.readthedocs.io)
+   as a fallback. Feed stories that are clearly off-topic (opinion,
+   obituaries, not about Guam for regional outlets) are skipped without
+   downloading the page.
 4. **Tag and store.** Topics are assigned, the image is saved as WebP, and the
    story is inserted. Failed pages are retried with exponential backoff (1h,
    2h, 4h, 8h); if a site blocks article pages but publishes a feed, the
-   feed's headline and summary are used.
+   feed's headline and summary are used. If a site answers "429 Too Many
+   Requests", that source stops for the hour and continues on the next run.
 
 Only one scrape runs at a time (PostgreSQL advisory lock), even if you start
 one by hand while the worker is running.
@@ -180,7 +211,7 @@ Settings are environment variables in `.env` (see [`.env.example`](.env.example)
 | `SCRAPE_INTERVAL_MINUTES` | `60` | how often to scrape (aligned to the clock) |
 | `SCRAPE_ON_START` | `true` | also scrape when the worker starts |
 | `MAX_NEW_PER_SOURCE` | `40` | new pages fetched per source per run |
-| `PER_HOST_DELAY` | `1.5` | seconds between requests to one site |
+| `PER_HOST_DELAY` | `1.5` | seconds between requests to one site (per-source `request_delay` and robots.txt `Crawl-delay` can raise it) |
 | `SCRAPER_WORKERS` | `4` | sources scraped in parallel |
 | `RESPECT_ROBOTS_TXT` | `true` | honour robots.txt |
 | `SCRAPER_USER_AGENT` | GUHeadlinesBot | put a contact URL/email here |
@@ -204,6 +235,9 @@ Add an entry to `config/sources.yaml`:
     article_pattern: '/\d{4}/\d{2}/'   # which links on those pages are stories
     categories: [business]        # optional: always apply these topics
     require_guam: false           # true for regional outlets
+    exclude_sections: [Opinion]   # optional: skip these feed categories/sections
+    request_delay: 5              # optional: slower pace for sites that rate-limit
+    max_age_days: 30              # listing links older than this are evergreen pages
     body_selector: '.story-text'  # optional: if the intro comes out wrong
 ```
 
