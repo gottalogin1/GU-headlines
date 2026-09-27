@@ -1,0 +1,63 @@
+# Self-hosted stack: PostgreSQL + website + hourly scraper.
+#
+#   cp .env.example .env    # then set POSTGRES_PASSWORD
+#   docker compose up -d --build
+#
+# Website: http://<server>:8000 (change WEB_PORT in .env)
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-guheadlines}
+      POSTGRES_USER: ${POSTGRES_USER:-guheadlines}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    shm_size: 256mb
+
+  web:
+    build: .
+    image: guheadlines:latest
+    restart: unless-stopped
+    command: ["guheadlines", "web", "--workers", "2"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - media:/data/media
+      - ./config:/app/config:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    image: guheadlines:latest
+    restart: unless-stopped
+    command: ["guheadlines", "worker"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    volumes:
+      - media:/data/media
+      - ./config:/app/config:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      disable: true
+
+volumes:
+  pgdata:
+  media:

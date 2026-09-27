@@ -1,0 +1,50 @@
+{% macro card(item, category_names, show_snippet=false) %}
+{% set a = item.article %}
+<article class="story">
+  <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+    {% if a.image_path %}
+      <img src="/media/{{ a.image_path }}" alt="" loading="lazy" decoding="async"
+           {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
+    {% elif a.image_url %}
+      <img src="{{ a.image_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+    {% else %}
+      <span class="placeholder" style="--hue: {{ item.source_slug|source_hue }}">{{ item.source_name|initials }}</span>
+    {% endif %}
+  </a>
+  <div class="story-body">
+    {% if a.categories %}
+    <div class="tags">
+      {% for c in a.categories %}<a class="tag tag-{{ c }}" href="/category/{{ c }}">{{ category_names.get(c, c) }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    <h3 class="headline"><a href="{{ a.url }}" target="_blank" rel="noopener">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
+    {% if show_snippet and item.snippet %}
+      {% for p in item.snippet|paragraphs %}<p class="intro">{{ p|highlight }}</p>{% endfor %}
+    {% elif a.intro %}
+      {% for p in a.intro|paragraphs %}<p class="intro">{{ p }}</p>{% endfor %}
+    {% endif %}
+    <p class="meta">
+      <a class="source" href="/source/{{ item.source_slug }}">{{ item.source_name }}</a>
+      <span aria-hidden="true">·</span>
+      <time datetime="{{ a.published_at.isoformat() }}" title="{{ a.published_at|fmt_datetime }}">{{ a.published_at|rel_time }}</time>
+      {% if a.author %}<span aria-hidden="true">·</span> <span class="author">{{ a.author }}</span>{% endif %}
+    </p>
+  </div>
+</article>
+{% endmacro %}
+
+{% macro pagination(result, page_url) %}
+{% if result and result.pages > 1 %}
+<nav class="pagination" aria-label="Pages">
+  {% if result.has_prev %}<a rel="prev" href="{{ page_url(page=result.page - 1) }}">← Newer</a>{% else %}<span class="disabled">← Newer</span>{% endif %}
+  <span class="pages">
+  {% for n in result.window() %}
+    {% if n is none %}<span class="gap">…</span>
+    {% elif n == result.page %}<span class="current" aria-current="page">{{ n }}</span>
+    {% else %}<a href="{{ page_url(page=n) }}">{{ n }}</a>{% endif %}
+  {% endfor %}
+  </span>
+  {% if result.has_next %}<a rel="next" href="{{ page_url(page=result.page + 1) }}">Older →</a>{% else %}<span class="disabled">Older →</span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

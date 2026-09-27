@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card, pagination %}
+{% block main %}
+{% if heading %}
+<header class="page-head">
+  {% if archive_day %}<p class="crumbs"><a href="/archive">Archive</a> › <a href="/archive/{{ archive_day.year }}/{{ archive_day.month }}">{{ months[archive_day.month - 1] }} {{ archive_day.year }}</a></p>{% endif %}
+  <h1>{{ heading }}</h1>
+  {% if subheading %}<p class="muted">{{ subheading }}</p>{% endif %}
+  {% if result.total %}<p class="muted small">{{ "{:,}".format(result.total) }} {{ "story" if result.total == 1 else "stories" }}</p>{% endif %}
+  {% if archive_day %}
+  <p class="month-nav">
+    <a href="/archive/{{ prev_day.year }}/{{ prev_day.month }}/{{ prev_day.day }}">← {{ prev_day|fmt_date_long }}</a>
+    <a href="/archive/{{ next_day.year }}/{{ next_day.month }}/{{ next_day.day }}">{{ next_day|fmt_date_long }} →</a>
+  </p>
+  {% endif %}
+</header>
+{% endif %}
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No stories here yet</h2>
+  <p>The scraper checks every source once an hour. If this is a fresh install, the first run starts when the worker boots; see <a href="/status">Sources</a> for progress.</p>
+</div>
+{% endif %}
+
+{% for label, items in groups %}
+<section class="day">
+  <h2 class="day-label">{{ label }}</h2>
+  {% for item in items %}{{ card(item, category_names) }}{% endfor %}
+</section>
+{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}

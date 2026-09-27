@@ -1,0 +1,228 @@
+# News sources to scrape.
+#
+# Changes take effect on the worker's next hourly run (no restart needed).
+# After editing, check a source with:
+#     docker compose exec worker guheadlines check --source <slug>
+#
+# How each source is discovered, cheapest first:
+#   feeds               RSS/Atom feeds (conditional GET; unchanged feeds cost nothing)
+#   listing_pages       section/front pages scanned for links that match article_pattern
+#   autodiscover_feeds  also follow <link rel="alternate" type="application/rss+xml">
+#                       tags found on the listing pages
+#   sitemaps            only used by `guheadlines backfill` to import older articles
+#
+# Only URLs that are not already in the database are fetched, so each run
+# downloads just the new article pages.
+#
+# Per-source options:
+#   article_pattern       regex (or list of regexes) a listing-page link must match
+#   exclude_url_patterns  regexes; matching URLs are skipped (added to the defaults below)
+#   categories            categories always applied to this source's articles
+#   require_guam          keep only articles that mention Guam (see guam_keywords)
+#   body_selector         CSS selector for the article body, if the automatic
+#                         extractor picks the wrong intro paragraph
+#   enabled               false to pause a source without deleting its articles
+
+defaults:
+  exclude_url_patterns:
+    - '/sports?/'
+    - '/opinion/'
+    - '/editorials?/'
+    - '/letters?-to-the-editor'
+    - '/obituar'
+    - '/classifieds?/'
+    - '/entertainment/'
+    - '/lifestyles?/'
+    - '/horoscopes?/'
+    - '/comics?/'
+    - '/puzzles?/'
+    - '/games?/'
+    - '/podcasts?/'
+    - '/videos?/'
+    - '/galler(y|ies)/'
+    - '/photos?/'
+    - '/e-?edition'
+    - '/(tag|tags|category|categories|author|authors|topic|topics|users?)/'
+    - '/page/\d+'
+    - '/(feed|rss)/?$'
+    - '/wp-(admin|login|content|json)'
+    - '/(search|login|register|subscribe|account|contact|about|advertise|privacy|terms)(/|$|\?)'
+    - '\.(pdf|jpe?g|png|gif|webp|mp3|mp4|zip|docx?|xlsx?)$'
+
+# Words that mark an article as being about Guam; used by sources with
+# require_guam: true (regional outlets that also cover the CNMI, Palau, FSM, ...).
+guam_keywords:
+  - guam
+  - guåhan
+  - guahan
+  - hagåtña
+  - hagatna
+  - tamuning
+  - tumon
+  - dededo
+  - yigo
+  - mangilao
+  - barrigada
+  - andersen
+  - apra harbor
+  - camp blaz
+  - joint region marianas
+  - naval base guam
+  - govguam
+  - chamoru
+  - chamorro
+
+sources:
+  - slug: postguam
+    name: The Guam Daily Post
+    homepage: https://www.postguam.com/
+    feeds:
+      - https://www.postguam.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
+      - https://www.postguam.com/search/?f=rss&t=article&c=business/local&l=50&s=start_time&sd=desc
+    listing_pages:
+      - https://www.postguam.com/news/local/
+      - https://www.postguam.com/business/local/
+    article_pattern: '/article_[0-9a-f-]+\.html'
+    exclude_url_patterns:
+      - '/(news|business)/(world|nation|national)/'
+
+  - slug: guampdn
+    name: Pacific Daily News
+    homepage: https://www.guampdn.com/
+    listing_pages:
+      - https://www.guampdn.com/
+      - https://www.guampdn.com/news/
+      - https://www.guampdn.com/news/local/
+      - https://www.guampdn.com/business/
+    autodiscover_feeds: true
+    article_pattern:
+      - '/article_[0-9a-f-]+\.html'
+      - '/story/news/'
+      - '/story/money/'
+      - '/news/local/[^/?#]+/?$'
+    exclude_url_patterns:
+      - '/(news|story/news)/(world|nation|national)/'
+
+  - slug: kuam
+    name: KUAM News
+    homepage: https://www.kuam.com/
+    listing_pages:
+      - https://www.kuam.com/news
+      - https://www.kuam.com/
+    autodiscover_feeds: true
+    article_pattern: '/story/\d+/'
+
+  - slug: pnc
+    name: PNC News First
+    homepage: https://www.pncguam.com/
+    feeds:
+      - https://www.pncguam.com/feed/
+    listing_pages:
+      - https://www.pncguam.com/
+    article_pattern: '^https?://(www\.)?pncguam\.com/[a-z0-9][a-z0-9-]{8,}/?$'
+
+  - slug: kandit
+    name: KANDIT News Group
+    homepage: https://kanditnews.com/
+    feeds:
+      - https://kanditnews.com/feed/
+    listing_pages:
+      - https://kanditnews.com/
+    article_pattern: '^https?://(www\.)?kanditnews\.com/[a-z0-9][a-z0-9-]{8,}/?$'
+
+  - slug: mbj
+    name: Marianas Business Journal
+    homepage: https://www.mbjguam.com/
+    feeds:
+      - https://www.mbjguam.com/rss.xml
+    listing_pages:
+      - https://www.mbjguam.com/guam
+      - https://www.mbjguam.com/news
+    autodiscover_feeds: true
+    article_pattern: '^https?://(www\.)?mbjguam\.com/[a-z0-9%][a-z0-9%-]{8,}/?$'
+    exclude_url_patterns:
+      - 'mbjguam\.com/(guam|news|gallery|digital-newspaper|databank|northern-mariana-islands|japan|marshall-islands|palau|public-notices|corporate-giving|making-moves)/?$'
+    categories: [business]
+
+  - slug: pactimes
+    name: Pacific Island Times
+    homepage: https://www.pacificislandtimes.com/
+    feeds:
+      - https://www.pacificislandtimes.com/blog-feed.xml
+    listing_pages:
+      - https://www.pacificislandtimes.com/
+    article_pattern: '/post/[^/?#]+'
+    require_guam: true
+
+  - slug: mvariety
+    name: Marianas Variety
+    homepage: https://www.mvariety.com/
+    feeds:
+      - https://www.mvariety.com/feed/
+    autodiscover_feeds: true
+    listing_pages:
+      - https://www.mvariety.com/news/local/
+    require_guam: true
+
+  - slug: stripes
+    name: Stars and Stripes
+    homepage: https://www.stripes.com/theaters/asia_pacific/
+    feeds:
+      - https://subscribe.stripes.com/rss/asia-pacific.xml
+    listing_pages:
+      - https://www.stripes.com/theaters/asia_pacific/
+    article_pattern: '/theaters/asia_pacific/\d{4}-\d{2}-\d{2}/'
+    require_guam: true
+    categories: [military]
+
+  - slug: dvids
+    name: DVIDS (Guam commands)
+    homepage: https://www.dvidshub.net/unit/CJR-M
+    listing_pages:
+      - https://www.dvidshub.net/unit/CJR-M
+      - https://www.dvidshub.net/unit/USNB-Guam
+      - https://www.dvidshub.net/unit/MCBCAMPBLAZ
+    autodiscover_feeds: true
+    article_pattern: '/news/\d+/'
+    exclude_url_patterns:
+      - '/(image|graphic|audio|video|publication|webcast|feature)/'
+    categories: [military]
+
+  - slug: andersen
+    name: Andersen Air Force Base
+    homepage: https://www.andersen.af.mil/
+    listing_pages:
+      - https://www.andersen.af.mil/News/
+    article_pattern: '/News/Article-Display/Article/\d+/'
+    categories: [military]
+
+  - slug: gdol
+    name: Guam Department of Labor
+    homepage: https://dol.guam.gov/
+    feeds:
+      - https://dol.guam.gov/feed/
+    categories: [labor]
+
+  - slug: gbm
+    name: Guam Business Magazine
+    homepage: https://www.guambusinessmagazine.com/
+    feeds:
+      - https://www.guambusinessmagazine.com/rss.xml
+    listing_pages:
+      - https://www.guambusinessmagazine.com/
+    autodiscover_feeds: true
+    article_pattern: '^https?://(www\.)?guambusinessmagazine\.com/[a-z0-9][a-z0-9-]{8,}/?$'
+    exclude_url_patterns:
+      - 'guambusinessmagazine\.com/(archives|digital-magazines|departments|advertise|subscribe)'
+    categories: [business]
+
+  # Official press releases. Plentiful, so off by default.
+  - slug: governor
+    name: Office of the Governor
+    homepage: https://governor.guam.gov/
+    enabled: false
+    feeds:
+      - https://governor.guam.gov/feed/
+    listing_pages:
+      - https://governor.guam.gov/press-releases/
+    article_pattern: '/press_release/'
