@@ -90,3 +90,14 @@ jobs:
                       row_number() OVER (PARTITION BY s.slug ORDER BY a.published_at DESC) AS n
                FROM articles a JOIN sources s ON s.id = a.source_id) x
              WHERE n <= 6 ORDER BY slug, day DESC"
+      - name: Website renders the scraped stories
+        run: |
+          guheadlines web --port 8000 --workers 1 > web.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
+          echo
+          for path in / /category/local /category/military /category/business /category/labor "/search?q=guam" "/search?q=hagatna" /archive /status; do
+            code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
+            echo "$path -> HTTP $code, $(grep -c 'class="story"' page.html) stories on the page"
+            test "$code" = 200
+          done
+          test "$(curl -s localhost:8000/ | grep -c 'class="story"')" -gt 0
