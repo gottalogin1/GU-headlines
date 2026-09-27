@@ -10,11 +10,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: WordPress.com public API for Cloudflare-protected sites
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install httpx beautifulsoup4 lxml
+      - name: Structure of KUAM's __PAGE_MODEL__
         run: |
-          for site in pncguam.com kanditnews.com guambusinessmagazine.com mbjguam.com; do
-            echo "=== $site"
-            curl -s -w "\nHTTP %{http_code}\n" "https://public-api.wordpress.com/rest/v1.1/sites/$site/posts/?number=2&fields=URL,title,date,excerpt,featured_image,categories" | head -c 1500
-            echo
-            curl -s -o /dev/null -w "wp/v2: HTTP %{http_code}\n" "https://public-api.wordpress.com/wp/v2/sites/$site/posts?per_page=1"
-          done
+          python - <<'PY'
+          import json, re, httpx
+          from bs4 import BeautifulSoup
+          url = "https://www.kuam.com/story/353384413/guam-hosting-2026-tuberculosis-controllers-association-conference"
+          html = httpx.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"}, timeout=30).text
+          soup = BeautifulSoup(html, "lxml")
+          for s in soup.find_all("script"):
+              t = s.string or ""
+              m = re.search(r"__PAGE_MODEL__\s*=\s*", t)
+              if not m:
+                  continue
+              raw = t[m.end():].lstrip()
+              print("starts:", raw[:80])
+              try:
+                  data, end = json.JSONDecoder().raw_decode(raw)
+                  print("decoded OK, rest:", raw[end:end+40])
+              except ValueError as e:
+                  print("DECODE ERROR", e, raw[max(0, e.pos-80):e.pos+80])
+                  continue
+              def walk(n, path):
+                  if isinstance(n, dict):
+                      for k, v in n.items(): walk(v, f"{path}.{k}")
+                  elif isinstance(n, list):
+                      for i, v in enumerate(n): walk(v, f"{path}[{i}]")
+                  elif isinstance(n, str) and len(n) > 30:
+                      print(path, "=>", n[:220].replace("\n", " "))
+              walk(data, "$")
+          PY
