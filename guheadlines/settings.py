@@ -39,7 +39,6 @@ class Settings:
     media_dir: Path
     site_name: str = "GU Headlines"
     site_tagline: str = "Guam news, updated every hour"
-    timezone: str = "Pacific/Guam"
     user_agent: str = (
         "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)"
     )
@@ -101,7 +100,6 @@ def load_settings() -> Settings:
         media_dir=Path(env.get("MEDIA_DIR", PROJECT_DIR / "data" / "media")),
         site_name=env.get("SITE_NAME", defaults.site_name),
         site_tagline=env.get("SITE_TAGLINE", defaults.site_tagline),
-        timezone=env.get("SITE_TIMEZONE", defaults.timezone),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),
