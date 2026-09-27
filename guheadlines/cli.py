@@ -35,6 +35,8 @@ def setup_logging(settings: Settings) -> None:
         "alembic.runtime.plugins",
     ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    # trafilatura warns about every page it cannot use; we have other extractors.
+    logging.getLogger("trafilatura").setLevel(logging.ERROR)
 
 
 def wait_for_db(timeout: float = 90.0) -> None:

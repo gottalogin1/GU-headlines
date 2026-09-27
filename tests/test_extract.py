@@ -91,3 +91,43 @@ def test_truncate_prefers_sentence_boundary():
     text = "First sentence here. Second sentence is much longer and goes on and on."
     assert truncate(text, 30) == "First sentence here."
     assert truncate(text, 45) == "First sentence here. Second sentence is much…"
+
+
+def test_story_text_from_embedded_page_state():
+    # KUAM-style page: story text only exists in a JSON blob rendered by JavaScript.
+    model = {
+        "title": "Guam hosting TB conference",
+        "blocks": [
+            {"type": "header", "props": {"text": "Guam hosting TB conference"}},
+            {
+                "type": "richtext",
+                "props": {
+                    "content": "<p>Guam will host the 2026 Tuberculosis Controllers Association "
+                    "Conference next month, bringing health officials from across the Pacific.</p>"
+                    "<p>The Department of Public Health says registration is open.</p>"
+                },
+            },
+        ],
+        "padding": "x" * 600,
+    }
+    import json
+
+    html = f"""<html><head><meta property="og:type" content="article">
+    <meta property="og:title" content="Guam hosting TB conference - KUAM">
+    <meta property="og:description" content="Guam hosting TB conference"></head>
+    <body><main><h1>Guam hosting TB conference</h1></main>
+    <script>window.__PAGE_MODEL__ = {json.dumps(model)};</script></body></html>"""
+    data = extract_article(html.encode(), "https://www.kuam.com/story/1/tb", source_name="KUAM")
+    assert data.title == "Guam hosting TB conference"
+    assert data.intro.startswith("Guam will host the 2026 Tuberculosis Controllers")
+
+
+def test_published_date_from_page_text():
+    html = b"""<html><head><meta property="og:type" content="article"></head><body>
+    <div class="info">Story by Sgt. Jane Doe | Marine Corps Base Camp Blaz</div>
+    <div>Date: 08.12.2026 | Posted: 08.12.2026 21:55 | News ID: 573626</div>
+    <div class="news-body"><p>MARINE CORPS BASE CAMP BLAZ, Guam - Marines greeted students at
+    Finegayan Elementary School on the first day of the school year.</p></div></body></html>"""
+    data = extract_article(html, "https://www.dvidshub.net/news/573626/x")
+    assert data.published_at.date().isoformat() in ("2026-08-11", "2026-08-12")
+    assert data.intro.startswith("MARINE CORPS BASE CAMP BLAZ")

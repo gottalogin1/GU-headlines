@@ -21,9 +21,35 @@
 #   require_guam          keep only articles that mention Guam (see guam_keywords)
 #   body_selector         CSS selector for the article body, if the automatic
 #                         extractor picks the wrong intro paragraph
+#   exclude_sections      skip stories filed under these sections/feed categories
+#                         (added to the defaults below)
+#   request_delay         seconds between requests to this site (default
+#                         PER_HOST_DELAY; robots.txt Crawl-delay is also honoured)
+#   max_age_days          links found on listing pages older than this are
+#                         skipped as evergreen pages (default 30)
 #   enabled               false to pause a source without deleting its articles
+#
+# Tested from GitHub's servers on 2026-09-27 (see .github/workflows/live-check.yml).
+# Sites marked "Cloudflare challenge" answered 403 to data-center IP addresses
+# with any user agent; they usually work from a home or business connection.
+# Run `guheadlines check --source <slug>` on your server to see.
 
 defaults:
+  exclude_sections:
+    - Opinion
+    - Opinions
+    - Editorial
+    - Editorials
+    - Letters to the Editor
+    - Letters
+    - Columnists
+    - Obituaries
+    - Rosaries and Funerals
+    - Today's Memorials
+    - Public Notices
+    - Legal Notices
+    - Classifieds
+    - Sports
   exclude_url_patterns:
     - '/sports?/'
     - '/opinion/'
@@ -73,95 +99,91 @@ guam_keywords:
   - chamorro
 
 sources:
+  # BLOX/TownNews site. Feeds carry 50 stories each; the site rate-limits bursts.
   - slug: postguam
     name: The Guam Daily Post
     homepage: https://www.postguam.com/
+    request_delay: 5
     feeds:
       - https://www.postguam.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
       - https://www.postguam.com/search/?f=rss&t=article&c=business/local&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.postguam.com/news/local/
-      - https://www.postguam.com/business/local/
     article_pattern: '/article_[0-9a-f-]+\.html'
     exclude_url_patterns:
       - '/(news|business)/(world|nation|national)/'
+      - '/forum/'
 
+  # BLOX/TownNews site (since the 2021 sale from Gannett).
   - slug: guampdn
     name: Pacific Daily News
     homepage: https://www.guampdn.com/
+    request_delay: 5
+    feeds:
+      - https://www.guampdn.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc
     listing_pages:
-      - https://www.guampdn.com/
       - https://www.guampdn.com/news/
-      - https://www.guampdn.com/news/local/
-      - https://www.guampdn.com/business/
-    autodiscover_feeds: true
-    article_pattern:
-      - '/article_[0-9a-f-]+\.html'
-      - '/story/news/'
-      - '/story/money/'
-      - '/news/local/[^/?#]+/?$'
+    article_pattern: '/article_[0-9a-f-]+\.html'
     exclude_url_patterns:
-      - '/(news|story/news)/(world|nation|national)/'
+      - '/(news|business)/(world|nation|national)/'
+      - '/pika/'
 
+  # No feed; story text is rendered by JavaScript and read from the page's JSON.
   - slug: kuam
     name: KUAM News
     homepage: https://www.kuam.com/
     listing_pages:
       - https://www.kuam.com/news
       - https://www.kuam.com/
-    autodiscover_feeds: true
     article_pattern: '/story/\d+/'
 
+  # WordPress. Cloudflare challenge from data centers.
   - slug: pnc
     name: PNC News First
     homepage: https://www.pncguam.com/
     feeds:
       - https://www.pncguam.com/feed/
-    listing_pages:
-      - https://www.pncguam.com/
     article_pattern: '^https?://(www\.)?pncguam\.com/[a-z0-9][a-z0-9-]{8,}/?$'
 
+  # WordPress. The feed works everywhere; the front page has a Cloudflare challenge.
   - slug: kandit
     name: KANDIT News Group
     homepage: https://kanditnews.com/
     feeds:
       - https://kanditnews.com/feed/
-    listing_pages:
-      - https://kanditnews.com/
-    article_pattern: '^https?://(www\.)?kanditnews\.com/[a-z0-9][a-z0-9-]{8,}/?$'
+    exclude_url_patterns:
+      - 'obituar'
+      - '/notice-of-'
 
+  # Drupal. Cloudflare challenge from data centers; robots.txt asks for a
+  # 10-second crawl delay, which is honoured automatically.
   - slug: mbj
     name: Marianas Business Journal
     homepage: https://www.mbjguam.com/
-    feeds:
-      - https://www.mbjguam.com/rss.xml
     listing_pages:
       - https://www.mbjguam.com/guam
       - https://www.mbjguam.com/news
-    autodiscover_feeds: true
     article_pattern: '^https?://(www\.)?mbjguam\.com/[a-z0-9%][a-z0-9%-]{8,}/?$'
     exclude_url_patterns:
       - 'mbjguam\.com/(guam|news|gallery|digital-newspaper|databank|northern-mariana-islands|japan|marshall-islands|palau|public-notices|corporate-giving|making-moves)/?$'
     categories: [business]
 
+  # Wix blog feed. Regional outlet: Guam stories only.
   - slug: pactimes
     name: Pacific Island Times
     homepage: https://www.pacificislandtimes.com/
     feeds:
       - https://www.pacificislandtimes.com/blog-feed.xml
-    listing_pages:
-      - https://www.pacificislandtimes.com/
-    article_pattern: '/post/[^/?#]+'
     require_guam: true
 
+  # Its robots.txt disallows crawlers other than a few search engines, so it is
+  # off. (Saipan-based; mostly CNMI news.)
   - slug: mvariety
     name: Marianas Variety
     homepage: https://www.mvariety.com/
+    enabled: false
     feeds:
-      - https://www.mvariety.com/feed/
-    autodiscover_feeds: true
-    listing_pages:
-      - https://www.mvariety.com/news/local/
+      - https://www.mvariety.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
     require_guam: true
 
   - slug: stripes
@@ -169,25 +191,24 @@ sources:
     homepage: https://www.stripes.com/theaters/asia_pacific/
     feeds:
       - https://subscribe.stripes.com/rss/asia-pacific.xml
-    listing_pages:
-      - https://www.stripes.com/theaters/asia_pacific/
-    article_pattern: '/theaters/asia_pacific/\d{4}-\d{2}-\d{2}/'
     require_guam: true
     categories: [military]
 
+  # DVIDS unit pages; its RSS ignores unit filters, so the search pages are
+  # scanned instead. Dates are read from the "Date:" line on each story.
   - slug: dvids
     name: DVIDS (Guam commands)
     homepage: https://www.dvidshub.net/unit/CJR-M
     listing_pages:
-      - https://www.dvidshub.net/unit/CJR-M
-      - https://www.dvidshub.net/unit/USNB-Guam
-      - https://www.dvidshub.net/unit/MCBCAMPBLAZ
-    autodiscover_feeds: true
+      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date
+      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=USNB-Guam&sort=date
+      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=MCBCAMPBLAZ&sort=date
+      - https://www.dvidshub.net/search/?q=Andersen+Air+Force+Base&filter%5Btype%5D=news&sort=date
     article_pattern: '/news/\d+/'
-    exclude_url_patterns:
-      - '/(image|graphic|audio|video|publication|webcast|feature)/'
+    require_guam: true
     categories: [military]
 
+  # af.mil sites (Akamai) refuse data-center IPs.
   - slug: andersen
     name: Andersen Air Force Base
     homepage: https://www.andersen.af.mil/
@@ -203,26 +224,27 @@ sources:
       - https://dol.guam.gov/feed/
     categories: [labor]
 
+  # Cloudflare challenge from data centers.
   - slug: gbm
     name: Guam Business Magazine
     homepage: https://www.guambusinessmagazine.com/
     feeds:
-      - https://www.guambusinessmagazine.com/rss.xml
+      - https://www.guambusinessmagazine.com/feed/
     listing_pages:
       - https://www.guambusinessmagazine.com/
-    autodiscover_feeds: true
     article_pattern: '^https?://(www\.)?guambusinessmagazine\.com/[a-z0-9][a-z0-9-]{8,}/?$'
     exclude_url_patterns:
       - 'guambusinessmagazine\.com/(archives|digital-magazines|departments|advertise|subscribe)'
     categories: [business]
 
-  # Official press releases. Plentiful, so off by default.
+  # Official press releases. Plentiful and duplicated by the news outlets, so
+  # off by default.
   - slug: governor
     name: Office of the Governor
     homepage: https://governor.guam.gov/
     enabled: false
     feeds:
-      - https://governor.guam.gov/feed/
+      - https://governor.guam.gov/feed/?post_type=press_release
     listing_pages:
-      - https://governor.guam.gov/press-releases/
+      - https://governor.guam.gov/
     article_pattern: '/press_release/'

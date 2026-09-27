@@ -237,6 +237,79 @@ def _paragraphs_from_body(body: Tag) -> list[str]:
     return [clean_text(p.get_text(" ")) for p in body.find_all("p")]
 
 
+# Pages rendered by JavaScript often embed the whole story as JSON state.
+_STATE_ASSIGN_RE = re.compile(
+    r"(?:window\.)?(__PAGE_MODEL__|__NEXT_DATA__|__NUXT__|__INITIAL_STATE__|"
+    r"__PRELOADED_STATE__|__APOLLO_STATE__)\s*=\s*"
+)
+
+
+def _json_strings(node, out: list[str], limit: int = 5000) -> None:
+    if len(out) >= limit:
+        return
+    if isinstance(node, str):
+        out.append(node)
+    elif isinstance(node, dict):
+        for value in node.values():
+            _json_strings(value, out, limit)
+    elif isinstance(node, list):
+        for value in node:
+            _json_strings(value, out, limit)
+
+
+def _paragraphs_from_embedded_json(soup: BeautifulSoup) -> list[str]:
+    """Story paragraphs from JSON page state (window.__PAGE_MODEL__, __NEXT_DATA__...)."""
+    decoder = json.JSONDecoder()
+    for script in soup.find_all("script"):
+        text = script.string or ""
+        if len(text) < 500:
+            continue
+        data = None
+        try:
+            if script.get("id") == "__NEXT_DATA__":
+                data = json.loads(text)
+            else:
+                match = _STATE_ASSIGN_RE.search(text)
+                if match:
+                    data, _ = decoder.raw_decode(text[match.end() :].lstrip())
+        except ValueError:
+            continue
+        if data is None:
+            continue
+        strings: list[str] = []
+        _json_strings(data, strings)
+        paragraphs: list[str] = []
+        for value in strings:
+            if "<p" in value:
+                fragment = BeautifulSoup(value, "lxml")
+                paragraphs += [clean_text(p.get_text(" ")) for p in fragment.find_all("p")]
+            elif len(value) >= 80 and value.count(" ") >= 10 and "://" not in value[:12]:
+                if "<" not in value and "{" not in value:
+                    paragraphs.append(clean_text(value))
+        if paragraphs:
+            return paragraphs
+    return []
+
+
+# "Date: 08.12.2026", "Posted: September 3, 2026" in the page text (e.g. DVIDS).
+_TEXT_DATE_RE = re.compile(
+    r"\b(?:date posted|posted on|posted|published on|published|date)\s*[:|]\s*"
+    r"(\d{1,2}[./-]\d{1,2}[./-]\d{4}(?:\s+\d{1,2}:\d{2})?|"
+    r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})",
+    re.IGNORECASE,
+)
+
+
+def _date_from_text(soup: BeautifulSoup) -> datetime | None:
+    body = soup.body or soup
+    text = body.get_text(" ", strip=True)[:60000]
+    for match in _TEXT_DATE_RE.finditer(text):
+        found = parse_datetime(match.group(1))
+        if found:
+            return found
+    return None
+
+
 def _paragraphs_from_trafilatura(html: bytes | str, url: str) -> list[str]:
     try:
         import trafilatura
@@ -377,6 +450,8 @@ def extract_article(
         time_tag = soup.find("time", attrs={"datetime": True})
         if time_tag:
             result.published_at = parse_datetime(time_tag["datetime"])
+    if not result.published_at:
+        result.published_at = _date_from_text(soup)
     result.modified_at = parse_datetime(
         _first(meta, "article:modified_time", "og:updated_time", "datemodified")
     ) or parse_datetime(ld.get("dateModified"))
@@ -412,11 +487,15 @@ def extract_article(
             seen[tag.lower()] = tag
     result.keywords = list(seen.values())[:25]
 
-    # Intro paragraphs: CMS body container first, trafilatura as a fallback.
+    # Intro paragraphs: CMS body container first, then JSON page state (for
+    # JavaScript-rendered sites), then trafilatura as a general fallback.
     intro = None
+    embedded = _paragraphs_from_embedded_json(soup)
     body = _find_body(soup, body_selector)
     if body is not None:
         intro = build_intro(_paragraphs_from_body(body), result.title)
+    if not intro and embedded:
+        intro = build_intro(embedded, result.title)
     if not intro:
         intro = build_intro(_paragraphs_from_trafilatura(content, url), result.title)
     if not intro and ld.get("articleBody"):

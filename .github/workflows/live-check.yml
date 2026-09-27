@@ -70,7 +70,7 @@ jobs:
           done
       - name: Full scrape
         run: guheadlines scrape
-      - name: Second scrape (should fetch almost nothing)
+      - name: Second scrape (continues capped sources; fetches only new pages)
         run: guheadlines scrape
       - name: Summary
         run: |

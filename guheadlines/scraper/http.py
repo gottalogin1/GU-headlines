@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 MAX_BODY_BYTES = 10 * 1024 * 1024  # pages larger than this are not news articles
 RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_CRAWL_DELAY = 15.0
 
 
 class FetchError(Exception):
@@ -133,6 +134,10 @@ class HttpClient:
             if result.status == 200:
                 parser = robotparser.RobotFileParser()
                 parser.parse(result.content.decode("utf-8", errors="replace").splitlines())
+                delay = parser.crawl_delay(self.robots_agent)
+                if delay and self.respect_robots:
+                    # Honour Crawl-delay (capped so one site cannot stall a run).
+                    self.set_host_delay(parts.netloc, min(float(delay), MAX_CRAWL_DELAY))
         except FetchError as exc:
             # No readable robots.txt: nothing is disallowed.
             log.debug("robots.txt unavailable for %s: %s", origin, exc)

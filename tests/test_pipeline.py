@@ -268,3 +268,45 @@ def test_lock_prevents_parallel_runs(clean_db, scraper):
     with advisory_lock(SCRAPE_LOCK_KEY) as acquired:
         assert acquired
         assert scraper.run() is None
+
+
+def test_rate_limited_site_is_left_for_the_next_run(clean_db, scraper, site):
+    original = site.__call__
+
+    def limited(request):
+        if str(request.url) == ARTICLE_1:
+            return httpx.Response(429)
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(limited)
+    scraper.client.retries = 0
+    result = scraper.run()[0]
+    assert ARTICLE_1 not in _articles()
+    assert any("rate limited" in e for e in result.errors)
+    with session_scope() as session:
+        # Not recorded as a failure (no backoff), and the feed will be re-read.
+        assert session.get(SeenUrl, ARTICLE_1) is None
+        assert session.get(HttpCache, "https://www.pncguam.com/feed/") is None
+
+
+def test_feed_items_filtered_before_fetching(clean_db, scraper, site, config):
+    source = config.source("pnc")
+    source.require_guam = True  # the "Mayors' Council" item never mentions Guam
+    source.exclude_sections = ["Local News"]  # the other item's feed category
+    scraper.run()
+    assert _articles() == {}
+    assert site.requests[ARTICLE_1] == 0 and site.requests[ARTICLE_2] == 0
+    with session_scope() as session:
+        reasons = {row.url: row.reason for row in session.scalars(select(SeenUrl))}
+    assert reasons[ARTICLE_1] == "excluded section: Local News"
+    assert reasons[ARTICLE_2] == "not about Guam"
+
+
+def test_old_listing_links_are_skipped(clean_db, scraper, config):
+    from guheadlines.scraper.discover import Candidate
+    from guheadlines.scraper.pipeline import Skip
+
+    source = config.source("pnc")
+    source.max_age_days = 1
+    with pytest.raises(Skip, match="evergreen"):
+        scraper.build_draft(source, None, Candidate(url=BARE, key=BARE, via="listing"))

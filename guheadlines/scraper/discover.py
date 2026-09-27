@@ -10,6 +10,7 @@ import gzip
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from urllib.parse import parse_qs, urlsplit
 
 import feedparser
 from bs4 import BeautifulSoup
@@ -40,8 +41,23 @@ _IMG_SRC_RE = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
 _DATE_PATH_RE = re.compile(r"/(19|20)\d{2}/\d{1,2}(/\d{1,2})?/")
 
 
+# News-search feeds (Bing, Google) wrap article links in a redirect that carries
+# the real URL in a query parameter.
+_REDIRECT_HOSTS = ("bing.com", "google.com", "news.google.com")
+
+
+def unwrap_redirect(url: str) -> str:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if any(host == h or host.endswith("." + h) for h in _REDIRECT_HOSTS):
+        target = parse_qs(parts.query).get("url", [None])[0]
+        if target and target.startswith(("http://", "https://")):
+            return target
+    return url
+
+
 def make_candidate(url: str, via: str, base: str | None = None, **info) -> Candidate | None:
-    absolute = normalize_url(url, base=base)
+    absolute = normalize_url(unwrap_redirect(url), base=base)
     if not absolute:
         return None
     return Candidate(url=absolute, key=absolute, via=via, **info)
