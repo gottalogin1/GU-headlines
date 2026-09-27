@@ -68,9 +68,11 @@ jobs:
             guheadlines check --source "$slug" --limit 2 || true
             echo
           done
-      - name: Full scrape, catching up every minute until every source is loaded
-        timeout-minutes: 25
-        run: guheadlines scrape --until-done --max-rounds 20
+      - name: Full scrape, catching up every minute until loaded (at most 8 rounds)
+        timeout-minutes: 35
+        # A site that keeps rate-limiting (Marianas Variety from GitHub's
+        # network) would otherwise keep this step going for a long time.
+        run: guheadlines scrape --until-done --max-rounds 8
       - name: Re-run like the hourly worker (should fetch only new pages)
         run: guheadlines scrape
       - name: Summary
