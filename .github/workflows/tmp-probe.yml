@@ -8,53 +8,13 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      PER_HOST_DELAY: "3"
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements.txt && pip install -e .
-      - name: News search feeds for blocked sites
+      - name: WordPress.com public API for Cloudflare-protected sites
         run: |
-          for site in pncguam.com mbjguam.com guambusinessmagazine.com andersen.af.mil kanditnews.com; do
-            guheadlines probe "https://www.bing.com/news/search?q=site%3A$site&format=rss&mkt=en-US"
+          for site in pncguam.com kanditnews.com guambusinessmagazine.com mbjguam.com; do
+            echo "=== $site"
+            curl -s -w "\nHTTP %{http_code}\n" "https://public-api.wordpress.com/rest/v1.1/sites/$site/posts/?number=2&fields=URL,title,date,excerpt,featured_image,categories" | head -c 1500
+            echo
+            curl -s -o /dev/null -w "wp/v2: HTTP %{http_code}\n" "https://public-api.wordpress.com/wp/v2/sites/$site/posts?per_page=1"
           done
-          guheadlines probe "https://news.google.com/rss/search?q=site:pncguam.com&hl=en-US&gl=US&ceid=US:en"
-          curl -s "https://www.bing.com/news/search?q=site%3Apncguam.com&format=rss&mkt=en-US" | head -c 2500; echo
-      - name: DVIDS unit and keyword feeds
-        run: |
-          guheadlines probe \
-            "https://www.dvidshub.net/rss/news/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date" \
-            "https://www.dvidshub.net/search/?q=Andersen+Air+Force+Base&filter%5Btype%5D=news&sort=date" | head -60
-      - name: Raw structure of KUAM and DVIDS article pages
-        run: |
-          python - <<'PY'
-          import re, json, httpx
-          from bs4 import BeautifulSoup
-          ua = {"User-Agent": "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"}
-          for url in ["https://www.kuam.com/story/353384413/guam-hosting-2026-tuberculosis-controllers-association-conference",
-                      "https://www.dvidshub.net/news/573626/camp-blaz-marines-welcome-students-back-finegayan-elementary-school"]:
-              html = httpx.get(url, headers=ua, follow_redirects=True, timeout=30).text
-              soup = BeautifulSoup(html, "lxml")
-              print("=" * 20, url)
-              for s in soup.find_all("script"):
-                  body = (s.string or "")
-                  print("script", s.get("type"), s.get("id"), len(body), body[:300].replace("\n", " ") if len(body) > 200 else "")
-              for m in soup.find_all("meta"):
-                  k = m.get("property") or m.get("name") or m.get("itemprop")
-                  if k: print("meta", k, "=", (m.get("content") or "")[:120])
-              for tag in soup.find_all(attrs={"class": re.compile(r"date|time|publish|byline|body|content|story|text", re.I)}):
-                  text = tag.get_text(" ", strip=True)
-                  if text:
-                      print("class", tag.name, tag.get("class"), "|", text[:160])
-              main = soup.find("main") or soup.body
-              print("MAIN TEXT:", main.get_text(" | ", strip=True)[:2500])
-          PY
-      - name: robots.txt (full)
-        run: |
-          guheadlines probe https://www.pncguam.com/robots.txt
-          guheadlines probe https://www.mvariety.com/robots.txt | tail -60
