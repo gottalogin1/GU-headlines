@@ -287,6 +287,35 @@ def cmd_reclassify(args, settings: Settings) -> None:
     print(f"re-tagged {changed} of {total} articles")
 
 
+def cmd_probe(args, settings: Settings) -> None:
+    """Describe pages/feeds (no database needed) to help write sources.yaml."""
+    from .scraper.http import HttpClient
+    from .scraper.probe import probe
+
+    urls = list(args.url or [])
+    if args.source or args.all:
+        config = _config(settings)
+        chosen = config.sources if args.all else [config.source(s) for s in args.source]
+        for source in chosen:
+            if source is None:
+                raise SystemExit("unknown source")
+            urls += [source.homepage or ""] + source.listing_pages + source.feeds
+    urls = [u for u in dict.fromkeys(urls) if u]
+    if not urls:
+        raise SystemExit("give one or more URLs, --source SLUG or --all")
+    with HttpClient(
+        settings.user_agent,
+        timeout=settings.request_timeout,
+        per_host_delay=settings.per_host_delay,
+        respect_robots=False,  # we want to see the page even if robots.txt says no
+    ) as client:
+        for url in urls:
+            probe(client, url)
+            if not client.robots_permits(url):
+                print(f"  NOTE: robots.txt disallows this URL for {client.robots_agent}")
+            print()
+
+
 def cmd_sources(args, settings: Settings) -> None:
     config = _config(settings)
     counts: dict[str, int] = {}
@@ -338,6 +367,11 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
+    probe = sub.add_parser("probe", help="describe a page or feed (helps configure sources)")
+    probe.add_argument("url", nargs="*")
+    probe.add_argument("--source", action="append", help="probe this source's URLs")
+    probe.add_argument("--all", action="store_true", help="probe every configured source")
+
     args = parser.parse_args(argv)
     handler = {
         "migrate": cmd_migrate,
@@ -348,6 +382,7 @@ def main(argv: list[str] | None = None) -> None:
         "backfill": cmd_backfill,
         "reclassify": cmd_reclassify,
         "sources": cmd_sources,
+        "probe": cmd_probe,
     }[args.command]
     handler(args, settings)
 

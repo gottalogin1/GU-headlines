@@ -129,11 +129,13 @@ class HttpClient:
             self._robots[origin] = parser
         return parser
 
-    def allowed(self, url: str) -> bool:
-        if not self.respect_robots:
-            return True
+    def robots_permits(self, url: str) -> bool:
+        """What robots.txt says about this URL, whether or not we honour it."""
         parser = self._robots_for(url)
         return parser is None or parser.can_fetch(self.robots_agent, url)
+
+    def allowed(self, url: str) -> bool:
+        return not self.respect_robots or self.robots_permits(url)
 
     # -- requests -----------------------------------------------------------
 

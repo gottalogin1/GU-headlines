@@ -1,0 +1,92 @@
+# Checks the configured news sites from GitHub's network: what each feed/page
+# looks like, what the scraper would store, and a full scrape into a throwaway
+# database. Run it from the Actions tab ("Run workflow") after editing
+# config/sources.yaml, or push a commit whose message contains [live].
+name: Live source check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "config/**"
+      - "guheadlines/scraper/**"
+      - ".github/workflows/live-check.yml"
+
+permissions:
+  contents: read
+
+env:
+  PER_HOST_DELAY: "1"
+  REQUEST_TIMEOUT: "20"
+  MEDIA_DIR: /tmp/media
+  LOG_LEVEL: INFO
+
+jobs:
+  probe:
+    name: Probe source pages
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Probe every configured URL
+        run: guheadlines probe --all
+
+  scrape:
+    name: Check and scrape sources
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: guheadlines
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/guheadlines
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: guheadlines migrate
+      - name: Dry-run each source
+        run: |
+          for slug in $(python -c "from guheadlines.config import load_config; from pathlib import Path; print(' '.join(s.slug for s in load_config(Path('config')).sources))"); do
+            guheadlines check --source "$slug" --limit 2 || true
+            echo
+          done
+      - name: Full scrape
+        run: guheadlines scrape
+      - name: Second scrape (should fetch almost nothing)
+        run: guheadlines scrape
+      - name: Summary
+        run: |
+          q() { psql "$DATABASE_URL" -P pager=off -c "$1"; }
+          q "SELECT s.slug, count(a.id) AS stories, count(a.image_path) AS images,
+                    round(avg(length(a.intro))) AS avg_intro, max(a.published_at) AS newest,
+                    min(a.published_at) AS oldest
+             FROM sources s LEFT JOIN articles a ON a.source_id = s.id
+             GROUP BY s.slug ORDER BY stories DESC"
+          q "SELECT unnest(categories) AS category, count(*) FROM articles GROUP BY 1 ORDER BY 2 DESC"
+          q "SELECT s.slug, r.candidates, r.new_articles, r.failed, left(r.error, 160) AS error
+             FROM scrape_runs r JOIN sources s ON s.id = r.source_id ORDER BY r.id"
+          q "SELECT status, left(reason, 60) AS reason, count(*) FROM seen_urls GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 25"
+          q "SELECT slug, day, title, categories, img, intro FROM (
+               SELECT s.slug, a.published_at::date AS day, left(a.title, 70) AS title,
+                      a.categories, a.image_path IS NOT NULL AS img, left(a.intro, 90) AS intro,
+                      row_number() OVER (PARTITION BY s.slug ORDER BY a.published_at DESC) AS n
+               FROM articles a JOIN sources s ON s.id = a.source_id) x
+             WHERE n <= 6 ORDER BY slug, day DESC"
