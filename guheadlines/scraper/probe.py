@@ -83,10 +83,10 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
 
     if result.content_type == "text/plain":
         lines = result.content.decode("utf-8", errors="replace").splitlines()
-        for line in lines[:60]:
+        for line in lines[:150]:
             out(f"  | {line}")
-        if len(lines) > 60:
-            out(f"  | ... {len(lines) - 60} more lines")
+        if len(lines) > 150:
+            out(f"  | ... {len(lines) - 150} more lines")
         return
 
     head = result.content[:500].lstrip().lower()

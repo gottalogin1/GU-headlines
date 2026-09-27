@@ -37,7 +37,7 @@ from .discover import (
     sitemaps_from_robots,
 )
 from .extract import build_intro, extract_article
-from .http import FetchError, FetchResult, HttpClient, RobotsDisallowed
+from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
 from .text import clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
@@ -88,11 +88,12 @@ class SourceResult:
     new_articles: int = 0
     failed: int = 0
     rejected: int = 0
+    reachable: int = 0  # feeds/pages that answered (including "not modified")
     errors: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
-        return not self.errors or self.candidates > 0
+        return not self.errors or self.reachable > 0
 
 
 def _now() -> datetime:
@@ -180,6 +181,10 @@ class Scraper:
             session.add(run)
             session.flush()
             run_id = run.id
+        if source.request_delay:
+            for url in [source.homepage or "", *source.feeds, *source.listing_pages]:
+                if url:
+                    self.client.set_host_delay(url, source.request_delay)
         try:
             candidates, cache_updates = self.discover(source, result)
             candidates += self._retry_candidates(source_id)
@@ -188,8 +193,12 @@ class Scraper:
                 fresh = self.filter_new(session, candidates)
             limit = self.settings.max_new_per_source
             capped = len(fresh) > limit
-            for candidate in fresh[:limit]:
-                self._process_and_save(source, source_id, candidate, result)
+            for done, candidate in enumerate(fresh[:limit]):
+                if not self._process_and_save(source, source_id, candidate, result):
+                    left = len(fresh) - done
+                    result.errors.append(f"rate limited by the site; {left} pages left for later")
+                    capped = True
+                    break
             if not capped:
                 # Only remember validators once everything they announced is
                 # stored, otherwise a capped run would never see the rest.
@@ -305,6 +314,7 @@ class Scraper:
             except FetchError as exc:
                 result.errors.append(f"listing {page_url}: {exc}")
                 continue
+            result.reachable += 1
             if page is None:
                 continue
             links, advertised = parse_listing(page.content, page.url, source)
@@ -323,6 +333,7 @@ class Scraper:
                 if feed_url in source.feeds:
                     result.errors.append(f"feed {feed_url}: {exc}")
                 continue
+            result.reachable += 1
             if feed is None:
                 continue
             for candidate in parse_feed(feed.content, feed.url):
@@ -391,10 +402,26 @@ class Scraper:
 
     def build_draft(self, source: SourceConfig, source_id: int | None, cand: Candidate) -> Draft:
         """Fetch and extract one article. Raises Skip when it should not be stored."""
+        # Decide from the feed alone when possible, to avoid fetching the page.
+        excluded = source.excluded_section(*cand.tags)
+        if excluded:
+            raise Skip("rejected", f"excluded section: {excluded}")
+        if (
+            source.require_guam
+            and cand.via == "feed"
+            and cand.title
+            and not mentions_guam(
+                self.config, cand.title, cand.summary, cand.url, " ".join(cand.tags)
+            )
+        ):
+            raise Skip("rejected", "not about Guam")
+
         page: FetchResult | None = None
         data = None
         try:
             page = self.client.get(cand.url)
+        except RateLimited as exc:
+            raise Skip("throttled", str(exc)) from exc
         except RobotsDisallowed as exc:
             if not (cand.via == "feed" and cand.title):
                 raise Skip("rejected", "disallowed by robots.txt") from exc
@@ -446,11 +473,19 @@ class Scraper:
         if intro:
             intro = truncate(intro, 800)
 
+        if intro and intro.strip(" .").lower() == title.strip(" .").lower():
+            intro = None  # some sites repeat the headline as the description
+
         published = (data.published_at if data else None) or cand.published_at or _now()
         published = min(published, _now())
+        if cand.via == "listing" and published < _now() - timedelta(days=source.max_age_days):
+            raise Skip("rejected", f"older than {source.max_age_days} days (evergreen link)")
 
         section = data.section if data else None
         keyword_list = (data.keywords if data and data.keywords else cand.tags) or []
+        excluded = source.excluded_section(section, *keyword_list)
+        if excluded:
+            raise Skip("rejected", f"excluded section: {excluded}")
         keywords = ", ".join(dict.fromkeys(k for k in keyword_list if k))[:1000] or None
 
         if source.require_guam and not mentions_guam(
@@ -516,17 +551,22 @@ class Scraper:
 
     def _process_and_save(
         self, source: SourceConfig, source_id: int, cand: Candidate, result: SourceResult
-    ) -> None:
+    ) -> bool:
+        """Fetch, extract and store one candidate. Returns False when the site
+        is rate-limiting us and the rest of this source should wait."""
         try:
             draft = self.build_draft(source, source_id, cand)
         except Skip as skip:
+            if skip.status == "throttled":
+                log.warning("[%s] %s", source.slug, skip.reason)
+                return False
             self._remember(source_id, cand.key, skip.status, skip.reason)
             if skip.status == "failed":
                 result.failed += 1
             else:
                 result.rejected += 1
             log.debug("[%s] skip %s: %s", source.slug, cand.url, skip.reason)
-            return
+            return True
 
         if draft.image_url and self.settings.store_images:
             stored = store_image(
@@ -584,9 +624,10 @@ class Scraper:
                         )
                     )
                 result.rejected += 1
-                return
+                return True
         result.new_articles += 1
         log.debug("[%s] new: %s", source.slug, draft.title)
+        return True
 
     def _remember(self, source_id: int, url: str, status: str, reason: str) -> None:
         with session_scope() as session:

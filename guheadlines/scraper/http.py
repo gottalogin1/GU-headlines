@@ -28,6 +28,10 @@ class RobotsDisallowed(FetchError):
     pass
 
 
+class RateLimited(FetchError):
+    """The site answered 429 Too Many Requests even after waiting."""
+
+
 @dataclass
 class FetchResult:
     url: str  # final URL after redirects
@@ -85,6 +89,7 @@ class HttpClient:
         )
         self._host_lock = threading.Lock()
         self._host_next: dict[str, float] = {}
+        self._host_delay: dict[str, float] = {}
         self._robots: dict[str, robotparser.RobotFileParser | None] = {}
         self._robots_lock = threading.Lock()
 
@@ -99,13 +104,19 @@ class HttpClient:
 
     # -- politeness ---------------------------------------------------------
 
+    def set_host_delay(self, url_or_host: str, seconds: float) -> None:
+        """Use a longer pause than per_host_delay for one site (e.g. one that rate-limits)."""
+        host = urlsplit(url_or_host).netloc or url_or_host
+        with self._host_lock:
+            self._host_delay[host] = max(seconds, self.per_host_delay)
+
     def _throttle(self, url: str) -> None:
         host = urlsplit(url).netloc
         with self._host_lock:
             now = time.monotonic()
             wait_until = self._host_next.get(host, now)
             start = max(now, wait_until)
-            self._host_next[host] = start + self.per_host_delay
+            self._host_next[host] = start + self._host_delay.get(host, self.per_host_delay)
         delay = start - now
         if delay > 0:
             self._sleep(delay)
@@ -195,6 +206,8 @@ class HttpClient:
                         content=body,
                         headers={k.lower(): v for k, v in response.headers.items()},
                     )
+                    if status == 429:
+                        raise RateLimited(f"HTTP 429 (rate limited) for {url}", status)
                     if status >= 400:
                         raise FetchError(f"HTTP {status} for {url}", status)
                     return result
@@ -210,5 +223,7 @@ class HttpClient:
     def _retry_delay(response: httpx.Response, attempt: int) -> float:
         retry_after = response.headers.get("retry-after", "")
         if retry_after.isdigit():
-            return min(float(retry_after), 30.0)
+            return min(float(retry_after), 60.0)
+        if response.status_code == 429:
+            return 15.0 * (attempt + 1)  # rate limiters need a real pause
         return 2.0 * (attempt + 1)

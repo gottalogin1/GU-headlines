@@ -56,9 +56,24 @@ class SourceConfig:
     categories: list[str] = field(default_factory=list)
     require_guam: bool = False
     body_selector: str | None = None
+    # Seconds between requests to this source's site (for sites that rate-limit).
+    request_delay: float | None = None
+    # Links found on listing pages that are older than this are not stored:
+    # they are usually evergreen/promo pages rather than news.
+    max_age_days: int = 30
+    # Skip stories whose site section or feed category/tag is one of these.
+    exclude_sections: list[str] = field(default_factory=list)
 
     def is_excluded(self, url: str) -> bool:
         return any(p.search(url) for p in self.exclude_patterns)
+
+    def excluded_section(self, *labels: str | None) -> str | None:
+        """The first label (section, tag, feed category) this source excludes."""
+        wanted = {fold(x).strip() for x in self.exclude_sections}
+        for label in labels:
+            if label and fold(label).strip() in wanted:
+                return label
+        return None
 
     def matches_article_pattern(self, url: str) -> bool:
         if not self.article_patterns:
@@ -173,6 +188,13 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             categories=forced,
             require_guam=bool(raw.get("require_guam", False)),
             body_selector=raw.get("body_selector"),
+            request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
+            max_age_days=int(raw.get("max_age_days", defaults.get("max_age_days", 30))),
+            exclude_sections=[
+                str(x)
+                for x in _as_list(defaults.get("exclude_sections"))
+                + _as_list(raw.get("exclude_sections"))
+            ],
         )
         if source.enabled and not (source.feeds or source.listing_pages):
             raise ConfigError(f"{where}: needs at least one feed or listing page")

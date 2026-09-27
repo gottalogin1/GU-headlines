@@ -18,35 +18,43 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt && pip install -e .
-      - name: Article pages and feeds
+      - name: News search feeds for blocked sites
+        run: |
+          for site in pncguam.com mbjguam.com guambusinessmagazine.com andersen.af.mil kanditnews.com; do
+            guheadlines probe "https://www.bing.com/news/search?q=site%3A$site&format=rss&mkt=en-US"
+          done
+          guheadlines probe "https://news.google.com/rss/search?q=site:pncguam.com&hl=en-US&gl=US&ceid=US:en"
+          curl -s "https://www.bing.com/news/search?q=site%3Apncguam.com&format=rss&mkt=en-US" | head -c 2500; echo
+      - name: DVIDS unit and keyword feeds
         run: |
           guheadlines probe \
-            https://www.kuam.com/story/353384413/guam-hosting-2026-tuberculosis-controllers-association-conference \
-            https://www.dvidshub.net/news/573626/camp-blaz-marines-welcome-students-back-finegayan-elementary-school \
-            https://www.dvidshub.net/unit/36WG \
-            "https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date" \
-            "https://www.guampdn.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc" \
-            https://kanditnews.com/feed/ \
-            "https://governor.guam.gov/feed/?post_type=press_release" \
-            https://governor.guam.gov/press_release/governor-and-lt-governor-welcome-high-level-delegation-from-japan/ \
-            https://www.mbjguam.com/feed https://www.mbjguam.com/guam/feed https://www.mbjguam.com/rss \
-            https://www.guambusinessmagazine.com/feed/ \
-            https://www.pncguam.com/wp-json/wp/v2/posts?per_page=2
-      - name: robots.txt
+            "https://www.dvidshub.net/rss/news/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date" \
+            "https://www.dvidshub.net/search/?q=Andersen+Air+Force+Base&filter%5Btype%5D=news&sort=date" | head -60
+      - name: Raw structure of KUAM and DVIDS article pages
         run: |
-          for host in www.postguam.com www.guampdn.com www.kuam.com www.mvariety.com www.pncguam.com kanditnews.com www.dvidshub.net www.mbjguam.com; do
-            guheadlines probe "https://$host/robots.txt"
-          done
-      - name: Blocked sites with a browser user agent (diagnosis only)
-        env:
-          SCRAPER_USER_AGENT: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+          python - <<'PY'
+          import re, json, httpx
+          from bs4 import BeautifulSoup
+          ua = {"User-Agent": "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"}
+          for url in ["https://www.kuam.com/story/353384413/guam-hosting-2026-tuberculosis-controllers-association-conference",
+                      "https://www.dvidshub.net/news/573626/camp-blaz-marines-welcome-students-back-finegayan-elementary-school"]:
+              html = httpx.get(url, headers=ua, follow_redirects=True, timeout=30).text
+              soup = BeautifulSoup(html, "lxml")
+              print("=" * 20, url)
+              for s in soup.find_all("script"):
+                  body = (s.string or "")
+                  print("script", s.get("type"), s.get("id"), len(body), body[:300].replace("\n", " ") if len(body) > 200 else "")
+              for m in soup.find_all("meta"):
+                  k = m.get("property") or m.get("name") or m.get("itemprop")
+                  if k: print("meta", k, "=", (m.get("content") or "")[:120])
+              for tag in soup.find_all(attrs={"class": re.compile(r"date|time|publish|byline|body|content|story|text", re.I)}):
+                  text = tag.get_text(" ", strip=True)
+                  if text:
+                      print("class", tag.name, tag.get("class"), "|", text[:160])
+              main = soup.find("main") or soup.body
+              print("MAIN TEXT:", main.get_text(" | ", strip=True)[:2500])
+          PY
+      - name: robots.txt (full)
         run: |
-          for url in https://www.pncguam.com/feed/ https://kanditnews.com/ https://www.mbjguam.com/guam https://www.guambusinessmagazine.com/ https://www.andersen.af.mil/News/; do
-            guheadlines probe "$url" | head -8
-          done
-      - name: Blocked sites with curl defaults (diagnosis only)
-        run: |
-          for url in https://www.pncguam.com/feed/ https://www.mbjguam.com/guam https://www.andersen.af.mil/News/; do
-            curl -s -o /dev/null -w "$url %{http_code}\n" "$url"
-            curl -sI "$url" | grep -i -E "^(server|cf-mitigated|x-|set-cookie: __cf)" | head -5
-          done
+          guheadlines probe https://www.pncguam.com/robots.txt
+          guheadlines probe https://www.mvariety.com/robots.txt | tail -60

@@ -173,7 +173,6 @@ categories:
       - Cope North
       - Pacific Partnership
       - deployment
-      - deployed
       - commissary
       - TRICARE
       - Naval Hospital
@@ -201,7 +200,10 @@ categories:
       - bank*
       - credit union
       - loan*
-      - invest*
+      - invest
+      - invests
+      - investment*
+      - investor*
       - revenue*
       - tax
       - taxes
@@ -237,7 +239,10 @@ categories:
       - Matson
       - tariff*
       - export*
-      - import*
+      - import
+      - imports
+      - imported
+      - importer*
       - small business*
       - SBA
       - entrepreneur*
@@ -281,11 +286,14 @@ categories:
       - salaries
       - pay raise
       - pay increase
-      - overtime
-      - union
+      - overtime pay
+      - labor union*
       - unions
+      - union members
       - collective bargaining
-      - strike
+      - labor strike
+      - workers strike
+      - on strike
       - H-2B
       - H2B
       - H-1B
