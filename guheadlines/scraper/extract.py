@@ -245,17 +245,37 @@ _STATE_ASSIGN_RE = re.compile(
 )
 
 
-def _json_strings(node, out: list[str], limit: int = 5000) -> None:
+def _json_strings(node, out: list[tuple[str, str]], path: str = "", limit: int = 5000) -> None:
+    """Collect (lowercased key path, string value) pairs in document order."""
     if len(out) >= limit:
         return
     if isinstance(node, str):
-        out.append(node)
+        out.append((path, node))
     elif isinstance(node, dict):
-        for value in node.values():
-            _json_strings(value, out, limit)
+        for key, value in node.items():
+            _json_strings(value, out, f"{path}.{str(key).lower()}", limit)
     elif isinstance(node, list):
         for value in node:
-            _json_strings(value, out, limit)
+            _json_strings(value, out, path, limit)
+
+
+# Where page-state JSON usually keeps the story text, e.g. storyData.story.content
+# (KUAM) or props.pageProps.article.body (Next.js sites).
+_STORY_PATH_RE = re.compile(
+    r"(story|article|post|entry)[^.]*\.(content|body|html|text|articlebody)$"
+)
+
+
+def _paragraphs_from_strings(values: list[str]) -> list[str]:
+    paragraphs: list[str] = []
+    for value in values:
+        if "<p" in value or "<P" in value:
+            fragment = BeautifulSoup(value, "lxml")
+            paragraphs += [clean_text(p.get_text(" ")) for p in fragment.find_all("p")]
+        elif len(value) >= 80 and value.count(" ") >= 10 and "://" not in value[:12]:
+            if "<" not in value and "{" not in value:
+                paragraphs.append(clean_text(value))
+    return paragraphs
 
 
 _JS_ESCAPE_RE = re.compile(r"\\\\|\\(.)", re.S)
@@ -297,18 +317,16 @@ def _paragraphs_from_embedded_json(soup: BeautifulSoup) -> list[str]:
             continue
         if data is None:
             continue
-        strings: list[str] = []
-        _json_strings(data, strings)
-        paragraphs: list[str] = []
-        for value in strings:
-            if "<p" in value:
-                fragment = BeautifulSoup(value, "lxml")
-                paragraphs += [clean_text(p.get_text(" ")) for p in fragment.find_all("p")]
-            elif len(value) >= 80 and value.count(" ") >= 10 and "://" not in value[:12]:
-                if "<" not in value and "{" not in value:
-                    paragraphs.append(clean_text(value))
-        if paragraphs:
-            return paragraphs
+        pairs: list[tuple[str, str]] = []
+        _json_strings(data, pairs)
+        # Fields that look like the story body first; everything else only as
+        # a fallback (menus and footers come first in document order).
+        preferred = _paragraphs_from_strings([v for p, v in pairs if _STORY_PATH_RE.search(p)])
+        if preferred:
+            return preferred
+        others = _paragraphs_from_strings([v for _, v in pairs])
+        if others:
+            return others
     return []
 
 
@@ -358,6 +376,8 @@ def _good_paragraph(text: str, title: str | None) -> bool:
     if len(text) < 40:
         return False
     if _JUNK_PARAGRAPH_RE.match(text):
+        return False
+    if text.count(" | ") >= 2:  # "EEO Report | FCC Public Files | ...": a link list
         return False
     if title and text.lower().strip(" .") == title.lower().strip(" ."):
         return False

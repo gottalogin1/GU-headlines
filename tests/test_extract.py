@@ -95,19 +95,27 @@ def test_truncate_prefers_sentence_boundary():
 
 def test_story_text_from_embedded_page_state():
     # KUAM-style page: story text only exists in a JSON blob rendered by JavaScript.
+    # Shape seen on kuam.com: menus and a footer come before the story itself.
     model = {
         "title": "Guam hosting TB conference",
-        "blocks": [
-            {"type": "header", "props": {"text": "Guam hosting TB conference"}},
+        "footer": [
             {
-                "type": "richtext",
                 "props": {
-                    "content": "<p>Guam will host the 2026 Tuberculosis Controllers Association "
-                    "Conference next month, bringing health officials from across the Pacific.</p>"
-                    "<p>The Department of Public Health says registration is open.</p>"
-                },
-            },
+                    "content": "<center><p>All content © copyright KUAM.</p><p><a>EEO Report</a>"
+                    " | <a>FCC Public Files</a> | <a>FCC Applications</a></p></center>"
+                }
+            }
         ],
+        "storyData": {
+            "story": {
+                "title": "Guam hosting TB conference",
+                "excerpt": "Guam hosting TB conference",
+                "content": "<p>Guam will host the 2026 Tuberculosis Controllers Association "
+                "Conference next month, bringing health officials from across the Pacific.</p>"
+                "<p>The Department of Public Health says registration is open.</p>",
+            },
+            "relatedStories": [{"title": "BMS mural teaches kids to make healthy choices"}],
+        },
         "padding": "x" * 600,
     }
     import json
