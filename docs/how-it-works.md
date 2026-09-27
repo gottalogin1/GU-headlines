@@ -126,7 +126,7 @@ Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
 
 ## GitHub checks
 
-Two workflows run in GitHub Actions:
+Three workflows run in GitHub Actions:
 
 - **CI**, on every push and pull request: lint (ruff), the test suite
   against PostgreSQL, and a Docker Compose smoke test that builds the image,
@@ -144,6 +144,15 @@ Two workflows run in GitHub Actions:
 
   GitHub's servers are in a US data center, so sites that block data-center
   addresses fail there even if they work for you.
+- **Release**, when a version tag such as `v1.0.0` is pushed (or run from the
+  Actions tab with the tag name): checks that the tag matches the version in
+  `pyproject.toml` and publishes a GitHub release with that version's notes
+  from `CHANGELOG.md`.
+
+To make a new release: set the new `version` in `pyproject.toml` and
+`guheadlines/__init__.py`, add a section for it at the top of
+`CHANGELOG.md`, merge, then tag the merged commit (`git tag v1.1.0` and
+`git push origin v1.1.0`).
 
 ## Running without Docker
 
@@ -183,6 +192,6 @@ guheadlines/
   cli.py                the `guheadlines` command
   schedule.py           when the worker wakes up next
 tests/                  pytest suite with saved sample pages in tests/fixtures
-.github/workflows/      CI and the live source check
+.github/workflows/      CI, the live source check and releases
 scripts/backup.sh       database backup
 ```

@@ -100,6 +100,7 @@ you.
 ```
 GU-headlines/
 ├── .env.example        settings template (you copy it to .env)
+├── CHANGELOG.md        what changed in each release
 ├── config/
 │   ├── sources.yaml    the list of news sites
 │   └── categories.yaml the topics and their keywords

@@ -158,7 +158,8 @@ docker run --rm -v gu-headlines_media:/media -v "$PWD/backups":/backup alpine \
 
 ## Updating
 
-When a new version of GU Headlines is published:
+New versions are listed on the project's GitHub **Releases** page, and
+[CHANGELOG.md](../CHANGELOG.md) says what changed in each one. To update:
 
 ```sh
 git pull
