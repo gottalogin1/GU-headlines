@@ -100,7 +100,35 @@ jobs:
           echo
           for path in / /category/local /category/military /category/business /category/labor "/search?q=guam" "/search?q=hagatna" /archive /status; do
             code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
-            echo "$path -> HTTP $code, $(grep -c 'class="story"' page.html) stories on the page"
+            echo "$path -> HTTP $code, $(grep -c 'class="story' page.html) stories, $(grep -c 'class="thumb-img"' page.html) with photos"
             test "$code" = 200
           done
-          test "$(curl -s localhost:8000/ | grep -c 'class="story"')" -gt 0
+          test "$(curl -s localhost:8000/ | grep -c 'class="story')" -gt 0
+      - name: Screenshots of the site with the scraped stories
+        run: |
+          mkdir -p /tmp/shots && cp .github/scripts/screenshots.cjs /tmp/shots/ && cd /tmp/shots
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium > /dev/null
+          node screenshots.cjs http://localhost:8000 /tmp/shots
+          ls -la /tmp/shots/*.png
+      - name: Keep the screenshots (Actions run page, 3 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-screenshots
+          path: /tmp/shots/*.png
+          retention-days: 3
+      - name: Screenshots as text in this log (only for commits tagged [preview])
+        if: contains(github.event.head_commit.message, '[preview]')
+        run: |
+          python - <<'PY'
+          import base64, glob, io
+          from PIL import Image
+          for path in sorted(glob.glob("/tmp/shots/*.png")):
+              image = Image.open(path).convert("RGB")
+              if image.width > 900:
+                  image = image.resize((900, round(image.height * 900 / image.width)))
+              buffer = io.BytesIO()
+              image.save(buffer, "JPEG", quality=74)
+              print("SHOT", path.rsplit("/", 1)[-1], base64.b64encode(buffer.getvalue()).decode())
+          PY

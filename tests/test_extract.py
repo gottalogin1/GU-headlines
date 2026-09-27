@@ -142,3 +142,16 @@ def test_published_date_from_page_text():
     data = extract_article(html, "https://www.dvidshub.net/news/573626/x")
     assert data.published_at.date().isoformat() in ("2026-08-11", "2026-08-12")
     assert data.intro.startswith("MARINE CORPS BASE CAMP BLAZ")
+
+
+def test_photo_from_article_body_when_no_share_image():
+    html = b"""<html><head><meta property="og:type" content="article"><title>X</title></head><body>
+    <article><div class="entry-content"><img src="/icons/share.png" width="24">
+    <figure><img src="data:image/gif;base64,R0lGOD" data-src="/wp-content/uploads/photo-300.jpg"
+     data-srcset="/wp-content/uploads/photo-300.jpg 300w, /wp-content/uploads/photo-1024.jpg 1024w">
+    </figure><p>The Guam Department of Labor announced a new apprenticeship program on Friday for
+    residents who want to enter the construction trades, with classes starting next month at the
+    Guam Community College.</p></div></article></body></html>"""
+    data = extract_article(html, "https://dol.guam.gov/story/")
+    # Lazy-loaded photo, largest srcset candidate; the share icon is skipped.
+    assert data.image_url == "https://dol.guam.gov/wp-content/uploads/photo-1024.jpg"

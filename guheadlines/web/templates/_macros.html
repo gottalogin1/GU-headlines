@@ -1,16 +1,15 @@
 {% macro card(item, category_names, show_snippet=false) %}
 {% set a = item.article %}
-<article class="story">
+{% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url %}
+<article class="story{% if not photo %} no-photo{% endif %}">
+  {% if photo %}
   <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
-    {% if a.image_path %}
-      <img src="/media/{{ a.image_path }}" alt="" loading="lazy" decoding="async"
-           {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
-    {% elif a.image_url %}
-      <img src="{{ a.image_url }}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">
-    {% else %}
-      <span class="placeholder" style="--hue: {{ item.source_slug|source_hue }}">{{ item.source_name|initials }}</span>
-    {% endif %}
+    {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest. #}
+    <img class="thumb-fill" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}>
+    <img class="thumb-img" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}
+         {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
   </a>
+  {% endif %}
   <div class="story-body">
     {% if a.categories %}
     <div class="tags">

@@ -230,29 +230,31 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   text-transform: uppercase; color: var(--text-soft);
 }
 .story {
-  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 20px;
+  display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 20px;
   padding: 14px; margin-bottom: 14px; border-radius: var(--r-xl);
   transition: transform .2s ease, box-shadow .2s ease;
 }
 .story:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover), inset 0 1px 0 rgba(255, 255, 255, .35); }
 .thumb {
-  position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden;
-  border-radius: var(--r-lg); background: var(--line);
+  position: relative; display: block; aspect-ratio: 3 / 2; overflow: hidden; align-self: start;
+  border-radius: var(--r-lg); background: var(--line); isolation: isolate;
 }
-.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s ease; }
-.story:hover .thumb img { transform: scale(1.03); }
+/* The article's own photo, shown whole ("contain"), never stretched or cropped;
+   any space around it is filled by a blurred, enlarged copy of the same photo. */
+.thumb-fill, .thumb-img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.thumb-fill {
+  object-fit: cover; transform: scale(1.25);
+  filter: blur(18px) saturate(1.25) brightness(.95); opacity: .9;
+}
+.thumb-img { object-fit: contain; transition: transform .35s ease; }
+.story:hover .thumb-img { transform: scale(1.02); }
 .thumb::after {
   /* a faint glass rim over the photo */
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), inset 0 1px 0 rgba(255, 255, 255, .35);
 }
-.placeholder {
-  display: grid; place-items: center; width: 100%; height: 100%;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 50%),
-    linear-gradient(140deg, hsl(var(--hue) 70% 62%), hsl(calc(var(--hue) + 40) 60% 38%));
-  color: rgba(255, 255, 255, .95); font-weight: 800; font-size: 1.5rem; letter-spacing: .02em;
-}
+.story.no-photo { grid-template-columns: minmax(0, 1fr); }
+.story.no-photo .story-body { padding-left: 8px; }
 .story-body { padding: 4px 6px 4px 0; min-width: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .tag {
@@ -275,9 +277,10 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 @media (max-width: 640px) {
   .wrap { padding: 0 12px; }
   .brand-tagline { display: none; }
-  .story { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 10px; border-radius: var(--r-lg); }
-  .thumb { aspect-ratio: 1 / 1; border-radius: var(--r-md); }
-  .placeholder { font-size: 1.05rem; }
+  /* Phones: the photo runs full width across the top of the card. */
+  .story { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 10px; border-radius: var(--r-lg); }
+  .thumb { aspect-ratio: 16 / 9; border-radius: var(--r-md); }
+  .story-body { padding: 0 6px 4px; }
   .headline { font-size: 1.04rem; }
   .intro { font-size: .92rem; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
   .intro + .intro { display: none; }

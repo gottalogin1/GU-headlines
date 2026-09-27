@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -140,19 +139,6 @@ def highlight(snippet: str | None) -> Markup:
     return Markup(safe.replace(MARK_START, "<mark>").replace(MARK_END, "</mark>"))
 
 
-def source_hue(slug: str) -> int:
-    return int(hashlib.md5(slug.encode()).hexdigest()[:4], 16) % 360
-
-
-def initials(name: str) -> str:
-    words = [
-        w
-        for w in name.replace("(", " ").split()
-        if w[:1].isalnum() and w.lower() not in {"the", "of"}
-    ]
-    return "".join(w[0] for w in words[:3]).upper() or "GU"
-
-
 def paragraphs(text: str | None) -> list[str]:
     return [p for p in (text or "").split("\n\n") if p.strip()]
 
@@ -162,8 +148,6 @@ templates.env.filters.update(
     fmt_date_long=fmt_date_long,
     rel_time=rel_time,
     highlight=highlight,
-    source_hue=source_hue,
-    initials=initials,
     paragraphs=paragraphs,
     to_local=to_local,
 )

@@ -213,6 +213,41 @@ def _usable_image(url: str | None, page_url: str) -> str | None:
     return absolute
 
 
+def _largest_from_srcset(srcset: str) -> str | None:
+    """'a.jpg 300w, b.jpg 1024w' -> 'b.jpg'."""
+    best, best_width = None, -1.0
+    for part in srcset.split(","):
+        bits = part.strip().split()
+        if not bits:
+            continue
+        width = -0.5
+        if len(bits) > 1 and bits[1][:-1].replace(".", "", 1).isdigit():
+            width = float(bits[1][:-1]) * (1000 if bits[1].endswith("x") else 1)
+        if width > best_width:
+            best, best_width = bits[0], width
+    return best
+
+
+def _body_image(body: Tag, page_url: str) -> str | None:
+    """The first photo in the story body that is not an icon, ad or tracking pixel."""
+    for img in body.find_all("img"):
+        width = img.get("width") or ""
+        if width.isdigit() and int(width) < 250:
+            continue
+        srcset = img.get("data-srcset") or img.get("srcset")
+        src = (
+            (_largest_from_srcset(srcset) if srcset else None)
+            or img.get("data-src")
+            or img.get("data-lazy-src")
+            or img.get("data-original")
+            or img.get("src")
+        )
+        usable = _usable_image(src, page_url)
+        if usable and not re.search(r"\.gif(\?|$)", usable, re.I):
+            return usable
+    return None
+
+
 def _find_body(soup: BeautifulSoup, selector: str | None) -> Tag | None:
     selectors = [selector] if selector else []
     selectors += BODY_SELECTORS
@@ -465,6 +500,10 @@ def extract_article(
         if usable:
             result.image_url = usable
             break
+    # No share image: use the first real photo inside the article body.
+    body = _find_body(soup, body_selector)
+    if not result.image_url and body is not None:
+        result.image_url = _body_image(body, url)
 
     # Dates.
     result.published_at = (
@@ -532,7 +571,6 @@ def extract_article(
     # JavaScript-rendered sites), then trafilatura as a general fallback.
     intro = None
     embedded = _paragraphs_from_embedded_json(soup)
-    body = _find_body(soup, body_selector)
     if body is not None:
         intro = build_intro(_paragraphs_from_body(body), result.title)
     if not intro and embedded:
