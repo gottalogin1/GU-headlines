@@ -7,37 +7,37 @@
   <meta name="description" content="{{ settings.site_tagline }}: local stories, military, business and labor news from Guam's newsrooms in one place.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/style.css?v=1">
+  <link rel="stylesheet" href="/static/style.css?v=2">
   {% block head %}{% endblock %}
 </head>
 <body>
   <a class="skip" href="#main">Skip to stories</a>
-  <header class="masthead">
-    <div class="wrap masthead-inner">
-      <a class="brand" href="/">
-        <span class="brand-mark" aria-hidden="true">GU</span>
-        <span class="brand-text">
-          <span class="brand-name">{{ settings.site_name }}</span>
-          <span class="brand-tagline">{{ settings.site_tagline }}</span>
-        </span>
-      </a>
-      <form class="search" action="/search" method="get" role="search">
-        <input type="search" name="q" value="{{ filters.q if filters is defined and filters else '' }}"
-               placeholder="Search every story, any year…" aria-label="Search stories" maxlength="200">
-        <button type="submit">Search</button>
-      </form>
-    </div>
-    <nav class="nav" aria-label="Sections">
-      <div class="wrap nav-inner">
-        <a href="/" {% if active_nav == 'latest' %}aria-current="page"{% endif %}>Latest</a>
-        {% for c in categories %}
-        <a href="/category/{{ c.slug }}" {% if active_nav == c.slug %}aria-current="page"{% endif %}>{{ c.name }}</a>
-        {% endfor %}
-        <a href="/archive" {% if active_nav == 'archive' %}aria-current="page"{% endif %}>Archive</a>
-        <a href="/search" {% if active_nav == 'search' %}aria-current="page"{% endif %}>Search</a>
-        <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="bar glass">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">GU</span>
+          <span class="brand-text">
+            <span class="brand-name">{{ settings.site_name }}</span>
+            <span class="brand-tagline">{{ settings.site_tagline }}</span>
+          </span>
+        </a>
+        <nav class="nav" aria-label="Sections">
+          <a href="/" {% if active_nav == 'latest' %}aria-current="page"{% endif %}>Latest</a>
+          {% for c in categories %}
+          <a href="/category/{{ c.slug }}" {% if active_nav == c.slug %}aria-current="page"{% endif %}>{{ c.name }}</a>
+          {% endfor %}
+          <a href="/archive" {% if active_nav == 'archive' %}aria-current="page"{% endif %}>Archive</a>
+          <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
+        </nav>
+        <form class="search" action="/search" method="get" role="search">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" name="q" value="{{ filters.q if filters is defined and filters else '' }}"
+                 placeholder="Search every story, any year" aria-label="Search stories" maxlength="200">
+          <button type="submit">Search</button>
+        </form>
       </div>
-    </nav>
+    </div>
   </header>
 
   <div class="wrap layout">
@@ -46,7 +46,8 @@
   </div>
 
   <footer class="footer">
-    <div class="wrap">
+    <div class="wrap footer-inner">
+      <strong>{{ settings.site_name }}</strong> · {{ settings.site_tagline }}.<br>
       Headlines, intros and images belong to their publishers; every story links to the original.
       Checked for new stories every hour. Times are Chamorro Standard Time (ChST).
     </div>
