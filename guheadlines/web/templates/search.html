@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import card, pagination %}
+{% block main %}
+<header class="page-head">
+  <h1>Search</h1>
+</header>
+
+<form class="search-form" action="/search" method="get">
+  <div class="field grow">
+    <label for="sq">Words</label>
+    <input id="sq" type="search" name="q" value="{{ filters.q }}" placeholder='e.g. "Camp Blaz" contract' maxlength="200" autofocus>
+  </div>
+  <div class="field">
+    <label for="ssource">Source</label>
+    <select id="ssource" name="source">
+      <option value="">All sources</option>
+      {% for s in sources %}<option value="{{ s.slug }}" {% if filters.source == s.slug %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="scat">Topic</label>
+    <select id="scat" name="category">
+      <option value="">All topics</option>
+      {% for c in categories %}<option value="{{ c.slug }}" {% if filters.category == c.slug %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="sfrom">From</label>
+    <input id="sfrom" type="date" name="from" value="{{ filters.date_from or '' }}">
+  </div>
+  <div class="field">
+    <label for="sto">To</label>
+    <input id="sto" type="date" name="to" value="{{ filters.date_to or '' }}">
+  </div>
+  <div class="field">
+    <label for="ssort">Sort</label>
+    <select id="ssort" name="sort">
+      <option value="relevance" {% if filters.sort == 'relevance' %}selected{% endif %}>Best match</option>
+      <option value="newest" {% if filters.sort == 'newest' %}selected{% endif %}>Newest first</option>
+      <option value="oldest" {% if filters.sort == 'oldest' %}selected{% endif %}>Oldest first</option>
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Search</button>
+    {% if filters.active %}<a class="reset" href="/search">Clear</a>{% endif %}
+  </div>
+</form>
+
+{% if result is none %}
+<div class="tips">
+  <h2>Search tips</h2>
+  <ul>
+    <li>Every stored story is searchable: headlines, intros, bylines and the site's own tags.</li>
+    <li>Use quotes for exact phrases: <code>"minimum wage"</code></li>
+    <li>Use <code>or</code> for either word: <code>typhoon or storm</code></li>
+    <li>Put <code>-</code> before a word to leave it out: <code>buildup -Okinawa</code></li>
+    <li>Accents are optional: <code>Hagatna</code> finds Hagåtña.</li>
+    <li>Leave the words empty and pick dates to see everything from that period.</li>
+  </ul>
+</div>
+{% else %}
+  <p class="result-count">
+    {% if fuzzy %}
+      No exact matches for <strong>{{ filters.q }}</strong>. Headlines that look similar:
+    {% elif result.total %}
+      {{ "{:,}".format(result.total) }} {{ "story" if result.total == 1 else "stories" }}{% if filters.q %} matching <strong>{{ filters.q }}</strong>{% endif %}
+    {% else %}
+      No stories found{% if filters.q %} for <strong>{{ filters.q }}</strong>{% endif %}. Try fewer words or a wider date range.
+    {% endif %}
+  </p>
+  {% for item in result.items %}{{ card(item, category_names, show_snippet=true) }}{% endfor %}
+  {{ pagination(result, page_url) }}
+{% endif %}
+{% endblock %}

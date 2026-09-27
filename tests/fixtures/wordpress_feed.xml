@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+<title>PNC News First</title>
+<link>https://www.pncguam.com</link>
+<item>
+  <title>GovGuam agencies brace for H-2B worker shortage</title>
+  <link>https://www.pncguam.com/govguam-agencies-brace-for-h-2b-worker-shortage/</link>
+  <dc:creator><![CDATA[Jolene Toves]]></dc:creator>
+  <pubDate>Sat, 26 Sep 2026 21:15:00 +0000</pubDate>
+  <category><![CDATA[Local News]]></category>
+  <description><![CDATA[<p>Government of Guam agencies are bracing for a shortage of H-2B construction workers [&#8230;]</p>
+<p>The post <a href="https://www.pncguam.com/x/">GovGuam agencies brace</a> appeared first on <a href="https://www.pncguam.com">PNC News First</a>.</p>]]></description>
+  <media:content url="https://www.pncguam.com/wp-content/uploads/2026/09/h2b-workers.jpg" medium="image"/>
+</item>
+<item>
+  <title>Mayors&#8217; Council plans village cleanup ahead of typhoon season</title>
+  <link>https://www.pncguam.com/mayors-council-plans-village-cleanup-ahead-of-typhoon-season/</link>
+  <pubDate>Fri, 25 Sep 2026 03:00:00 +0000</pubDate>
+  <description><![CDATA[Mayors across the island will coordinate a cleanup of village drainage ahead of typhoon season.]]></description>
+</item>
+<item>
+  <title>Off-site link</title>
+  <link>https://www.example.com/not-ours/</link>
+  <pubDate>Fri, 25 Sep 2026 03:00:00 +0000</pubDate>
+</item>
+</channel>
+</rss>

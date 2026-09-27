@@ -1,0 +1,134 @@
+# Checks the configured news sites from GitHub's network: what each feed/page
+# looks like, what the scraper would store, and a full scrape into a throwaway
+# database. Run it from the Actions tab ("Run workflow") after editing
+# config/sources.yaml, or push a commit whose message contains [live].
+name: Live source check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "config/**"
+      - "guheadlines/scraper/**"
+      - ".github/workflows/live-check.yml"
+
+permissions:
+  contents: read
+
+env:
+  PER_HOST_DELAY: "1"
+  REQUEST_TIMEOUT: "20"
+  MEDIA_DIR: /tmp/media
+  LOG_LEVEL: INFO
+
+jobs:
+  probe:
+    name: Probe source pages
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Probe every configured URL
+        run: guheadlines probe --all
+
+  scrape:
+    name: Check and scrape sources
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: guheadlines
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/guheadlines
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: guheadlines migrate
+      - name: Dry-run each source
+        run: |
+          for slug in $(python -c "from guheadlines.config import load_config; from pathlib import Path; print(' '.join(s.slug for s in load_config(Path('config')).sources))"); do
+            guheadlines check --source "$slug" --limit 2 || true
+            echo
+          done
+      - name: Full scrape, catching up every minute until loaded (at most 8 rounds)
+        timeout-minutes: 35
+        # A site that keeps rate-limiting (Marianas Variety from GitHub's
+        # network) would otherwise keep this step going for a long time.
+        run: guheadlines scrape --until-done --max-rounds 8
+      - name: Re-run like the hourly worker (should fetch only new pages)
+        run: guheadlines scrape
+      - name: Summary
+        run: |
+          q() { psql "$DATABASE_URL" -P pager=off -c "$1"; }
+          q "SELECT s.slug, count(a.id) AS stories, count(a.image_path) AS images,
+                    round(avg(length(a.intro))) AS avg_intro, max(a.published_at) AS newest,
+                    min(a.published_at) AS oldest
+             FROM sources s LEFT JOIN articles a ON a.source_id = s.id
+             GROUP BY s.slug ORDER BY stories DESC"
+          q "SELECT unnest(categories) AS category, count(*) FROM articles GROUP BY 1 ORDER BY 2 DESC"
+          q "SELECT s.slug, r.candidates, r.new_articles, r.failed, left(r.error, 160) AS error
+             FROM scrape_runs r JOIN sources s ON s.id = r.source_id ORDER BY r.id"
+          q "SELECT status, left(reason, 60) AS reason, count(*) FROM seen_urls GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 25"
+          q "SELECT slug, day, title, categories, img, intro FROM (
+               SELECT s.slug, a.published_at::date AS day, left(a.title, 70) AS title,
+                      a.categories, a.image_path IS NOT NULL AS img, left(a.intro, 90) AS intro,
+                      row_number() OVER (PARTITION BY s.slug ORDER BY a.published_at DESC) AS n
+               FROM articles a JOIN sources s ON s.id = a.source_id) x
+             WHERE n <= 6 ORDER BY slug, day DESC"
+      - name: Website renders the scraped stories
+        run: |
+          guheadlines web --port 8000 --workers 1 > web.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
+          echo
+          for path in / /category/local /category/military /category/business /category/labor "/search?q=guam" "/search?q=hagatna" /archive /status; do
+            code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
+            echo "$path -> HTTP $code, $(grep -c 'class="story' page.html) stories, $(grep -c 'class="thumb-img"' page.html) with photos"
+            test "$code" = 200
+          done
+          test "$(curl -s localhost:8000/ | grep -c 'class="story')" -gt 0
+      - name: Screenshots of the site with the scraped stories
+        run: |
+          mkdir -p /tmp/shots && cp .github/scripts/screenshots.cjs /tmp/shots/ && cd /tmp/shots
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium > /dev/null
+          node screenshots.cjs http://localhost:8000 /tmp/shots
+          ls -la /tmp/shots/*.png
+      - name: Keep the screenshots (Actions run page, 3 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-screenshots
+          path: /tmp/shots/*.png
+          retention-days: 3
+      - name: Screenshots as text in this log (only for commits tagged [preview])
+        if: contains(github.event.head_commit.message, '[preview]')
+        run: |
+          python - <<'PY'
+          import base64, glob, io
+          from PIL import Image
+          for path in sorted(glob.glob("/tmp/shots/*.png")):
+              image = Image.open(path).convert("RGB")
+              if image.width > 900:
+                  image = image.resize((900, round(image.height * 900 / image.width)))
+              buffer = io.BytesIO()
+              image.save(buffer, "JPEG", quality=74)
+              print("SHOT", path.rsplit("/", 1)[-1], base64.b64encode(buffer.getvalue()).decode())
+          PY

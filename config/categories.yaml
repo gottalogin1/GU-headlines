@@ -1,0 +1,315 @@
+# Topic categories. An article can belong to several.
+#
+# Each keyword is matched case-insensitively on whole words; a trailing * matches
+# any ending ("employ*" matches employer, employment, ...). Accents are ignored.
+#
+# Scoring: a keyword found in the headline scores 3, in the site's own
+# section/tags/URL scores 2, in the intro paragraph scores 1. A category is
+# applied when its score reaches min_score (default 3). Sources can also force
+# a category (see categories: in sources.yaml).
+#
+# The category marked fallback: true is applied when nothing else matched.
+# After changing this file, re-tag existing articles with:
+#     docker compose exec worker guheadlines reclassify
+
+categories:
+  - slug: local
+    name: Local
+    description: Everyday life on island - community, public safety, schools, health, weather, government.
+    fallback: true
+    keywords:
+      - police
+      - GPD
+      - arrest*
+      - court
+      - judge
+      - jury
+      - sentenc*
+      - charged
+      - crash
+      - collision
+      - fire
+      - firefighters
+      - GFD
+      - rescue
+      - typhoon
+      - tropical storm
+      - storm
+      - weather
+      - flood*
+      - earthquake
+      - tsunami
+      - power outage
+      - outage
+      - school*
+      - students
+      - teachers
+      - GDOE
+      - University of Guam
+      - UOG
+      - Guam Community College
+      - GCC
+      - mayor*
+      - village*
+      - fiesta
+      - festival
+      - parade
+      - church
+      - community
+      - residents
+      - neighborhood
+      - Liberation Day
+      - holiday
+      - health
+      - hospital
+      - GMH
+      - DPHSS
+      - clinic
+      - dengue
+      - water
+      - GWA
+      - GPA
+      - roads
+      - traffic
+      - DPW
+      - beach*
+      - park
+      - cleanup
+      - library
+      - culture
+      - cultural
+      - CHamoru
+      - Chamorro
+      - legislature
+      - senator*
+      - governor
+      - election*
+      - Hagåtña
+      - Tamuning
+      - Tumon
+      - Dededo
+      - Yigo
+      - Mangilao
+      - Barrigada
+      - Sinajana
+      - Agana Heights
+      - Chalan Pago
+      - Ordot
+      - Mongmong
+      - Toto
+      - Maite
+      - Asan
+      - Maina
+      - Piti
+      - Santa Rita
+      - Agat
+      - Umatac
+      - Merizo
+      - Inarajan
+      - Talofofo
+      - Yona
+
+  - slug: military
+    name: Military
+    description: Armed forces on Guam, the buildup, veterans and defense.
+    keywords:
+      - military
+      - buildup
+      - build-up
+      - Navy
+      - naval
+      - Marine Corps
+      - Marines
+      - Air Force
+      - Army
+      - Space Force
+      - Coast Guard
+      - National Guard
+      - Guam Guard
+      - soldier*
+      - sailor*
+      - airman
+      - airmen
+      - servicemember*
+      - service member*
+      - troops
+      - veteran*
+      - VA clinic
+      - Pentagon
+      - Department of Defense
+      - Department of War
+      - Defense Department
+      - defense secretary
+      - secretary of defense
+      - missile defense
+      - Guam Defense System
+      - NDAA
+      - DoD
+      - Andersen
+      - Naval Base Guam
+      - Joint Region Marianas
+      - JRM
+      - Camp Blaz
+      - Finegayan
+      - INDOPACOM
+      - Indo-Pacific Command
+      - Joint Task Force
+      - JTF-Micronesia
+      - missile*
+      - Aegis
+      - THAAD
+      - bomber*
+      - B-52
+      - B-1
+      - B-2
+      - fighter jet*
+      - warship*
+      - destroyer
+      - submarine*
+      - aircraft carrier
+      - USS
+      - Seabees
+      - Valiant Shield
+      - Cope North
+      - Pacific Partnership
+      - deployment
+      - commissary
+      - TRICARE
+      - Naval Hospital
+
+  - slug: business
+    name: Business
+    description: Economy, tourism, companies, prices, contracts and development.
+    keywords:
+      - business*
+      - economy
+      - economic*
+      - GDP
+      - tourism
+      - tourist*
+      - visitor arrivals
+      - visitors
+      - Guam Visitors Bureau
+      - GVB
+      - hotel*
+      - airline*
+      - United Airlines
+      - flights
+      - retail*
+      - restaurant*
+      - bank*
+      - credit union
+      - loan*
+      - invest
+      - invests
+      - investment*
+      - investor*
+      - revenue*
+      - tax
+      - taxes
+      - business privilege tax
+      - BPT
+      - GEDA
+      - chamber of commerce
+      - contract
+      - contracts
+      - contractor*
+      - procurement
+      - bids
+      - construction
+      - developer*
+      - real estate
+      - housing market
+      - rent
+      - prices
+      - price
+      - inflation
+      - cost of living
+      - gas prices
+      - fuel
+      - power rates
+      - water rates
+      - utility rates
+      - CCU
+      - shipping
+      - cargo
+      - port
+      - port authority
+      - Port of Guam
+      - Matson
+      - tariff*
+      - export*
+      - import
+      - imports
+      - imported
+      - importer*
+      - small business*
+      - SBA
+      - entrepreneur*
+      - startup*
+      - company
+      - companies
+      - corporation
+      - CEO
+      - profit*
+      - sales
+      - stock market
+      - mall
+      - duty free
+      - DFS
+
+  - slug: labor
+    name: Labor
+    description: Jobs, wages, workforce, unions and foreign-worker programs.
+    keywords:
+      - labor
+      - labour
+      - workforce
+      - worker*
+      - workplace
+      - employee*
+      - employer*
+      - employ*
+      - unemploy*
+      - jobs
+      - job fair
+      - career fair
+      - job seekers
+      - hiring
+      - layoff*
+      - laid off
+      - furlough*
+      - wage*
+      - minimum wage
+      - prevailing wage
+      - salary
+      - salaries
+      - pay raise
+      - pay increase
+      - overtime pay
+      - labor union*
+      - unions
+      - union members
+      - collective bargaining
+      - labor strike
+      - workers strike
+      - on strike
+      - H-2B
+      - H2B
+      - H-1B
+      - foreign workers
+      - guest workers
+      - CW-1
+      - apprentice*
+      - GDOL
+      - Department of Labor
+      - American Job Center
+      - HireGuam
+      - OSHA
+      - workers' compensation
+      - workforce development
+      - labor shortage
+      - staffing
+      - retirement fund
+      - pension*
+      - Civil Service Commission

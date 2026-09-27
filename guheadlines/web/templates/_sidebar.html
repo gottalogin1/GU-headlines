@@ -1,0 +1,40 @@
+<section class="panel">
+  <h2>Updated</h2>
+  {% if sidebar.last_updated %}
+  <p class="updated">Last checked <strong>{{ sidebar.last_updated|rel_time }}</strong><br>
+    <span class="muted">{{ sidebar.last_updated|fmt_datetime }}</span></p>
+  {% else %}
+  <p class="muted">Waiting for the first scrape.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>This week</h2>
+  <ul class="facets">
+    {% for c in categories %}
+    <li><a href="/category/{{ c.slug }}"><span class="dot tag-{{ c.slug }}"></span>{{ c.name }}</a>
+      <span class="count">{{ sidebar.facets_week.categories.get(c.slug, 0) }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Sources</h2>
+  <ul class="facets">
+    {% for s in sidebar.facets_week.sources %}
+    <li>
+      <span class="facet-name">
+        <a href="/source/{{ s.slug }}">{{ s.name }}</a>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+      </span>
+      <span class="count">{{ s.count }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Stories this week. Name: that outlet's stories here; ↗ its website. <a href="/status">Status →</a></p>
+</section>
+
+<section class="panel">
+  <h2>Looking for an older story?</h2>
+  <p class="small">Use <a href="/search">search</a> with a date range, or browse the <a href="/archive">archive</a> by month and day.</p>
+</section>

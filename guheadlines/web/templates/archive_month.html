@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block main %}
+<header class="page-head">
+  <p class="crumbs"><a href="/archive">Archive</a></p>
+  <h1>{{ months[month - 1] }} {{ year }}</h1>
+  {% set prev_m = 12 if month == 1 else month - 1 %}{% set prev_y = year - 1 if month == 1 else year %}
+  {% set next_m = 1 if month == 12 else month + 1 %}{% set next_y = year + 1 if month == 12 else year %}
+  <p class="month-nav">
+    <a href="/archive/{{ prev_y }}/{{ prev_m }}">← {{ months[prev_m - 1] }} {{ prev_y }}</a>
+    <a href="/archive/{{ next_y }}/{{ next_m }}">{{ months[next_m - 1] }} {{ next_y }} →</a>
+  </p>
+</header>
+{% if not days %}
+<div class="empty"><p>No stories stored for this month.</p></div>
+{% else %}
+<ul class="day-list">
+  {% for d in days %}
+  <li><a href="/archive/{{ d.day.year }}/{{ d.day.month }}/{{ d.day.day }}">{{ d.day|fmt_date_long }}</a><span class="count">{{ d.count }}</span></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block main %}
+<header class="page-head">
+  <h1>Sources</h1>
+  <p class="muted">Each source is checked every hour. Only pages not already in the database are downloaded.</p>
+</header>
+<div class="table-wrap">
+<table class="status-table">
+  <thead>
+    <tr><th>Source</th><th>Last check</th><th class="num">24 h</th><th class="num">7 days</th><th class="num">Total</th><th>Latest story</th></tr>
+  </thead>
+  <tbody>
+  {% for row in sources %}
+  {% set s = row.source %}
+  <tr class="{{ 'disabled' if not s.enabled }}">
+    <td>
+      <a href="/source/{{ s.slug }}">{{ s.name }}</a>
+      {% if not s.enabled %}<span class="badge">paused</span>{% endif %}
+      {% if s.homepage %}<br><a class="site-link" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}
+      {% if s.last_error %}<div class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(160) }}</div>{% endif %}
+    </td>
+    <td>{% if s.last_run_at %}<span title="{{ s.last_run_at|fmt_datetime }}">{{ s.last_run_at|rel_time }}</span>{% else %}<span class="muted">never</span>{% endif %}
+      {% if s.last_run_at and (not s.last_success_at or s.last_success_at < s.last_run_at) %}<br><span class="error small">failed</span>{% endif %}</td>
+    <td class="num">{{ row.day }}</td>
+    <td class="num">{{ row.week }}</td>
+    <td class="num">{{ "{:,}".format(row.total) }}</td>
+    <td>{% if row.latest %}{{ row.latest|rel_time }}{% else %}<span class="muted">–</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="section-title">Recent runs</h2>
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Started</th><th>Source</th><th class="num">Links</th><th class="num">New</th><th class="num">Failed</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr>
+    <td title="{{ r.run.started_at|fmt_datetime }}">{{ r.run.started_at|rel_time }}</td>
+    <td>{{ r.source_name }}</td>
+    <td class="num">{{ r.run.candidates }}</td>
+    <td class="num">{{ r.run.new_articles }}</td>
+    <td class="num">{{ r.run.failed }}</td>
+    <td class="small">{% if r.run.error %}<span class="error" title="{{ r.run.error }}">{{ r.run.error|truncate(90) }}</span>{% elif not r.run.finished_at %}<span class="muted">running…</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No runs yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

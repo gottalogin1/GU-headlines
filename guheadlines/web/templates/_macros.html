@@ -1,0 +1,55 @@
+{% macro card(item, category_names, show_snippet=false) %}
+{% set a = item.article %}
+{% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url %}
+<article class="story{% if not photo %} no-photo{% endif %}">
+  {% if photo %}
+  <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+    {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest. #}
+    <img class="thumb-fill" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}>
+    <img class="thumb-img" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}
+         {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
+  </a>
+  {% endif %}
+  <div class="story-body">
+    {% if a.categories %}
+    <div class="tags">
+      {% for c in a.categories %}<a class="tag tag-{{ c }}" href="/category/{{ c }}">{{ category_names.get(c, c) }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    <h3 class="headline"><a href="{{ a.url }}" target="_blank" rel="noopener" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
+    {% if show_snippet and item.snippet %}
+      {% for p in item.snippet|paragraphs %}<p class="intro">{{ p|highlight }}</p>{% endfor %}
+    {% elif a.intro %}
+      {% for p in a.intro|paragraphs %}<p class="intro">{{ p }}</p>{% endfor %}
+    {% endif %}
+    <p class="meta">
+      {% if item.source_homepage %}
+      <a class="source" href="{{ item.source_homepage }}" target="_blank" rel="noopener" title="{{ item.source_homepage|domain }}">{{ item.source_name }}</a>
+      {% else %}<span class="source">{{ item.source_name }}</span>{% endif %}
+      <span aria-hidden="true">·</span>
+      <time datetime="{{ a.published_at.isoformat() }}" title="{{ a.published_at|fmt_datetime }}">{{ a.published_at|rel_time }}</time>
+      {% if a.author %}<span aria-hidden="true">·</span> <span class="author">{{ a.author }}</span>{% endif %}
+    </p>
+    <a class="read-link" href="{{ a.url }}" target="_blank" rel="noopener">
+      Read the full story at <span class="read-domain">{{ a.url|domain }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
+  </div>
+</article>
+{% endmacro %}
+
+{% macro pagination(result, page_url) %}
+{% if result and result.pages > 1 %}
+<nav class="pagination" aria-label="Pages">
+  {% if result.has_prev %}<a rel="prev" href="{{ page_url(page=result.page - 1) }}">← Newer</a>{% else %}<span class="disabled">← Newer</span>{% endif %}
+  <span class="pages">
+  {% for n in result.window() %}
+    {% if n is none %}<span class="gap">…</span>
+    {% elif n == result.page %}<span class="current" aria-current="page">{{ n }}</span>
+    {% else %}<a href="{{ page_url(page=n) }}">{{ n }}</a>{% endif %}
+  {% endfor %}
+  </span>
+  {% if result.has_next %}<a rel="next" href="{{ page_url(page=result.page + 1) }}">Older →</a>{% else %}<span class="disabled">Older →</span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

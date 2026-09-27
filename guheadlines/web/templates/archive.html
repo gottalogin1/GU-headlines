@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block main %}
+<header class="page-head">
+  <h1>Archive</h1>
+  <p class="muted">Every story collected, by month. Times are Chamorro Standard Time.</p>
+</header>
+{% if not years %}
+<div class="empty"><p>Nothing archived yet.</p></div>
+{% endif %}
+{% for y in years %}
+<section class="archive-year">
+  <h2>{{ y.year }}</h2>
+  <ul class="month-grid">
+    {% for m in y.months %}
+    <li><a href="/archive/{{ y.year }}/{{ m.month }}"><span class="month">{{ months[m.month - 1] }}</span><span class="count">{{ "{:,}".format(m.count) }} stories</span></a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}
