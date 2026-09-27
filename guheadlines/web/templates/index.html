@@ -5,7 +5,9 @@
 <header class="page-head">
   {% if archive_day %}<p class="crumbs"><a href="/archive">Archive</a> › <a href="/archive/{{ archive_day.year }}/{{ archive_day.month }}">{{ months[archive_day.month - 1] }} {{ archive_day.year }}</a></p>{% endif %}
   <h1>{{ heading }}</h1>
-  {% if subheading %}<p class="muted">{{ subheading }}</p>{% endif %}
+  {% if subheading_link %}
+  <p><a class="external" href="{{ subheading_link }}" target="_blank" rel="noopener">{{ subheading_link|domain }} ↗</a></p>
+  {% elif subheading %}<p class="muted">{{ subheading }}</p>{% endif %}
   {% if result.total %}<p class="muted small">{{ "{:,}".format(result.total) }} {{ "story" if result.total == 1 else "stories" }}</p>{% endif %}
   {% if archive_day %}
   <p class="month-nav">

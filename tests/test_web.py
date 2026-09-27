@@ -63,6 +63,20 @@ def test_home_lists_latest(client):
     assert "<script>x</script>" not in html and "&lt;script&gt;" in html
 
 
+def test_links_to_articles_and_source_websites(client):
+    html = client.get("/").text
+    article = "https://www.postguam.com/news/local/a/article_1.html"
+    # Headline, photo and the "read the full story" link all open the article.
+    assert html.count(f'href="{article}"') >= 2
+    assert 'Read the full story at <span class="read-domain">postguam.com</span>' in html
+    # The outlet's name opens the outlet's website; the sidebar shows its address.
+    assert '<a class="source" href="https://www.postguam.com/"' in html
+    assert 'class="site-link" href="https://www.kuam.com/"' in html
+    source_page = client.get("/source/kuam").text
+    link = 'href="https://www.kuam.com/" target="_blank" rel="noopener">kuam.com ↗</a>'
+    assert link in source_page
+
+
 def test_category_and_source_pages(client):
     labor = client.get("/category/labor").text
     assert "Minimum wage increase" in labor and "Cope North" not in labor

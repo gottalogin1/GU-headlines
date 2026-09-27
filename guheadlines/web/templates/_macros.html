@@ -16,18 +16,24 @@
       {% for c in a.categories %}<a class="tag tag-{{ c }}" href="/category/{{ c }}">{{ category_names.get(c, c) }}</a>{% endfor %}
     </div>
     {% endif %}
-    <h3 class="headline"><a href="{{ a.url }}" target="_blank" rel="noopener">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
+    <h3 class="headline"><a href="{{ a.url }}" target="_blank" rel="noopener" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
     {% if show_snippet and item.snippet %}
       {% for p in item.snippet|paragraphs %}<p class="intro">{{ p|highlight }}</p>{% endfor %}
     {% elif a.intro %}
       {% for p in a.intro|paragraphs %}<p class="intro">{{ p }}</p>{% endfor %}
     {% endif %}
     <p class="meta">
-      <a class="source" href="/source/{{ item.source_slug }}">{{ item.source_name }}</a>
+      {% if item.source_homepage %}
+      <a class="source" href="{{ item.source_homepage }}" target="_blank" rel="noopener" title="{{ item.source_homepage|domain }}">{{ item.source_name }}</a>
+      {% else %}<span class="source">{{ item.source_name }}</span>{% endif %}
       <span aria-hidden="true">·</span>
       <time datetime="{{ a.published_at.isoformat() }}" title="{{ a.published_at|fmt_datetime }}">{{ a.published_at|rel_time }}</time>
       {% if a.author %}<span aria-hidden="true">·</span> <span class="author">{{ a.author }}</span>{% endif %}
     </p>
+    <a class="read-link" href="{{ a.url }}" target="_blank" rel="noopener">
+      Read the full story at <span class="read-domain">{{ a.url|domain }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
   </div>
 </article>
 {% endmacro %}

@@ -269,10 +269,27 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tag-labor { color: var(--tag-labor); background: var(--tag-labor-bg); }
 .headline { font-size: 1.2rem; line-height: 1.3; font-weight: 720; letter-spacing: -.015em; margin: 0 0 6px; }
 .headline a { color: var(--text); }
-.headline a:hover { color: var(--link); text-decoration: none; }
+.headline a:hover { color: var(--link); }
 .intro { margin: 0 0 6px; color: var(--text-soft); font-size: .97rem; line-height: 1.62; }
 .meta { margin: 8px 0 0; font-size: .82rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 7px; }
 .meta .source { font-weight: 700; color: var(--text); }
+.meta a.source:hover { color: var(--link); }
+.headline a { text-decoration-thickness: 2px; }
+.headline a:hover { text-decoration: underline; text-underline-offset: 4px; }
+/* The article's own address, always visible and clickable. */
+.read-link {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: .82rem; font-weight: 650; color: var(--link);
+  background: rgba(37, 99, 235, .08); border: 1px solid rgba(37, 99, 235, .16);
+  transition: background-color .15s ease;
+}
+.read-link:hover { text-decoration: none; background: rgba(37, 99, 235, .15); }
+.read-link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.read-domain { font-weight: 750; }
+.site-link { display: block; font-size: .78rem; color: var(--muted); }
+.site-link:hover { color: var(--link); }
+.external { font-weight: 650; }
 
 @media (max-width: 640px) {
   .wrap { padding: 0 12px; }
@@ -309,6 +326,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .sidebar p { margin: 4px 0; }
 .facets { list-style: none; margin: 0; padding: 0; }
 .facets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }
+.facet-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 .facets li:last-child { border-bottom: 0; }
 .facets a { color: var(--text-soft); }
 .facets .count, .day-list .count {

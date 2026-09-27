@@ -71,9 +71,12 @@ def local_day_bounds(day: date) -> tuple[datetime, datetime]:
 
 
 def _article_query() -> Select:
-    return select(Article, Source.name.label("source_name"), Source.slug.label("source_slug")).join(
-        Source, Source.id == Article.source_id
-    )
+    return select(
+        Article,
+        Source.name.label("source_name"),
+        Source.slug.label("source_slug"),
+        Source.homepage.label("source_homepage"),
+    ).join(Source, Source.id == Article.source_id)
 
 
 def _apply_filters(stmt: Select, f: Filters) -> Select:
@@ -101,6 +104,7 @@ def _rows(session: Session, stmt: Select) -> list[dict]:
                 "article": mapping[Article],
                 "source_name": mapping["source_name"],
                 "source_slug": mapping["source_slug"],
+                "source_homepage": mapping["source_homepage"],
                 "snippet": mapping.get("snippet"),
                 "title_marked": mapping.get("title_marked"),
             }
@@ -166,16 +170,16 @@ def facet_counts(session: Session, since: datetime | None = None) -> dict:
         select(category, func.count()).select_from(Article).where(cond).group_by(category)
     ).all()
     src_rows = session.execute(
-        select(Source.slug, Source.name, func.count(Article.id))
+        select(Source.slug, Source.name, Source.homepage, func.count(Article.id))
         .select_from(Source)
         .outerjoin(Article, and_(Article.source_id == Source.id, cond))
         .where(Source.enabled.is_(True))
-        .group_by(Source.slug, Source.name)
+        .group_by(Source.slug, Source.name, Source.homepage)
         .order_by(func.count(Article.id).desc(), Source.name)
     ).all()
     return {
         "categories": {slug: count for slug, count in cat_rows},
-        "sources": [{"slug": s, "name": n, "count": c} for s, n, c in src_rows],
+        "sources": [{"slug": s, "name": n, "homepage": h, "count": c} for s, n, h, c in src_rows],
     }
 
 

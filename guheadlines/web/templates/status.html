@@ -16,7 +16,7 @@
     <td>
       <a href="/source/{{ s.slug }}">{{ s.name }}</a>
       {% if not s.enabled %}<span class="badge">paused</span>{% endif %}
-      {% if s.homepage %}<br><a class="muted small" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage }}</a>{% endif %}
+      {% if s.homepage %}<br><a class="site-link" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}
       {% if s.last_error %}<div class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(160) }}</div>{% endif %}
     </td>
     <td>{% if s.last_run_at %}<span title="{{ s.last_run_at|fmt_datetime }}">{{ s.last_run_at|rel_time }}</span>{% else %}<span class="muted">never</span>{% endif %}

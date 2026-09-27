@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
@@ -143,6 +143,12 @@ def paragraphs(text: str | None) -> list[str]:
     return [p for p in (text or "").split("\n\n") if p.strip()]
 
 
+def domain(url: str | None) -> str:
+    """https://www.guampdn.com/news/... -> guampdn.com"""
+    host = (urlsplit(url or "").hostname or "").lower()
+    return host.removeprefix("www.")
+
+
 templates.env.filters.update(
     fmt_datetime=fmt_datetime,
     fmt_date_long=fmt_date_long,
@@ -150,6 +156,7 @@ templates.env.filters.update(
     highlight=highlight,
     paragraphs=paragraphs,
     to_local=to_local,
+    domain=domain,
 )
 templates.env.globals.update(settings=settings, months=MONTHS)
 
@@ -257,6 +264,7 @@ def source_page(request: Request, slug: str, page: int = Query(1, ge=1, le=10000
         active_nav=None,
         heading=source.name,
         subheading=source.homepage,
+        subheading_link=source.homepage,
         title=source.name,
     )
 

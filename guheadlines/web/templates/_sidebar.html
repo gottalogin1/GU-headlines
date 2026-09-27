@@ -22,10 +22,16 @@
   <h2>Sources</h2>
   <ul class="facets">
     {% for s in sidebar.facets_week.sources %}
-    <li><a href="/source/{{ s.slug }}">{{ s.name }}</a><span class="count">{{ s.count }}</span></li>
+    <li>
+      <span class="facet-name">
+        <a href="/source/{{ s.slug }}">{{ s.name }}</a>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+      </span>
+      <span class="count">{{ s.count }}</span>
+    </li>
     {% endfor %}
   </ul>
-  <p class="muted small">Stories per source this week. <a href="/status">Status →</a></p>
+  <p class="muted small">Stories this week. Name: that outlet's stories here; ↗ its website. <a href="/status">Status →</a></p>
 </section>
 
 <section class="panel">
