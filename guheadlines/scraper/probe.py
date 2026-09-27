@@ -81,6 +81,14 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
     flags = [h for h in ("etag", "last-modified", "cf-ray", "server") if h in headers]
     out("  headers: " + ", ".join(f"{h}={headers[h][:40]}" for h in flags))
 
+    if result.content_type == "text/plain":
+        lines = result.content.decode("utf-8", errors="replace").splitlines()
+        for line in lines[:60]:
+            out(f"  | {line}")
+        if len(lines) > 60:
+            out(f"  | ... {len(lines) - 60} more lines")
+        return
+
     head = result.content[:500].lstrip().lower()
     if b"<rss" in head or b"<feed" in head or b"<rdf" in head or "xml" in result.content_type:
         parsed = feedparser.parse(result.content)
@@ -89,7 +97,8 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
         for item in items[:4]:
             out(
                 f"   - {item.url}\n     title={item.title!r:.90} date={item.published_at} "
-                f"image={'yes' if item.image_url else 'no'} summary={len(item.summary or '')}ch"
+                f"image={'yes' if item.image_url else 'no'} summary={len(item.summary or '')}ch "
+                f"tags={item.tags[:5]}"
             )
         return
 

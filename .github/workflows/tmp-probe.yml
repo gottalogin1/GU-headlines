@@ -1,0 +1,52 @@
+# Temporary: targeted probes while tuning sources. Removed once done.
+name: Temporary probe
+on:
+  push:
+    paths: [".github/workflows/tmp-probe.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PER_HOST_DELAY: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: Article pages and feeds
+        run: |
+          guheadlines probe \
+            https://www.kuam.com/story/353384413/guam-hosting-2026-tuberculosis-controllers-association-conference \
+            https://www.dvidshub.net/news/573626/camp-blaz-marines-welcome-students-back-finegayan-elementary-school \
+            https://www.dvidshub.net/unit/36WG \
+            "https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date" \
+            "https://www.guampdn.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc" \
+            https://kanditnews.com/feed/ \
+            "https://governor.guam.gov/feed/?post_type=press_release" \
+            https://governor.guam.gov/press_release/governor-and-lt-governor-welcome-high-level-delegation-from-japan/ \
+            https://www.mbjguam.com/feed https://www.mbjguam.com/guam/feed https://www.mbjguam.com/rss \
+            https://www.guambusinessmagazine.com/feed/ \
+            https://www.pncguam.com/wp-json/wp/v2/posts?per_page=2
+      - name: robots.txt
+        run: |
+          for host in www.postguam.com www.guampdn.com www.kuam.com www.mvariety.com www.pncguam.com kanditnews.com www.dvidshub.net www.mbjguam.com; do
+            guheadlines probe "https://$host/robots.txt"
+          done
+      - name: Blocked sites with a browser user agent (diagnosis only)
+        env:
+          SCRAPER_USER_AGENT: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+        run: |
+          for url in https://www.pncguam.com/feed/ https://kanditnews.com/ https://www.mbjguam.com/guam https://www.guambusinessmagazine.com/ https://www.andersen.af.mil/News/; do
+            guheadlines probe "$url" | head -8
+          done
+      - name: Blocked sites with curl defaults (diagnosis only)
+        run: |
+          for url in https://www.pncguam.com/feed/ https://www.mbjguam.com/guam https://www.andersen.af.mil/News/; do
+            curl -s -o /dev/null -w "$url %{http_code}\n" "$url"
+            curl -sI "$url" | grep -i -E "^(server|cf-mitigated|x-|set-cookie: __cf)" | head -5
+          done
