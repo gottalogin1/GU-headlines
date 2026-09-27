@@ -40,7 +40,7 @@ from .discover import (
 from .extract import build_intro, extract_article
 from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
-from .text import clean_text, truncate
+from .text import clean_byline, clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
 
 log = logging.getLogger(__name__)
@@ -571,7 +571,11 @@ class Scraper:
             discovered_url=cand.key if cand.key != canonical else None,
             title=title,
             intro=intro,
-            author=(data.author if data else None) or cand.author,
+            author=clean_byline(
+                (data.author if data else None) or cand.author,
+                source.name,
+                data.site_name if data else None,
+            ),
             section=section,
             keywords=keywords,
             categories=categories,

@@ -155,3 +155,15 @@ def test_photo_from_article_body_when_no_share_image():
     data = extract_article(html, "https://dol.guam.gov/story/")
     # Lazy-loaded photo, largest srcset candidate; the share icon is skipped.
     assert data.image_url == "https://dol.guam.gov/wp-content/uploads/photo-1024.jpg"
+
+
+def test_outlet_name_removed_from_bylines():
+    from guheadlines.scraper.text import clean_byline
+
+    assert clean_byline("Uriah Aguon Pacific Daily News", "Pacific Daily News") == "Uriah Aguon"
+    assert clean_byline("Pacific Daily News", "Pacific Daily News") is None
+    assert clean_byline("Kenneth Quinata, The Guam Daily Post", "The Guam Daily Post") == (
+        "Kenneth Quinata"
+    )
+    assert clean_byline("Jolene Toves", "PNC News First") == "Jolene Toves"
+    assert clean_byline(None, "KUAM News") is None

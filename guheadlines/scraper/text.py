@@ -90,3 +90,20 @@ def struct_time_to_datetime(value) -> datetime | None:
     except (TypeError, ValueError):
         return None
     return parse_datetime(dt)
+
+
+def clean_byline(author: str | None, *outlets: str | None) -> str | None:
+    """Drop the outlet's own name from a byline: "Jane Cruz Pacific Daily News"
+    -> "Jane Cruz"; a byline that is only the outlet's name -> None."""
+    author = clean_text(author)
+    for outlet in sorted({clean_text(o) for o in outlets if o}, key=len, reverse=True):
+        if not outlet:
+            continue
+        pattern = re.compile(rf"[\s,|/–—-]*(?:of\s+|for\s+)?(the\s+)?{re.escape(outlet)}\s*$", re.I)
+        author = pattern.sub("", author).strip(" ,|/–—-")
+        if (
+            author.lower().removeprefix("the ").strip()
+            == outlet.lower().removeprefix("the ").strip()
+        ):
+            author = ""
+    return author or None
