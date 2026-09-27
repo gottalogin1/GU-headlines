@@ -27,6 +27,8 @@
 #                         PER_HOST_DELAY; robots.txt Crawl-delay is also honoured)
 #   max_age_days          links found on listing pages older than this are
 #                         skipped as evergreen pages (default 30)
+#   ignore_robots         fetch this site even where its robots.txt disallows
+#                         crawlers (the site may block you for it)
 #   enabled               false to pause a source without deleting its articles
 #
 # Tested from GitHub's servers on 2026-09-27 (see .github/workflows/live-check.yml).
@@ -176,14 +178,25 @@ sources:
       - https://www.pacificislandtimes.com/blog-feed.xml
     require_guam: true
 
-  # Its robots.txt disallows crawlers other than a few search engines, so it is
-  # off. (Saipan-based; mostly CNMI news.)
+  # BLOX/TownNews site, Saipan-based: Guam stories only. Its robots.txt
+  # disallows crawlers other than a few search engines; fetched anyway by the
+  # site owner's choice (ignore_robots), at the same slow pace as the other
+  # BLOX sites.
   - slug: mvariety
     name: Marianas Variety
     homepage: https://www.mvariety.com/
-    enabled: false
+    ignore_robots: true
+    request_delay: 5
     feeds:
       - https://www.mvariety.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
+      - https://www.mvariety.com/search/?f=rss&t=article&c=news/regional&l=50&s=start_time&sd=desc
+      - https://www.mvariety.com/search/?f=rss&t=article&c=business/business_news&l=50&s=start_time&sd=desc
+    listing_pages:
+      - https://www.mvariety.com/news/local/
+    article_pattern: '/article_[0-9a-f-]+\.html'
+    exclude_url_patterns:
+      - '/(news|business)/(world|nation|national)/'
+      - '/views/'
     require_guam: true
 
   - slug: stripes

@@ -113,6 +113,7 @@ class HttpClient:
         self._host_lock = threading.Lock()
         self._host_next: dict[str, float] = {}
         self._host_delay: dict[str, float] = {}
+        self._robots_ignored: set[str] = set()
         self._robots: dict[str, robotparser.RobotFileParser | None] = {}
         self._robots_lock = threading.Lock()
 
@@ -167,13 +168,21 @@ class HttpClient:
             self._robots[origin] = parser
         return parser
 
+    def ignore_robots_for(self, url_or_host: str) -> None:
+        """Do not apply robots.txt to this one site (a per-source owner's choice)."""
+        host = urlsplit(url_or_host).netloc or url_or_host
+        with self._host_lock:
+            self._robots_ignored.add(host)
+
     def robots_permits(self, url: str) -> bool:
         """What robots.txt says about this URL, whether or not we honour it."""
         parser = self._robots_for(url)
         return parser is None or parser.can_fetch(self.robots_agent, url)
 
     def allowed(self, url: str) -> bool:
-        return not self.respect_robots or self.robots_permits(url)
+        if not self.respect_robots or urlsplit(url).netloc in self._robots_ignored:
+            return True
+        return self.robots_permits(url)
 
     # -- requests -----------------------------------------------------------
 

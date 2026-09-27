@@ -212,10 +212,7 @@ class Scraper:
             session.add(run)
             session.flush()
             run_id = run.id
-        if source.request_delay:
-            for url in [source.homepage or "", *source.feeds, *source.listing_pages]:
-                if url:
-                    self.client.set_host_delay(url, source.request_delay)
+        self.prepare(source)
         try:
             if carry is not None:
                 # Catching up: continue with the pages an earlier run left over.
@@ -287,6 +284,15 @@ class Scraper:
             f" (errors: {error})" if error else "",
         )
         return result
+
+    def prepare(self, source: SourceConfig) -> None:
+        """Apply per-source HTTP settings (pace, robots.txt) to the source's sites."""
+        urls = [u for u in [source.homepage, *source.feeds, *source.listing_pages] if u]
+        for url in urls:
+            if source.request_delay:
+                self.client.set_host_delay(url, source.request_delay)
+            if source.ignore_robots:
+                self.client.ignore_robots_for(url)
 
     # ------------------------------------------------------------- discovery
 
@@ -716,6 +722,7 @@ class Scraper:
         self, source: SourceConfig, source_id: int, since: datetime, limit: int
     ) -> SourceResult:
         """Import older articles listed in the site's XML sitemaps."""
+        self.prepare(source)
         result = SourceResult(slug=source.slug)
         sitemap_urls = list(source.sitemaps)
         origin = normalize_url(source.homepage or (source.feeds + source.listing_pages)[0])

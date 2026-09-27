@@ -63,6 +63,8 @@ class SourceConfig:
     max_age_days: int = 30
     # Skip stories whose site section or feed category/tag is one of these.
     exclude_sections: list[str] = field(default_factory=list)
+    # Fetch this site even where its robots.txt disallows crawlers.
+    ignore_robots: bool = False
 
     def is_excluded(self, url: str) -> bool:
         return any(p.search(url) for p in self.exclude_patterns)
@@ -189,6 +191,7 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             require_guam=bool(raw.get("require_guam", False)),
             body_selector=raw.get("body_selector"),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
+            ignore_robots=bool(raw.get("ignore_robots", False)),
             max_age_days=int(raw.get("max_age_days", defaults.get("max_age_days", 30))),
             exclude_sections=[
                 str(x)

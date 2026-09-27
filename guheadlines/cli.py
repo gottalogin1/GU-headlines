@@ -249,6 +249,7 @@ def cmd_check(args, settings: Settings) -> None:
         source_id = sync_sources(session, config)[source.slug]
     scraper = Scraper(settings, config)
     try:
+        scraper.prepare(source)
         result = SourceResult(slug=source.slug)
         candidates, _ = scraper.discover(source, result, use_cache=False)
         print(f"== {source.name} ({source.slug})")

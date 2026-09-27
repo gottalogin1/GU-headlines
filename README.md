@@ -53,7 +53,7 @@ tested against the live sites from GitHub's servers (see
 | Marianas Business Journal | section pages | Business | Cloudflare challenge* |
 | Guam Business Magazine | RSS + front page | Business | Cloudflare challenge* |
 | Andersen Air Force Base | news page | Military | blocked by Akamai* |
-| Marianas Variety (off) | RSS, Guam stories only | by keywords | robots.txt disallows crawlers |
+| Marianas Variety | RSS (local, regional, business), Guam stories only | by keywords | works; its robots.txt is ignored by choice (`ignore_robots`) |
 | Office of the Governor (off) | press-release RSS | by keywords | works |
 
 \* These sites refuse requests from data-center IP addresses (Cloudflare's
@@ -61,7 +61,7 @@ JavaScript challenge or Akamai), whatever the user agent. They usually load
 normally from a home or business connection, so they are left on: after you
 deploy, `/status` shows whether they work from your server. GU Headlines does
 not try to get around these blocks, and it honours `robots.txt`
-(including `Crawl-delay`).
+(including `Crawl-delay`) except for sources marked `ignore_robots: true`.
 
 News sites change their layouts. If a source stops finding stories, run
 `guheadlines check` and `guheadlines probe` (below) and adjust its entry in
@@ -248,6 +248,7 @@ Add an entry to `config/sources.yaml`:
     require_guam: false           # true for regional outlets
     exclude_sections: [Opinion]   # optional: skip these feed categories/sections
     request_delay: 5              # optional: slower pace for sites that rate-limit
+    ignore_robots: false          # true: fetch even where robots.txt disallows it
     max_age_days: 30              # listing links older than this are evergreen pages
     body_selector: '.story-text'  # optional: if the intro comes out wrong
 ```

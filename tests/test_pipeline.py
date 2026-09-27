@@ -346,3 +346,29 @@ def test_old_listing_links_are_skipped(clean_db, scraper, config):
     source.max_age_days = 1
     with pytest.raises(Skip, match="evergreen"):
         scraper.build_draft(source, None, Candidate(url=BARE, key=BARE, via="listing"))
+
+
+def test_ignore_robots_is_per_source(clean_db, scraper, site, config):
+    original = site.__call__
+
+    def disallow_all(request):
+        if str(request.url).endswith("/robots.txt"):
+            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(disallow_all)
+    assert scraper.run()[0].new_articles == 0  # robots.txt respected by default
+
+    other = HttpClient("test-agent", transport=httpx.MockTransport(disallow_all))
+    try:
+        config.source("pnc").ignore_robots = True
+        with session_scope() as session:
+            session.execute(text("TRUNCATE seen_urls, http_cache"))
+        assert scraper.run()[0].new_articles == 2
+        # Only that source's site is exempt; the rule still applies elsewhere.
+        assert not scraper.client.allowed("https://www.example.com/")
+        other.ignore_robots_for("https://www.pncguam.com/")
+        assert other.allowed("https://www.pncguam.com/any/page/")
+        assert not other.allowed("https://kanditnews.com/any/page/")
+    finally:
+        other.close()
