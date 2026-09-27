@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -45,6 +46,7 @@ from .urls import normalize_url, same_site, url_variants
 log = logging.getLogger(__name__)
 
 MAX_FAILED_ATTEMPTS = 5
+MAX_BACKFILL_PAUSES = 10
 HTML_TYPES = ("text/html", "application/xhtml+xml", "")
 _FEED_TAIL_RE = re.compile(
     r"(\s*\[(…|\.\.\.|&hellip;)\]\s*$)|(\s*The post .{3,200} appeared first on .{3,120}\.?\s*$)",
@@ -53,13 +55,15 @@ _FEED_TAIL_RE = re.compile(
 
 
 class Skip(Exception):
-    """A candidate that will not be stored. status is 'rejected' (never retry)
-    or 'failed' (retry later with backoff)."""
+    """A candidate that will not be stored. status is 'rejected' (never retry),
+    'failed' (retry later with backoff) or 'throttled' (the site is
+    rate-limiting us: stop this source and catch up shortly)."""
 
-    def __init__(self, status: str, reason: str):
+    def __init__(self, status: str, reason: str, retry_after: float | None = None):
         super().__init__(reason)
         self.status = status
         self.reason = reason
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -90,10 +94,21 @@ class SourceResult:
     rejected: int = 0
     reachable: int = 0  # feeds/pages that answered (including "not modified")
     errors: list[str] = field(default_factory=list)
+    # New pages not processed yet (per-run cap reached or rate-limited). The
+    # worker comes back for them within a minute instead of waiting an hour.
+    pending: list[Candidate] = field(default_factory=list)
+    # Feed validators to save once the pending pages are done.
+    cache_updates: list[dict] = field(default_factory=list)
+    # Seconds the site asked us to wait (Retry-After), if it was rate-limiting.
+    retry_after: float | None = None
 
     @property
     def ok(self) -> bool:
         return not self.errors or self.reachable > 0
+
+    @property
+    def incomplete(self) -> bool:
+        return bool(self.pending)
 
 
 def _now() -> datetime:
@@ -150,19 +165,33 @@ class Scraper:
 
     # ------------------------------------------------------------------ runs
 
-    def run(self, only: list[str] | None = None) -> list[SourceResult] | None:
-        """Scrape all enabled sources (or just `only`). Returns None if another
-        scrape already holds the lock."""
+    def run(
+        self,
+        only: list[str] | None = None,
+        catch_up: dict[str, SourceResult] | None = None,
+    ) -> list[SourceResult] | None:
+        """Scrape all enabled sources (or just `only`). With `catch_up` (results
+        of an earlier run that left pages pending), only those sources run and
+        they continue with their pending pages instead of re-reading feeds.
+        Returns None if another scrape already holds the lock."""
         with advisory_lock(SCRAPE_LOCK_KEY) as acquired:
             if not acquired:
                 log.warning("another scrape is already running; skipping this one")
                 return None
             with session_scope() as session:
                 ids = sync_sources(session, self.config)
-            sources = [s for s in self.config.sources if (s.slug in only if only else s.enabled)]
+            if catch_up is not None:
+                sources = [s for s in self.config.sources if s.slug in catch_up and s.enabled]
+            else:
+                sources = [
+                    s for s in self.config.sources if (s.slug in only if only else s.enabled)
+                ]
+            carry = catch_up or {}
             started = _now()
             with ThreadPoolExecutor(max_workers=self.settings.max_workers) as pool:
-                results = list(pool.map(lambda s: self.run_source(s, ids[s.slug]), sources))
+                results = list(
+                    pool.map(lambda s: self.run_source(s, ids[s.slug], carry.get(s.slug)), sources)
+                )
             self._housekeeping()
             new_total = sum(r.new_articles for r in results)
             log.info(
@@ -173,7 +202,9 @@ class Scraper:
             )
             return results
 
-    def run_source(self, source: SourceConfig, source_id: int) -> SourceResult:
+    def run_source(
+        self, source: SourceConfig, source_id: int, carry: SourceResult | None = None
+    ) -> SourceResult:
         result = SourceResult(slug=source.slug)
         started = _now()
         with session_scope() as session:
@@ -186,8 +217,13 @@ class Scraper:
                 if url:
                     self.client.set_host_delay(url, source.request_delay)
         try:
-            candidates, cache_updates = self.discover(source, result)
-            candidates += self._retry_candidates(source_id)
+            if carry is not None:
+                # Catching up: continue with the pages an earlier run left over.
+                candidates, cache_updates = list(carry.pending), list(carry.cache_updates)
+                result.reachable = 1
+            else:
+                candidates, cache_updates = self.discover(source, result)
+                candidates += self._retry_candidates(source_id)
             result.candidates = len(candidates)
             with session_scope() as session:
                 fresh = self.filter_new(session, candidates)
@@ -202,16 +238,22 @@ class Scraper:
                     result.rejected += 1
             fresh = kept
             limit = self.settings.max_new_per_source
-            capped = len(fresh) > limit
+            result.pending = fresh[limit:]
             for done, candidate in enumerate(fresh[:limit]):
-                if not self._process_and_save(source, source_id, candidate, result):
-                    left = len(fresh) - done
-                    result.errors.append(f"rate limited by the site; {left} pages left for later")
-                    capped = True
+                try:
+                    self._process_and_save(source, source_id, candidate, result)
+                except Skip as skip:  # rate-limited: stop and catch up shortly
+                    result.pending = fresh[done:]
+                    result.retry_after = skip.retry_after
+                    result.errors.append(
+                        f"rate limited by the site; {len(result.pending)} pages left for later"
+                    )
                     break
-            if not capped:
+            if result.pending:
+                result.cache_updates = cache_updates
+            else:
                 # Only remember validators once everything they announced is
-                # stored, otherwise a capped run would never see the rest.
+                # stored, otherwise the rest would never be seen again.
                 self._save_cache(cache_updates)
         except Exception as exc:  # never let one source break the others
             log.exception("source %s crashed", source.slug)
@@ -433,7 +475,7 @@ class Scraper:
         try:
             page = self.client.get(cand.url)
         except RateLimited as exc:
-            raise Skip("throttled", str(exc)) from exc
+            raise Skip("throttled", str(exc), retry_after=exc.retry_after) from exc
         except RobotsDisallowed as exc:
             if not (cand.via == "feed" and cand.title):
                 raise Skip("rejected", "disallowed by robots.txt") from exc
@@ -563,22 +605,22 @@ class Scraper:
 
     def _process_and_save(
         self, source: SourceConfig, source_id: int, cand: Candidate, result: SourceResult
-    ) -> bool:
-        """Fetch, extract and store one candidate. Returns False when the site
-        is rate-limiting us and the rest of this source should wait."""
+    ) -> None:
+        """Fetch, extract and store one candidate. Re-raises Skip('throttled')
+        when the site is rate-limiting us, so the rest of the source can wait."""
         try:
             draft = self.build_draft(source, source_id, cand)
         except Skip as skip:
             if skip.status == "throttled":
                 log.warning("[%s] %s", source.slug, skip.reason)
-                return False
+                raise
             self._remember(source_id, cand.key, skip.status, skip.reason)
             if skip.status == "failed":
                 result.failed += 1
             else:
                 result.rejected += 1
             log.debug("[%s] skip %s: %s", source.slug, cand.url, skip.reason)
-            return True
+            return
 
         if draft.image_url and self.settings.store_images:
             stored = store_image(
@@ -636,10 +678,9 @@ class Scraper:
                         )
                     )
                 result.rejected += 1
-                return True
+                return
         result.new_articles += 1
         log.debug("[%s] new: %s", source.slug, draft.title)
-        return True
 
     def _remember(self, source_id: int, url: str, status: str, reason: str) -> None:
         with session_scope() as session:
@@ -732,6 +773,20 @@ class Scraper:
         result.candidates = len(candidates)
         with session_scope() as session:
             fresh = self.filter_new(session, candidates)
-        for candidate in fresh[:limit]:
-            self._process_and_save(source, source_id, candidate, result)
+        queue = list(fresh[:limit])
+        throttled = 0
+        while queue:
+            try:
+                self._process_and_save(source, source_id, queue[0], result)
+            except Skip as skip:  # rate-limited: pause, then carry on with the same page
+                throttled += 1
+                if throttled > MAX_BACKFILL_PAUSES:
+                    result.errors.append(f"still rate limited; stopped with {len(queue)} left")
+                    break
+                wait = min(max(self.settings.catch_up_seconds, skip.retry_after or 0), 600)
+                log.info("[%s] rate limited; waiting %.0fs before continuing", source.slug, wait)
+                time.sleep(wait)
+                continue
+            throttled = 0
+            queue.pop(0)
         return result

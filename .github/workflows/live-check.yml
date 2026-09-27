@@ -68,9 +68,10 @@ jobs:
             guheadlines check --source "$slug" --limit 2 || true
             echo
           done
-      - name: Full scrape
-        run: guheadlines scrape
-      - name: Second scrape (continues capped sources; fetches only new pages)
+      - name: Full scrape, catching up every minute until every source is loaded
+        timeout-minutes: 25
+        run: guheadlines scrape --until-done --max-rounds 20
+      - name: Re-run like the hourly worker (should fetch only new pages)
         run: guheadlines scrape
       - name: Summary
         run: |

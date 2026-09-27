@@ -98,14 +98,46 @@ def cmd_web(args, settings: Settings) -> None:
     )
 
 
-def _run_scrape(settings: Settings, config: AppConfig, only: list[str] | None = None):
+def _run_scrape(
+    settings: Settings,
+    config: AppConfig,
+    only: list[str] | None = None,
+    catch_up: dict | None = None,
+):
     from .scraper.pipeline import Scraper
 
     scraper = Scraper(settings, config)
     try:
-        return scraper.run(only=only)
+        return scraper.run(only=only, catch_up=catch_up)
     finally:
         scraper.close()
+
+
+def _merge_pending(pending: dict, results: list, catch_up: bool) -> dict:
+    """Sources that still have pages left after a run (full or catch-up)."""
+    by_slug = {r.slug: r for r in results}
+    if not catch_up:
+        return {slug: r for slug, r in by_slug.items() if r.incomplete}
+    merged = {}
+    for slug in pending:
+        result = by_slug.get(slug)  # missing if the source was disabled meanwhile
+        if result is not None and result.incomplete:
+            merged[slug] = result
+    return merged
+
+
+def _describe_pending(pending: dict) -> str:
+    return ", ".join(f"{slug} ({len(r.pending)} pages)" for slug, r in pending.items())
+
+
+def _print_results(results: list) -> None:
+    for r in results:
+        status = "ok" if r.ok else "ERROR"
+        left = f" left={len(r.pending)}" if r.pending else ""
+        print(
+            f"{r.slug:<12} {status:<6} candidates={r.candidates:<4} new={r.new_articles:<4} "
+            f"failed={r.failed:<3} skipped={r.rejected:<3}{left} {'; '.join(r.errors)}"
+        )
 
 
 def cmd_scrape(args, settings: Settings) -> None:
@@ -120,16 +152,37 @@ def cmd_scrape(args, settings: Settings) -> None:
     results = _run_scrape(settings, config, only)
     if results is None:
         raise SystemExit("another scrape is running")
-    for r in results:
-        status = "ok" if r.ok else "ERROR"
-        print(
-            f"{r.slug:<12} {status:<6} candidates={r.candidates:<4} new={r.new_articles:<4} "
-            f"failed={r.failed:<3} skipped={r.rejected:<3} {'; '.join(r.errors)}"
-        )
+    _print_results(results)
+    if not args.until_done:
+        return
+    # Keep catching up, like the worker does, until every source is loaded.
+    pending = _merge_pending({}, results, catch_up=False)
+    rounds = 0
+    while pending and rounds < args.max_rounds:
+        rounds += 1
+        wait = max([settings.catch_up_seconds] + [r.retry_after or 0 for r in pending.values()])
+        wait = min(wait, 600)
+        print(f"\ncatching up in {wait:.0f}s: {_describe_pending(pending)}", flush=True)
+        time.sleep(wait)
+        results = _run_scrape(settings, config, catch_up=pending)
+        if results is None:
+            raise SystemExit("another scrape is running")
+        _print_results(results)
+        pending = _merge_pending(pending, results, catch_up=True)
+    if pending:
+        print(f"\nstill pending after {rounds} rounds: {_describe_pending(pending)}")
 
 
 def cmd_worker(args, settings: Settings) -> None:
-    """Scrape every SCRAPE_INTERVAL_MINUTES, aligned to the clock (e.g. on the hour)."""
+    """Scrape every SCRAPE_INTERVAL_MINUTES, aligned to the clock (e.g. on the hour).
+
+    If a run leaves pages behind (a site rate-limited us, or there were more new
+    pages than MAX_NEW_PER_SOURCE), the worker comes back for just those sources
+    every CATCH_UP_SECONDS until they are fully loaded, then returns to the
+    regular schedule.
+    """
+    from .schedule import next_wake
+
     wait_for_db()
     migrate()
     stop = threading.Event()
@@ -143,31 +196,42 @@ def cmd_worker(args, settings: Settings) -> None:
 
     interval = settings.scrape_interval_minutes * 60
     config = _config(settings)
+    pending: dict = {}
 
-    def run_once() -> None:
-        nonlocal config
+    def run_once(catch_up: bool = False) -> None:
+        nonlocal config, pending
         try:
             config = load_config(settings.config_dir)  # pick up YAML edits
         except ConfigError as exc:
             log.error("config error, using previous config: %s", exc)
         try:
-            _run_scrape(settings, config)
+            results = _run_scrape(settings, config, catch_up=pending if catch_up else None)
         except Exception:
             log.exception("scrape run failed")
+            return
+        if results is None:
+            return  # another scrape holds the lock; keep what is pending
+        pending = _merge_pending(pending, results, catch_up)
+        if pending:
+            log.info("not fully loaded yet: %s", _describe_pending(pending))
 
-    log.info("worker started; scraping every %d minutes", settings.scrape_interval_minutes)
+    log.info(
+        "worker started; scraping every %d minutes (catch-up every %ds when needed)",
+        settings.scrape_interval_minutes,
+        settings.catch_up_seconds,
+    )
     if settings.scrape_on_start:
         run_once()
     while not stop.is_set():
-        now = time.time()
-        next_run = (now // interval + 1) * interval
-        log.info(
-            "next scrape at %s UTC",
-            datetime.fromtimestamp(next_run, tz=timezone.utc).strftime("%Y-%m-%d %H:%M"),
-        )
-        if stop.wait(next_run - now):
+        delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
+        when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
+        if kind == "catch-up":
+            log.info("catching up at %s UTC: %s", f"{when:%H:%M:%S}", _describe_pending(pending))
+        else:
+            log.info("next scrape at %s UTC", f"{when:%Y-%m-%d %H:%M}")
+        if stop.wait(delay):
             break
-        run_once()
+        run_once(catch_up=kind == "catch-up")
     log.info("worker stopped")
 
 
@@ -356,6 +420,12 @@ def main(argv: list[str] | None = None) -> None:
 
     scrape = sub.add_parser("scrape", help="scrape once, now")
     scrape.add_argument("--source", action="append", help="only this source (repeatable)")
+    scrape.add_argument(
+        "--until-done",
+        action="store_true",
+        help="if pages are left (rate limit / per-run cap), catch up every CATCH_UP_SECONDS",
+    )
+    scrape.add_argument("--max-rounds", type=int, default=60, help="catch-up rounds limit")
 
     check = sub.add_parser("check", help="dry-run a source and show what would be stored")
     check.add_argument("--source", required=True)

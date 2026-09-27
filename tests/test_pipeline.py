@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -270,23 +271,58 @@ def test_lock_prevents_parallel_runs(clean_db, scraper):
         assert scraper.run() is None
 
 
-def test_rate_limited_site_is_left_for_the_next_run(clean_db, scraper, site):
+def test_rate_limited_site_catches_up_after_a_pause(clean_db, scraper, site):
     original = site.__call__
+    limited = {"on": True}
 
-    def limited(request):
-        if str(request.url) == ARTICLE_1:
-            return httpx.Response(429)
+    def rate_limiter(request):
+        if str(request.url) == ARTICLE_1 and limited["on"]:
+            return httpx.Response(429, headers={"Retry-After": "120"})
         return original(request)
 
-    scraper.client._client._transport = httpx.MockTransport(limited)
+    scraper.client._client._transport = httpx.MockTransport(rate_limiter)
     scraper.client.retries = 0
     result = scraper.run()[0]
     assert ARTICLE_1 not in _articles()
     assert any("rate limited" in e for e in result.errors)
+    # Every new page is left for a catch-up, which will wait as the site asked.
+    assert {c.key for c in result.pending} == {ARTICLE_1, ARTICLE_2, NOT_ARTICLE}
+    assert result.retry_after == 120
     with session_scope() as session:
-        # Not recorded as a failure (no backoff), and the feed will be re-read.
+        # Not recorded as a failure (no backoff), and feed validators wait too.
         assert session.get(SeenUrl, ARTICLE_1) is None
         assert session.get(HttpCache, "https://www.pncguam.com/feed/") is None
+
+    # The catch-up run continues with the pending pages without re-reading the feed.
+    limited["on"] = False
+    feed_reads = site.requests["https://www.pncguam.com/feed/"]
+    caught_up = scraper.run(catch_up={"pnc": result})[0]
+    assert not caught_up.incomplete
+    assert caught_up.new_articles == 2 and caught_up.rejected == 1
+    assert {ARTICLE_1, ARTICLE_2} <= set(_articles())
+    assert site.requests["https://www.pncguam.com/feed/"] == feed_reads
+    with session_scope() as session:
+        assert session.get(HttpCache, "https://www.pncguam.com/feed/").etag == '"v1"'
+
+
+def test_per_run_cap_leaves_pages_for_catch_up(clean_db, config, site):
+    client = HttpClient(
+        "test-agent", per_host_delay=0, transport=httpx.MockTransport(site), sleep=lambda s: None
+    )
+    scraper = Scraper(replace(get_settings(), max_new_per_source=1), config, client=client)
+    try:
+        first = scraper.run()[0]
+        assert first.new_articles == 1 and len(first.pending) == 2
+        rounds = 0
+        pending = {"pnc": first}
+        while pending:
+            rounds += 1
+            result = scraper.run(catch_up=pending)[0]
+            pending = {"pnc": result} if result.incomplete else {}
+        assert rounds == 2
+        assert {ARTICLE_1, ARTICLE_2} <= set(_articles())
+    finally:
+        client.close()
 
 
 def test_feed_items_filtered_before_fetching(clean_db, scraper, site, config):

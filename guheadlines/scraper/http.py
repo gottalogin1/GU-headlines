@@ -7,6 +7,8 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib import robotparser
 from urllib.parse import urlsplit
 
@@ -32,6 +34,10 @@ class RobotsDisallowed(FetchError):
 class RateLimited(FetchError):
     """The site answered 429 Too Many Requests even after waiting."""
 
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message, 429)
+        self.retry_after = retry_after  # seconds the site asked us to wait, if it said
+
 
 @dataclass
 class FetchResult:
@@ -55,6 +61,22 @@ class FetchResult:
     @property
     def last_modified(self) -> str | None:
         return self.headers.get("last-modified")
+
+
+def retry_after_seconds(value: str | None) -> float | None:
+    """Parse a Retry-After header: either seconds or an HTTP date."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 class HttpClient:
@@ -212,7 +234,10 @@ class HttpClient:
                         headers={k.lower(): v for k, v in response.headers.items()},
                     )
                     if status == 429:
-                        raise RateLimited(f"HTTP 429 (rate limited) for {url}", status)
+                        raise RateLimited(
+                            f"HTTP 429 (rate limited) for {url}",
+                            retry_after=retry_after_seconds(result.headers.get("retry-after")),
+                        )
                     if status >= 400:
                         raise FetchError(f"HTTP {status} for {url}", status)
                     return result
@@ -226,9 +251,9 @@ class HttpClient:
 
     @staticmethod
     def _retry_delay(response: httpx.Response, attempt: int) -> float:
-        retry_after = response.headers.get("retry-after", "")
-        if retry_after.isdigit():
-            return min(float(retry_after), 60.0)
+        retry_after = retry_after_seconds(response.headers.get("retry-after"))
+        if retry_after is not None:
+            return min(retry_after, 60.0)
         if response.status_code == 429:
             return 15.0 * (attempt + 1)  # rate limiters need a real pause
         return 2.0 * (attempt + 1)

@@ -80,7 +80,10 @@ docker compose up -d --build
 ```
 
 Open `http://<your-server>:8000`. The worker starts scraping right away and
-then runs at the top of every hour. Watch it with:
+then runs at the top of every hour. If a site is not fully loaded after a run
+(it asked us to slow down, or it had more new stories than one run takes), the
+worker comes back for that site every minute until it is, then returns to the
+hourly schedule. Watch it with:
 
 ```sh
 docker compose logs -f worker
@@ -125,6 +128,7 @@ Example output:
 ```sh
 docker compose exec worker guheadlines scrape                   # run all sources now
 docker compose exec worker guheadlines scrape --source kuam     # one source now
+docker compose exec worker guheadlines scrape --until-done      # and catch up until fully loaded
 docker compose exec worker guheadlines sources                  # list sources and counts
 docker compose exec worker guheadlines reclassify               # re-apply categories.yaml
 docker compose exec worker guheadlines backfill --source pnc --since 2025-01-01 --limit 500
@@ -176,8 +180,14 @@ For each enabled source, each run:
 4. **Tag and store.** Topics are assigned, the image is saved as WebP, and the
    story is inserted. Failed pages are retried with exponential backoff (1h,
    2h, 4h, 8h); if a site blocks article pages but publishes a feed, the
-   feed's headline and summary are used. If a site answers "429 Too Many
-   Requests", that source stops for the hour and continues on the next run.
+   feed's headline and summary are used.
+5. **Catch up.** If a source still has new pages waiting, because the site
+   answered "429 Too Many Requests" or there were more than
+   `MAX_NEW_PER_SOURCE` of them, the worker returns for just those sources
+   after `CATCH_UP_SECONDS` (1 minute; longer if the site's `Retry-After`
+   asks for it, up to 10 minutes). Catch-up rounds continue with the pages
+   that were left and do not re-read the feeds. Once every source is loaded,
+   the worker goes back to the hourly schedule.
 
 Only one scrape runs at a time (PostgreSQL advisory lock), even if you start
 one by hand while the worker is running.
@@ -211,6 +221,7 @@ Settings are environment variables in `.env` (see [`.env.example`](.env.example)
 | `SCRAPE_INTERVAL_MINUTES` | `60` | how often to scrape (aligned to the clock) |
 | `SCRAPE_ON_START` | `true` | also scrape when the worker starts |
 | `MAX_NEW_PER_SOURCE` | `40` | new pages fetched per source per run |
+| `CATCH_UP_SECONDS` | `60` | how soon to come back for sources left not fully loaded |
 | `PER_HOST_DELAY` | `1.5` | seconds between requests to one site (per-source `request_delay` and robots.txt `Crawl-delay` can raise it) |
 | `SCRAPER_WORKERS` | `4` | sources scraped in parallel |
 | `RESPECT_ROBOTS_TXT` | `true` | honour robots.txt |

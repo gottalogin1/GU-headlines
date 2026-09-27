@@ -44,6 +44,9 @@ class Settings:
         "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)"
     )
     scrape_interval_minutes: int = 60
+    # When a run leaves pages behind (site rate-limited us, or the per-run cap
+    # was reached), come back for just those sources after this many seconds.
+    catch_up_seconds: int = 60
     scrape_on_start: bool = True
     request_timeout: float = 25.0
     per_host_delay: float = 1.5
@@ -101,6 +104,7 @@ def load_settings() -> Settings:
         timezone=env.get("SITE_TIMEZONE", defaults.timezone),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
+        catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),
         scrape_on_start=_bool(env.get("SCRAPE_ON_START"), True),
         request_timeout=_float(env.get("REQUEST_TIMEOUT"), defaults.request_timeout),
         per_host_delay=_float(env.get("PER_HOST_DELAY"), defaults.per_host_delay),
