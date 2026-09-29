@@ -239,10 +239,13 @@ class HttpClient:
         etag: str | None = None,
         last_modified: str | None = None,
         referer: str | None = None,
+        accept: str | None = None,
         max_bytes: int = MAX_BODY_BYTES,
         check_robots: bool = True,
     ) -> FetchResult:
         headers = {}
+        if accept:
+            headers["Accept"] = accept
         if etag:
             headers["If-None-Match"] = etag
         if last_modified:

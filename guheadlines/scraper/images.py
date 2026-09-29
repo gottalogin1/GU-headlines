@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 MIN_WIDTH = 200
+# What browsers ask for when loading a picture. Some image hosts (Reddit's
+# i.redd.it) answer a request for a web page with their photo viewer instead.
+IMAGE_ACCEPT = "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5"
 MIN_HEIGHT = 120
 Image.MAX_IMAGE_PIXELS = 60_000_000
 
@@ -94,7 +97,11 @@ def store_image(
             target.unlink(missing_ok=True)
     try:
         result = client.get(
-            image_url, referer=referer, max_bytes=MAX_IMAGE_BYTES, check_robots=check_robots
+            image_url,
+            referer=referer,
+            accept=IMAGE_ACCEPT,
+            max_bytes=MAX_IMAGE_BYTES,
+            check_robots=check_robots,
         )
         content_type = result.content_type
         if content_type and not content_type.startswith(

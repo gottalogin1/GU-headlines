@@ -421,6 +421,9 @@ def test_feed_only_source_never_opens_the_posts(clean_db):
                 headers={"content-type": "application/atom+xml"},
             )
         if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
+            # Like Reddit: a request for a web page goes to the (blocked) viewer.
+            if "image/" not in request.headers.get("accept", ""):
+                return httpx.Response(302, headers={"location": "https://www.reddit.com/media"})
             return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
         return httpx.Response(403, text="Blocked")
 
