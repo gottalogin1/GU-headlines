@@ -479,7 +479,8 @@ class Scraper:
         page: FetchResult | None = None
         data = None
         try:
-            page = self.client.get(cand.url)
+            if not (source.feed_only and cand.via == "feed"):
+                page = self.client.get(cand.url)
         except RateLimited as exc:
             raise Skip("throttled", str(exc), retry_after=exc.retry_after) from exc
         except RobotsDisallowed as exc:
@@ -640,6 +641,9 @@ class Scraper:
                 media_dir=self.settings.media_dir,
                 when=draft.published_at,
                 max_width=self.settings.image_max_width,
+                # The owner's ignore_robots choice covers the pictures the site's
+                # stories point at, which may be on another host (i.redd.it).
+                check_robots=not source.ignore_robots,
             )
             if stored:
                 draft.image_path = stored.path

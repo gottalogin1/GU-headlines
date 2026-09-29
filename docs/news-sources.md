@@ -260,6 +260,23 @@ site's own address (for example `/business/local/` becomes
 **A regional site that also covers Saipan, Palau or other islands:** add
 `require_guam: true` to keep only stories that mention Guam.
 
+**A Reddit community** (subreddit): Reddit's pages turn robots away, but each
+community's feed works. Use `feed_only: true` so posts are built from the
+feed without opening them, and `ignore_robots: true` because Reddit's
+robots.txt turns all robots away. This is how r/guam is set up; for another
+community, change `guam` in both addresses:
+
+```yaml
+  - slug: reddit-guam
+    name: r/guam (Reddit)
+    homepage: https://www.reddit.com/r/guam/
+    feeds:
+      - https://www.reddit.com/r/guam/new/.rss?limit=50
+    feed_only: true
+    ignore_robots: true
+    categories: [community]
+```
+
 ---
 
 ## Every option explained
@@ -279,12 +296,13 @@ entry are required.
 | `autodiscover_feeds` | `true` | Also use any feed that the listing pages advertise. |
 | `exclude_url_patterns` | `- '/opinion/'` | Skip story links whose address matches one of these patterns. Added to the shared list under `defaults:` at the top of the file. |
 | `exclude_sections` | `[Opinion, Sports]` | Skip stories that the site files under these sections or feed categories. Added to the shared list under `defaults:`. |
-| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business` or `labor`. |
+| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor` or `community`. |
 | `require_guam` | `true` | Keep only stories that mention Guam. What counts as "mentions Guam" is the `guam_keywords` list near the top of the file. |
 | `request_delay` | `5` | Seconds between requests to this site. Use it for sites that answer "too many requests" (HTTP 429). If the site's robots.txt asks for a longer delay, that is used instead. |
 | `max_age_days` | `30` | Links found on *listing pages* that are older than this are skipped. Home pages often link to old "evergreen" pages (station promos, guides); this keeps them out. Feed stories are never skipped for age. |
 | `body_selector` | `'.story-text'` | Where the story text is on the page. Only needed if the intro comes out wrong. To find it, open a story in Chrome or Firefox, right-click its first paragraph and choose **Inspect**. Look a few lines up for the box that holds all the paragraphs, such as `<div class="story-text">`, and write its class with a dot in front: `'.story-text'`. |
-| `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). |
+| `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). Also covers the photos its stories point to. |
+| `feed_only` | `true` | Build stories from the feed alone: the headline, text, photo and date the feed gives, without opening each story's page. For sites whose pages turn robots away but whose feed works, such as Reddit. Needs `feeds`. |
 | `sitemaps` | *(a list of addresses)* | Sitemap files for [importing older stories](#importing-older-stories). Usually found automatically. |
 
 ### Settings shared by all sites
@@ -305,9 +323,14 @@ At the top of `sources.yaml`:
 ### robots.txt
 
 Many sites have a file called `robots.txt` that tells automated programs which
-pages they may read. GU Headlines obeys it. Marianas Variety's robots.txt asks
-all robots except a few search engines to stay out; on your instructions it
-is set to `ignore_robots: true`.
+pages they may read. GU Headlines obeys it. Two sites are set to
+`ignore_robots: true` on your instructions:
+
+- **Marianas Variety**, whose robots.txt asks all robots except a few search
+  engines to stay out.
+- **r/guam**, because Reddit's robots.txt turns all robots away. Only the
+  community's public feed is read, once an hour, as feed reader apps do; the
+  posts themselves are never opened (`feed_only`).
 
 If you use `ignore_robots` on a site, know that the site owner has asked not
 to be read this way and may block your server. To turn the exception off,

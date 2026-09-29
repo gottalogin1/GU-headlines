@@ -82,6 +82,7 @@ def store_image(
     media_dir: Path,
     when: datetime,
     max_width: int,
+    check_robots: bool = True,
 ) -> StoredImage | None:
     relative = image_filename(image_url, when)
     target = media_dir / relative
@@ -92,7 +93,9 @@ def store_image(
         except Exception:
             target.unlink(missing_ok=True)
     try:
-        result = client.get(image_url, referer=referer, max_bytes=MAX_IMAGE_BYTES)
+        result = client.get(
+            image_url, referer=referer, max_bytes=MAX_IMAGE_BYTES, check_robots=check_robots
+        )
         content_type = result.content_type
         if content_type and not content_type.startswith(
             ("image/", "application/octet-stream", "binary/")

@@ -3,6 +3,17 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Added
+- **Guam Federation of Teachers** (gftunion.com) as a news site, under Labor.
+- **r/guam on Reddit**, under a new **Community** topic. Posts are read from
+  the community's feed; picture posts show the picture.
+- `feed_only` option in `sources.yaml`, for sites whose pages turn robots
+  away but whose feed works.
+- The Live source check can probe any addresses you give it, to try out a
+  site before adding it.
+
 ## 1.0.0 (2026-09-27)
 
 The first release.

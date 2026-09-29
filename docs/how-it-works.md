@@ -55,6 +55,9 @@ For each enabled news site:
      `__PAGE_MODEL__`, Next.js `__NEXT_DATA__`),
    - [trafilatura](https://trafilatura.readthedocs.io) as a general fallback.
 
+   Sites marked `feed_only` (Reddit) are not opened: the story is built from
+   the feed entry's headline, text, picture and date.
+
    The intro is the story's opening paragraphs: it adds paragraphs until it has
    about 280 characters (at most three paragraphs, cut at 700 characters),
    skipping photo captions, bylines and "subscribe" lines.

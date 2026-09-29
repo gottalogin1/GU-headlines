@@ -62,3 +62,27 @@ def test_article_url_heuristic():
     assert looks_like_article_url("https://x.com/news/governor-signs-new-minimum-wage-bill")
     assert not looks_like_article_url("https://x.com/news/")
     assert not looks_like_article_url("https://x.com/about-us")
+
+
+def test_parse_reddit_feed():
+    items = parse_feed(
+        fixture_bytes("reddit_feed.xml"), "https://www.reddit.com/r/guam/new/.rss?limit=50"
+    )
+    assert [c.title for c in items] == [
+        "DMV need help Guam ID",
+        "Sunset at Ypao Beach tonight",
+        "Port Authority approves new gantry cranes",
+    ]
+    text_post, picture_post, link_post = items
+    assert text_post.url == "https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"
+    # Only the post's own text; not "submitted by /u/... [link] [comments]".
+    assert text_post.summary.startswith("My appointment at the Department of Revenue")
+    assert text_post.summary.endswith("Thanks in advance!")
+    assert text_post.author == "u/islandcommuter"
+    assert text_post.image_url is None
+    assert text_post.published_at == datetime(2026, 9, 29, 3, 22, 48, tzinfo=timezone.utc)
+    # A picture post shows the full-size picture, not Reddit's 140 px thumbnail.
+    assert picture_post.image_url == "https://i.redd.it/k2v9w8ypao1.jpeg"
+    assert picture_post.summary is None
+    # A shared link has neither text of its own nor a usable picture.
+    assert link_post.summary is None and link_post.image_url is None

@@ -194,6 +194,7 @@ class HttpClient:
         last_modified: str | None = None,
         referer: str | None = None,
         max_bytes: int = MAX_BODY_BYTES,
+        check_robots: bool = True,
     ) -> FetchResult:
         headers = {}
         if etag:
@@ -202,7 +203,9 @@ class HttpClient:
             headers["If-Modified-Since"] = last_modified
         if referer:
             headers["Referer"] = referer
-        return self._request("GET", url, headers=headers, max_bytes=max_bytes)
+        return self._request(
+            "GET", url, headers=headers, max_bytes=max_bytes, check_robots=check_robots
+        )
 
     def _request(
         self,

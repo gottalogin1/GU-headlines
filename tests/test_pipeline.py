@@ -372,3 +372,59 @@ def test_ignore_robots_is_per_source(clean_db, scraper, site, config):
         assert not other.allowed("https://kanditnews.com/any/page/")
     finally:
         other.close()
+
+
+REDDIT_FEED = "https://www.reddit.com/r/guam/new/.rss?limit=50"
+
+
+def test_feed_only_source_never_opens_the_posts(clean_db):
+    requests: Counter[str] = Counter()
+
+    def reddit(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        requests[url] += 1
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+        if url == REDDIT_FEED:
+            return httpx.Response(
+                200,
+                content=fixture_bytes("reddit_feed.xml"),
+                headers={"content-type": "application/atom+xml"},
+            )
+        if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
+            return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
+        return httpx.Response(403, text="Blocked")
+
+    sources = {
+        "sources": [
+            {
+                "slug": "reddit-guam",
+                "name": "r/guam (Reddit)",
+                "homepage": "https://www.reddit.com/r/guam/",
+                "feeds": [REDDIT_FEED],
+                "feed_only": True,
+                "ignore_robots": True,
+                "categories": ["community"],
+            }
+        ]
+    }
+    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
+    client = HttpClient(
+        "test-agent", per_host_delay=0, transport=httpx.MockTransport(reddit), sleep=lambda s: None
+    )
+    try:
+        scraper = Scraper(get_settings(), parse_config(sources, categories), client=client)
+        assert scraper.run()[0].new_articles == 3
+    finally:
+        client.close()
+
+    assert not any("/comments/" in url for url in requests)  # posts never opened
+    articles = _articles()
+    post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
+    assert post.intro.startswith("My appointment at the Department of Revenue")
+    assert post.author == "u/islandcommuter"
+    assert post.categories == ["community"]
+    picture = articles[
+        "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
+    ]
+    assert picture.image_path and picture.intro is None

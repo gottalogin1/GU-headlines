@@ -313,3 +313,9 @@ categories:
       - retirement fund
       - pension*
       - Civil Service Commission
+
+  # Posts from Guam's online community (the r/guam source in sources.yaml
+  # puts its posts here). No keywords: news stories are never sorted into it.
+  - slug: community
+    name: Community
+    description: Questions, tips and discussion from Guam's online community on Reddit (r/guam).
