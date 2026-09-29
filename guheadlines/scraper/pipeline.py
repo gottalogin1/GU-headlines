@@ -26,7 +26,15 @@ from sqlalchemy.orm import Session
 
 from ..config import AppConfig, SourceConfig
 from ..db import SCRAPE_LOCK_KEY, advisory_lock, session_scope
-from ..models import Article, HttpCache, IgnoredImage, ScrapeRun, SeenUrl, Source
+from ..models import (
+    CATCH_UP_NOTE,
+    Article,
+    HttpCache,
+    IgnoredImage,
+    ScrapeRun,
+    SeenUrl,
+    Source,
+)
 from ..settings import Settings
 from .classify import classify, mentions_guam
 from .discover import (
@@ -243,7 +251,8 @@ class Scraper:
                     result.pending = fresh[done:]
                     result.retry_after = skip.retry_after
                     result.errors.append(
-                        f"rate limited by the site; {len(result.pending)} pages left for later"
+                        f"{CATCH_UP_NOTE} the site asked us to slow down, "
+                        f"{len(result.pending)} pages left for the next round"
                     )
                     break
             if result.pending:

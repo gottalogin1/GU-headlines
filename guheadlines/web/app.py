@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from ..config import AppConfig, ConfigError, load_config
 from ..db import session_scope
-from ..models import Source
+from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
 from . import queries
@@ -143,6 +143,12 @@ def paragraphs(text: str | None) -> list[str]:
     return [p for p in (text or "").split("\n\n") if p.strip()]
 
 
+def is_note(message: str | None) -> bool:
+    """A run message that only reports a normal catch-up pause, not a problem."""
+    parts = [part.strip() for part in (message or "").split("; ")]
+    return bool(message) and all(part.startswith(CATCH_UP_NOTE) for part in parts)
+
+
 def domain(url: str | None) -> str:
     """https://www.guampdn.com/news/... -> guampdn.com"""
     host = (urlsplit(url or "").hostname or "").lower()
@@ -158,6 +164,7 @@ templates.env.filters.update(
     to_local=to_local,
     domain=domain,
 )
+templates.env.tests.update(note=is_note)
 templates.env.globals.update(settings=settings, months=MONTHS)
 
 

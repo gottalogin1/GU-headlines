@@ -284,7 +284,7 @@ def test_rate_limited_site_catches_up_after_a_pause(clean_db, scraper, site):
     scraper.client.retries = 0
     result = scraper.run()[0]
     assert ARTICLE_1 not in _articles()
-    assert any("rate limited" in e for e in result.errors)
+    assert any(e.startswith("catching up: the site asked us to slow down") for e in result.errors)
     # Every new page is left for a catch-up, which will wait as the site asked.
     assert {c.key for c in result.pending} == {ARTICLE_1, ARTICLE_2, NOT_ARTICLE}
     assert result.retry_after == 120
@@ -428,3 +428,34 @@ def test_feed_only_source_never_opens_the_posts(clean_db):
         "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
     ]
     assert picture.image_path and picture.intro is None
+
+
+BOT_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</title>
+<script src="/.well-known/sgcaptcha/?r=%2F"></script></head>
+<body><h1>Please wait while your request is being verified...</h1></body></html>"""
+
+
+def test_bot_check_pages_are_not_taken_for_content(clean_db, scraper, site, config):
+    from guheadlines.scraper.discover import Candidate
+    from guheadlines.scraper.pipeline import Skip
+
+    original = site.__call__
+
+    def bot_check(request):
+        if str(request.url) in (ARTICLE_1, BARE, "https://www.pncguam.com/"):
+            return httpx.Response(200, content=BOT_CHECK, headers={"content-type": "text/html"})
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(bot_check)
+    result = scraper.run()[0]
+    # The listing page's bot check is reported on the Sources page...
+    assert any("SiteGround showed a bot check" in error for error in result.errors)
+    # ...and a story behind one falls back to its feed entry, instead of being
+    # rejected for good as "not an article page".
+    assert _articles()[ARTICLE_1].title == "GovGuam agencies brace for H-2B worker shortage"
+    # Without a feed entry it is retried later.
+    with pytest.raises(Skip) as skip:
+        scraper.build_draft(
+            config.source("pnc"), None, Candidate(url=BARE, key=BARE, via="listing")
+        )
+    assert skip.value.status == "failed"

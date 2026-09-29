@@ -17,7 +17,8 @@
       <a href="/source/{{ s.slug }}">{{ s.name }}</a>
       {% if not s.enabled %}<span class="badge">paused</span>{% endif %}
       {% if s.homepage %}<br><a class="site-link" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}
-      {% if s.last_error %}<div class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(160) }}</div>{% endif %}
+      {% if s.last_error is note %}<div class="muted small" title="{{ s.last_error }}">↻ {{ s.last_error|truncate(160) }}</div>
+      {% elif s.last_error %}<div class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(160) }}</div>{% endif %}
     </td>
     <td>{% if s.last_run_at %}<span title="{{ s.last_run_at|fmt_datetime }}">{{ s.last_run_at|rel_time }}</span>{% else %}<span class="muted">never</span>{% endif %}
       {% if s.last_run_at and (not s.last_success_at or s.last_success_at < s.last_run_at) %}<br><span class="error small">failed</span>{% endif %}</td>
@@ -43,7 +44,7 @@
     <td class="num">{{ r.run.candidates }}</td>
     <td class="num">{{ r.run.new_articles }}</td>
     <td class="num">{{ r.run.failed }}</td>
-    <td class="small">{% if r.run.error %}<span class="error" title="{{ r.run.error }}">{{ r.run.error|truncate(90) }}</span>{% elif not r.run.finished_at %}<span class="muted">running…</span>{% endif %}</td>
+    <td class="small">{% if r.run.error is note %}<span class="muted" title="{{ r.run.error }}">{{ r.run.error|truncate(90) }}</span>{% elif r.run.error %}<span class="error" title="{{ r.run.error }}">{{ r.run.error|truncate(90) }}</span>{% elif not r.run.finished_at %}<span class="muted">running…</span>{% endif %}</td>
   </tr>
   {% else %}
   <tr><td colspan="6" class="muted">No runs yet.</td></tr>

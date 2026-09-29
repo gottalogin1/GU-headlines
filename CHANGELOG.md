@@ -14,6 +14,14 @@ release, see [Updating](docs/maintenance.md#updating).
 - The Live source check can probe any addresses you give it, to try out a
   site before adding it.
 
+### Fixed
+- A "bot check" page (such as "One moment, please..." or "Just a moment...")
+  is no longer mistaken for a site's content. The Sources page names it
+  (for example "SiteGround showed a bot check instead of the page"), and
+  stories behind one are retried later instead of being skipped for good.
+- A site asking to slow down is shown on the Sources page as a grey
+  "catching up" note, not as a red error; it finishes loading on its own.
+
 ## 1.0.0 (2026-09-27)
 
 The first release.

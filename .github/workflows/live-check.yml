@@ -54,7 +54,7 @@ jobs:
           ua=$(python -c "from guheadlines.settings import load_settings; print(load_settings().user_agent)")
           for url in $URLS; do
             echo "### raw start of $url"
-            curl -sSL -m 20 -A "$ua" "$url" | head -c 3000 || true
+            curl -sSL -m 20 -A "$ua" -D - "$url" | head -c 3000 || true
             echo
           done
 

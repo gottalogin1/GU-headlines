@@ -127,6 +127,11 @@ class HttpCache(Base):
     )
 
 
+# ScrapeRun.error / Source.last_error messages that start with this report a
+# normal pause (the site asked us to slow down), not a problem.
+CATCH_UP_NOTE = "catching up:"
+
+
 class ScrapeRun(Base):
     """One row per source per scheduled run; powers the /status page."""
 

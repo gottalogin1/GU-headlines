@@ -4,6 +4,7 @@ retries transient errors and supports conditional GETs."""
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -29,6 +30,13 @@ class FetchError(Exception):
 
 class RobotsDisallowed(FetchError):
     pass
+
+
+class Blocked(FetchError):
+    """The site answered with a bot check ("Just a moment...") instead of the page."""
+
+    def __init__(self, message: str):
+        super().__init__(message, 403)  # handled like the 403 many bot walls send
 
 
 class RateLimited(FetchError):
@@ -61,6 +69,44 @@ class FetchResult:
     @property
     def last_modified(self) -> str | None:
         return self.headers.get("last-modified")
+
+
+# Titles of the pages bot-protection services show instead of the real page.
+_BOT_CHECK_TITLE_RE = re.compile(
+    rb"<title[^>]*>\s*(just a moment|one moment, please|attention required|"
+    rb"please wait|checking your browser|ddos-guard|access denied)",
+    re.IGNORECASE,
+)
+_BOT_CHECK_MAX_BYTES = 200_000  # challenge pages are small; articles often are not
+
+
+def bot_check_service(result: FetchResult) -> str | None:
+    """The bot-protection service that answered for the site, if it can be told."""
+    headers = result.headers
+    server = headers.get("server", "").lower()
+    head = result.content[:50_000].lower()
+    if "cf-ray" in headers or server == "cloudflare":
+        return "Cloudflare"
+    if b"sgcaptcha" in head:
+        return "SiteGround"
+    if "akamai" in server:
+        return "Akamai"
+    if "x-sucuri-id" in headers or b"sucuri" in head:
+        return "Sucuri"
+    if b"_incapsula_resource" in head or "x-iinfo" in headers:
+        return "Imperva"
+    if b"ddos-guard" in head:
+        return "DDoS-Guard"
+    return None
+
+
+def is_bot_check(result: FetchResult) -> bool:
+    """A successful-looking answer that is really a bot check page."""
+    if result.content_type not in ("", "text/html") or not result.content:
+        return False
+    if len(result.content) > _BOT_CHECK_MAX_BYTES:
+        return False
+    return bool(_BOT_CHECK_TITLE_RE.search(result.content[:50_000]))
 
 
 def retry_after_seconds(value: str | None) -> float | None:
@@ -251,7 +297,17 @@ class HttpClient:
                             retry_after=retry_after_seconds(result.headers.get("retry-after")),
                         )
                     if status >= 400:
-                        raise FetchError(f"HTTP {status} for {url}", status)
+                        note = ""
+                        if status in (401, 403, 451):
+                            service = bot_check_service(result)
+                            if service:
+                                note = f" (blocked by {service})"
+                            elif is_bot_check(result):
+                                note = " (blocked by a bot check)"
+                        raise FetchError(f"HTTP {status} for {url}{note}", status)
+                    if is_bot_check(result):
+                        service = bot_check_service(result) or "The site"
+                        raise Blocked(f"{service} showed a bot check instead of the page: {url}")
                     return result
             except (httpx.TransportError, httpx.TooManyRedirects) as exc:
                 last_error = FetchError(f"{type(exc).__name__}: {exc}")
