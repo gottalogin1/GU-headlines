@@ -68,11 +68,12 @@ For each enabled news site:
    8 hours. If an article page is blocked but its feed was readable, the
    feed's headline and summary are used instead.
 7. **Catch up.** If pages are left over (the per-round limit was reached, or
-   the site answered `429 Too Many Requests`), the worker returns for just
-   those sites after `CATCH_UP_SECONDS`, or after the site's `Retry-After` if
-   that is longer (up to 10 minutes). It continues with the leftover pages
-   without re-reading the feeds, until everything is loaded, then returns to
-   the regular schedule.
+   the site answered `429 Too Many Requests`), or a feed or listing page was
+   rate-limited, the worker returns for just those sites after
+   `CATCH_UP_SECONDS`, or after the site's `Retry-After` if that is longer (up
+   to 10 minutes). It continues with the leftover pages and re-reads only the
+   rate-limited feeds, until everything is loaded, then returns to the regular
+   schedule.
 
 Only one collection runs at a time (a PostgreSQL advisory lock), even if you
 start one by hand while the worker is running.

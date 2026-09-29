@@ -305,6 +305,35 @@ def test_rate_limited_site_catches_up_after_a_pause(clean_db, scraper, site):
         assert session.get(HttpCache, "https://www.pncguam.com/feed/").etag == '"v1"'
 
 
+def test_rate_limited_feed_is_read_again_on_catch_up(clean_db, scraper, site, config):
+    feed = "https://www.pncguam.com/feed/"
+    config.source("pnc").listing_pages = []  # the feed is the only way in
+    original = site.__call__
+    limited = {"on": True}
+
+    def rate_limiter(request):
+        if str(request.url) == feed and limited["on"]:
+            return httpx.Response(429, headers={"Retry-After": "90"})
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(rate_limiter)
+    scraper.client.retries = 0
+    result = scraper.run()[0]
+    assert result.new_articles == 0 and result.ok  # the site answered; not a failure
+    assert result.incomplete and result.pending_urls == [feed]
+    assert result.retry_after == 90
+    assert result.errors == [
+        f"catching up: the site asked us to slow down, {feed} is read again shortly"
+    ]
+
+    # A minute later only that feed is read again, and its stories are loaded.
+    limited["on"] = False
+    caught_up = scraper.run(catch_up={"pnc": result})[0]
+    assert not caught_up.incomplete
+    assert caught_up.new_articles == 2
+    assert site.requests["https://www.pncguam.com/"] == 0
+
+
 def test_per_run_cap_leaves_pages_for_catch_up(clean_db, config, site):
     client = HttpClient(
         "test-agent", per_host_delay=0, transport=httpx.MockTransport(site), sleep=lambda s: None
