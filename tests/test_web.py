@@ -120,3 +120,22 @@ def test_status_and_health(client):
     health = client.get("/healthz").json()
     assert health["status"] == "ok" and health["last_scrape"]
     assert "Disallow: /search" in client.get("/robots.txt").text
+
+
+def test_status_shows_catch_up_pauses_as_notes(client):
+    from sqlalchemy import update
+
+    with session_scope() as session:
+        session.execute(
+            update(Source)
+            .where(Source.slug == "kuam")
+            .values(last_error="catching up: the site asked us to slow down, 12 pages left")
+        )
+        session.execute(
+            update(Source)
+            .where(Source.slug == "postguam")
+            .values(last_error="feed https://www.postguam.com/rss: HTTP 404")
+        )
+    page = client.get("/status").text
+    assert '<div class="muted small" title="catching up: the site asked us' in page
+    assert '<div class="error small" title="feed https://www.postguam.com/rss: HTTP 404">' in page

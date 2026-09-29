@@ -8,7 +8,7 @@ news sites, picks up any **new** stories, and shows them on one page with the
 to the news site that published it.
 
 Stories are sorted into four topics, **Local, Military, Business and Labor**,
-and everything is kept, so you can search for a story from last week or from
+plus **Community** for posts from Reddit's r/guam, and everything is kept, so you can search for a story from last week or from
 three years ago.
 
 ![The front page (sample stories)](docs/screenshot.jpg)
@@ -82,6 +82,8 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Stars and Stripes | Guam stories only |
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz, Andersen) | Military news releases |
 | Guam Department of Labor | Posts rarely |
+| Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
+| r/guam on Reddit | Community posts, under their own **Community** topic; read from the community's feed only |
 | PNC News First, Marianas Business Journal, Guam Business Magazine, Andersen Air Force Base | These sites block some internet addresses (see below) |
 | Office of the Governor | Press releases; switched off unless you turn it on |
 

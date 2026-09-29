@@ -65,6 +65,9 @@ class SourceConfig:
     exclude_sections: list[str] = field(default_factory=list)
     # Fetch this site even where its robots.txt disallows crawlers.
     ignore_robots: bool = False
+    # Build stories from the feed entries alone, without downloading the
+    # article pages (for sites like Reddit whose pages refuse bots).
+    feed_only: bool = False
 
     def is_excluded(self, url: str) -> bool:
         return any(p.search(url) for p in self.exclude_patterns)
@@ -192,6 +195,7 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             body_selector=raw.get("body_selector"),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),
+            feed_only=bool(raw.get("feed_only", False)),
             max_age_days=int(raw.get("max_age_days", defaults.get("max_age_days", 30))),
             exclude_sections=[
                 str(x)
@@ -201,6 +205,8 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         )
         if source.enabled and not (source.feeds or source.listing_pages):
             raise ConfigError(f"{where}: needs at least one feed or listing page")
+        if source.feed_only and not source.feeds:
+            raise ConfigError(f"{where}: feed_only needs at least one feed")
         sources.append(source)
 
     guam_keywords = compile_keywords([str(k) for k in _as_list(sources_data.get("guam_keywords"))])

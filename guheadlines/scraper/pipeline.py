@@ -26,7 +26,15 @@ from sqlalchemy.orm import Session
 
 from ..config import AppConfig, SourceConfig
 from ..db import SCRAPE_LOCK_KEY, advisory_lock, session_scope
-from ..models import Article, HttpCache, IgnoredImage, ScrapeRun, SeenUrl, Source
+from ..models import (
+    CATCH_UP_NOTE,
+    Article,
+    HttpCache,
+    IgnoredImage,
+    ScrapeRun,
+    SeenUrl,
+    Source,
+)
 from ..settings import Settings
 from .classify import classify, mentions_guam
 from .discover import (
@@ -97,6 +105,8 @@ class SourceResult:
     # New pages not processed yet (per-run cap reached or rate-limited). The
     # worker comes back for them within a minute instead of waiting an hour.
     pending: list[Candidate] = field(default_factory=list)
+    # Feeds and listing pages the site rate-limited; read again on catch-up.
+    pending_urls: list[str] = field(default_factory=list)
     # Feed validators to save once the pending pages are done.
     cache_updates: list[dict] = field(default_factory=list)
     # Seconds the site asked us to wait (Retry-After), if it was rate-limiting.
@@ -108,7 +118,17 @@ class SourceResult:
 
     @property
     def incomplete(self) -> bool:
-        return bool(self.pending)
+        return bool(self.pending or self.pending_urls)
+
+    def slow_down(self, url: str, exc: RateLimited) -> None:
+        """A feed or listing page was rate-limited: read it again on catch-up."""
+        self.reachable += 1  # the site answered; it just asked for a pause
+        self.pending_urls.append(url)
+        if exc.retry_after:
+            self.retry_after = max(self.retry_after or 0.0, exc.retry_after)
+        self.errors.append(
+            f"{CATCH_UP_NOTE} the site asked us to slow down, {url} is read again shortly"
+        )
 
 
 def _now() -> datetime:
@@ -215,9 +235,15 @@ class Scraper:
         self.prepare(source)
         try:
             if carry is not None:
-                # Catching up: continue with the pages an earlier run left over.
+                # Catching up: continue with the pages an earlier run left over,
+                # and re-read the feeds and listing pages the site rate-limited.
                 candidates, cache_updates = list(carry.pending), list(carry.cache_updates)
                 result.reachable = 1
+                if carry.pending_urls:
+                    found, updates = self.discover(source, result, only=set(carry.pending_urls))
+                    known = {c.key for c in candidates}
+                    candidates += [c for c in found if c.key not in known]
+                    cache_updates += updates
             else:
                 candidates, cache_updates = self.discover(source, result)
                 candidates += self._retry_candidates(source_id)
@@ -241,9 +267,11 @@ class Scraper:
                     self._process_and_save(source, source_id, candidate, result)
                 except Skip as skip:  # rate-limited: stop and catch up shortly
                     result.pending = fresh[done:]
-                    result.retry_after = skip.retry_after
+                    if skip.retry_after:
+                        result.retry_after = max(result.retry_after or 0.0, skip.retry_after)
                     result.errors.append(
-                        f"rate limited by the site; {len(result.pending)} pages left for later"
+                        f"{CATCH_UP_NOTE} the site asked us to slow down, "
+                        f"{len(result.pending)} pages left for the next round"
                     )
                     break
             if result.pending:
@@ -345,11 +373,22 @@ class Scraper:
                 session.execute(stmt)
 
     def discover(
-        self, source: SourceConfig, result: SourceResult, *, use_cache: bool = True
+        self,
+        source: SourceConfig,
+        result: SourceResult,
+        *,
+        use_cache: bool = True,
+        only: set[str] | None = None,
     ) -> tuple[list[Candidate], list[dict]]:
+        """Candidates from the source's listing pages and feeds (or just the
+        addresses in `only`, when catching up after a rate limit)."""
         cache_updates: list[dict] = []
         found: dict[str, Candidate] = {}
-        feeds = list(source.feeds)
+        listing_pages = [u for u in source.listing_pages if only is None or u in only]
+        if only is None:
+            feeds = list(source.feeds)
+        else:  # may include feeds a listing page advertised
+            feeds = [u for u in only if u not in source.listing_pages]
 
         def add(candidate: Candidate) -> None:
             if source.is_excluded(candidate.url):
@@ -361,7 +400,7 @@ class Scraper:
                     candidate.title = existing.title
                 found[candidate.key] = candidate
 
-        for page_url in source.listing_pages:
+        for page_url in listing_pages:
             try:
                 # Pages that advertise feeds must be parsed every time to find them.
                 page = self._conditional_fetch(
@@ -369,6 +408,9 @@ class Scraper:
                     cache_updates,
                     use_validators=use_cache and not source.autodiscover_feeds,
                 )
+            except RateLimited as exc:
+                result.slow_down(page_url, exc)
+                continue
             except FetchError as exc:
                 result.errors.append(f"listing {page_url}: {exc}")
                 continue
@@ -385,6 +427,9 @@ class Scraper:
         for feed_url in feeds:
             try:
                 feed = self._conditional_fetch(feed_url, cache_updates, use_validators=use_cache)
+            except RateLimited as exc:
+                result.slow_down(feed_url, exc)
+                continue
             except FetchError as exc:
                 # Configured feeds that disappear are worth reporting; guessed
                 # (auto-discovered) ones are not.
@@ -479,7 +524,8 @@ class Scraper:
         page: FetchResult | None = None
         data = None
         try:
-            page = self.client.get(cand.url)
+            if not (source.feed_only and cand.via == "feed"):
+                page = self.client.get(cand.url)
         except RateLimited as exc:
             raise Skip("throttled", str(exc), retry_after=exc.retry_after) from exc
         except RobotsDisallowed as exc:
@@ -640,6 +686,9 @@ class Scraper:
                 media_dir=self.settings.media_dir,
                 when=draft.published_at,
                 max_width=self.settings.image_max_width,
+                # The owner's ignore_robots choice covers the pictures the site's
+                # stories point at, which may be on another host (i.redd.it).
+                check_robots=not source.ignore_robots,
             )
             if stored:
                 draft.image_path = stored.path

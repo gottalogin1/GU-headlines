@@ -42,3 +42,12 @@ def test_invalid_config_is_reported():
         )
     with pytest.raises(ConfigError):
         parse_config({"sources": [{"slug": "a", "name": "A"}]}, {})
+    with pytest.raises(ConfigError, match="feed_only"):
+        parse_config(
+            {
+                "sources": [
+                    {"slug": "a", "name": "A", "listing_pages": ["https://a.b"], "feed_only": True}
+                ]
+            },
+            {},
+        )

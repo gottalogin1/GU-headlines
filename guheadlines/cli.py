@@ -127,13 +127,21 @@ def _merge_pending(pending: dict, results: list, catch_up: bool) -> dict:
 
 
 def _describe_pending(pending: dict) -> str:
-    return ", ".join(f"{slug} ({len(r.pending)} pages)" for slug, r in pending.items())
+    def left(r) -> str:
+        parts = [f"{len(r.pending)} pages"] if r.pending else []
+        if r.pending_urls:
+            parts.append(f"{len(r.pending_urls)} feeds/listings")
+        return ", ".join(parts)
+
+    return ", ".join(f"{slug} ({left(r)})" for slug, r in pending.items())
 
 
 def _print_results(results: list) -> None:
     for r in results:
         status = "ok" if r.ok else "ERROR"
         left = f" left={len(r.pending)}" if r.pending else ""
+        if r.pending_urls:
+            left += f" feeds_left={len(r.pending_urls)}"
         print(
             f"{r.slug:<12} {status:<6} candidates={r.candidates:<4} new={r.new_articles:<4} "
             f"failed={r.failed:<3} skipped={r.rejected:<3}{left} {'; '.join(r.errors)}"

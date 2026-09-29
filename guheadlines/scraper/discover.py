@@ -38,6 +38,7 @@ class Candidate:
 
 _FEED_TYPES = re.compile(r"application/(rss|atom)\+xml|application/(rdf\+)?xml|text/xml", re.I)
 _IMG_SRC_RE = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
+_IMAGE_FILE_RE = re.compile(r"\.(jpe?g|png|webp|gif)$", re.I)
 _DATE_PATH_RE = re.compile(r"/(19|20)\d{2}/\d{1,2}(/\d{1,2})?/")
 
 
@@ -84,6 +85,27 @@ def _entry_image(entry) -> str | None:
     return None
 
 
+def _is_reddit(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").lower()
+    return host == "reddit.com" or host.endswith(".reddit.com")
+
+
+def _reddit_post(html: str) -> tuple[str, str | None]:
+    """Reddit feed entries hold the post's own text (if any) followed by
+    "submitted by /u/name [link] [comments]". Returns that text, and the full-size
+    picture when the post is one (its [link] then points at the image file)."""
+    soup = BeautifulSoup(html or "", "lxml")
+    body = soup.select_one("div.md")
+    text = clean_text(body.get_text(" ")) if body else ""
+    picture = None
+    for anchor in soup.find_all("a", href=True):
+        if anchor.get_text(strip=True) == "[link]":
+            target = anchor["href"]
+            if _IMAGE_FILE_RE.search(urlsplit(target).path):
+                picture = target
+    return text, picture
+
+
 def parse_feed(content: bytes, feed_url: str) -> list[Candidate]:
     parsed = feedparser.parse(content)
     candidates: list[Candidate] = []
@@ -99,6 +121,11 @@ def parse_feed(content: bytes, feed_url: str) -> list[Candidate]:
         ) or parse_datetime(entry.get("published") or entry.get("updated"))
         summary = strip_html(entry.get("summary") or "")
         image = _entry_image(entry)
+        author = clean_text(entry.get("author")) or None
+        if _is_reddit(link):
+            # Reddit's own thumbnails are too small to show (140 px).
+            summary, image = _reddit_post(entry.get("summary") or "")
+            author = author.lstrip("/") if author else None
         candidate = make_candidate(
             link,
             "feed",
@@ -107,7 +134,7 @@ def parse_feed(content: bytes, feed_url: str) -> list[Candidate]:
             summary=summary or None,
             image_url=normalize_url(image, base=link) if image else None,
             published_at=published,
-            author=clean_text(entry.get("author")) or None,
+            author=author,
             tags=[clean_text(t.get("term")) for t in entry.get("tags", []) if t.get("term")],
         )
         if candidate:

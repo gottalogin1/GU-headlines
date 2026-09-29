@@ -1,8 +1,9 @@
 # Topics
 
 Stories are sorted into topics: **Local, Military, Business and Labor** out of
-the box. A story can belong to more than one (a contract for the military
-buildup can be Military *and* Business). Topics are defined in
+the box, plus **Community** for posts from Reddit's r/guam. A story can belong
+to more than one (a contract for the military buildup can be Military *and*
+Business). Topics are defined in
 **`config/categories.yaml`**, which you can edit to add keywords or whole new
 topics.
 
@@ -30,6 +31,11 @@ Three more rules:
   `sources.yaml` (see [News sources](news-sources.md#every-option-explained)).
 - A story that matches no topic goes to **Local**, the "everyday life on
   island" topic, marked `fallback: true`.
+- **Community** has no keywords, so news stories never land in it. It holds
+  the r/guam posts, because that site in `sources.yaml` has
+  `categories: [community]`. A post can also get a news topic from its
+  headline (a post titled "Military housing question" is Community and
+  Military), but never Local, since it already has a topic.
 
 ## How keywords match
 
@@ -157,7 +163,7 @@ hex color), then run `docker compose up -d --build`:
 ### Rename a topic
 
 Change its `name`. Keep the `slug` the same, otherwise it becomes a different
-topic and needs `reclassify`. The four built-in slugs are also used in the
+topic and needs `reclassify`. The five built-in slugs are also used in the
 page colors and by some news sites in `sources.yaml` (`categories:`).
 
 ### Remove a topic

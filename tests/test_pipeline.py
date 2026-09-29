@@ -284,7 +284,7 @@ def test_rate_limited_site_catches_up_after_a_pause(clean_db, scraper, site):
     scraper.client.retries = 0
     result = scraper.run()[0]
     assert ARTICLE_1 not in _articles()
-    assert any("rate limited" in e for e in result.errors)
+    assert any(e.startswith("catching up: the site asked us to slow down") for e in result.errors)
     # Every new page is left for a catch-up, which will wait as the site asked.
     assert {c.key for c in result.pending} == {ARTICLE_1, ARTICLE_2, NOT_ARTICLE}
     assert result.retry_after == 120
@@ -303,6 +303,35 @@ def test_rate_limited_site_catches_up_after_a_pause(clean_db, scraper, site):
     assert site.requests["https://www.pncguam.com/feed/"] == feed_reads
     with session_scope() as session:
         assert session.get(HttpCache, "https://www.pncguam.com/feed/").etag == '"v1"'
+
+
+def test_rate_limited_feed_is_read_again_on_catch_up(clean_db, scraper, site, config):
+    feed = "https://www.pncguam.com/feed/"
+    config.source("pnc").listing_pages = []  # the feed is the only way in
+    original = site.__call__
+    limited = {"on": True}
+
+    def rate_limiter(request):
+        if str(request.url) == feed and limited["on"]:
+            return httpx.Response(429, headers={"Retry-After": "90"})
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(rate_limiter)
+    scraper.client.retries = 0
+    result = scraper.run()[0]
+    assert result.new_articles == 0 and result.ok  # the site answered; not a failure
+    assert result.incomplete and result.pending_urls == [feed]
+    assert result.retry_after == 90
+    assert result.errors == [
+        f"catching up: the site asked us to slow down, {feed} is read again shortly"
+    ]
+
+    # A minute later only that feed is read again, and its stories are loaded.
+    limited["on"] = False
+    caught_up = scraper.run(catch_up={"pnc": result})[0]
+    assert not caught_up.incomplete
+    assert caught_up.new_articles == 2
+    assert site.requests["https://www.pncguam.com/"] == 0
 
 
 def test_per_run_cap_leaves_pages_for_catch_up(clean_db, config, site):
@@ -372,3 +401,93 @@ def test_ignore_robots_is_per_source(clean_db, scraper, site, config):
         assert not other.allowed("https://kanditnews.com/any/page/")
     finally:
         other.close()
+
+
+REDDIT_FEED = "https://www.reddit.com/r/guam/new/.rss?limit=50"
+
+
+def test_feed_only_source_never_opens_the_posts(clean_db):
+    requests: Counter[str] = Counter()
+
+    def reddit(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        requests[url] += 1
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+        if url == REDDIT_FEED:
+            return httpx.Response(
+                200,
+                content=fixture_bytes("reddit_feed.xml"),
+                headers={"content-type": "application/atom+xml"},
+            )
+        if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
+            # Like Reddit: a request for a web page goes to the (blocked) viewer.
+            if "image/" not in request.headers.get("accept", ""):
+                return httpx.Response(302, headers={"location": "https://www.reddit.com/media"})
+            return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
+        return httpx.Response(403, text="Blocked")
+
+    sources = {
+        "sources": [
+            {
+                "slug": "reddit-guam",
+                "name": "r/guam (Reddit)",
+                "homepage": "https://www.reddit.com/r/guam/",
+                "feeds": [REDDIT_FEED],
+                "feed_only": True,
+                "ignore_robots": True,
+                "categories": ["community"],
+            }
+        ]
+    }
+    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
+    client = HttpClient(
+        "test-agent", per_host_delay=0, transport=httpx.MockTransport(reddit), sleep=lambda s: None
+    )
+    try:
+        scraper = Scraper(get_settings(), parse_config(sources, categories), client=client)
+        assert scraper.run()[0].new_articles == 3
+    finally:
+        client.close()
+
+    assert not any("/comments/" in url for url in requests)  # posts never opened
+    articles = _articles()
+    post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
+    assert post.intro.startswith("My appointment at the Department of Revenue")
+    assert post.author == "u/islandcommuter"
+    assert post.categories == ["community"]
+    picture = articles[
+        "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
+    ]
+    assert picture.image_path and picture.intro is None
+
+
+BOT_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</title>
+<script src="/.well-known/sgcaptcha/?r=%2F"></script></head>
+<body><h1>Please wait while your request is being verified...</h1></body></html>"""
+
+
+def test_bot_check_pages_are_not_taken_for_content(clean_db, scraper, site, config):
+    from guheadlines.scraper.discover import Candidate
+    from guheadlines.scraper.pipeline import Skip
+
+    original = site.__call__
+
+    def bot_check(request):
+        if str(request.url) in (ARTICLE_1, BARE, "https://www.pncguam.com/"):
+            return httpx.Response(200, content=BOT_CHECK, headers={"content-type": "text/html"})
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(bot_check)
+    result = scraper.run()[0]
+    # The listing page's bot check is reported on the Sources page...
+    assert any("SiteGround showed a bot check" in error for error in result.errors)
+    # ...and a story behind one falls back to its feed entry, instead of being
+    # rejected for good as "not an article page".
+    assert _articles()[ARTICLE_1].title == "GovGuam agencies brace for H-2B worker shortage"
+    # Without a feed entry it is retried later.
+    with pytest.raises(Skip) as skip:
+        scraper.build_draft(
+            config.source("pnc"), None, Candidate(url=BARE, key=BARE, via="listing")
+        )
+    assert skip.value.status == "failed"

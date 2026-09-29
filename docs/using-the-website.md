@@ -8,6 +8,7 @@ A tour of every page, and how to find older stories.
 |---|---|
 | **Latest** | Every story, newest first (the front page) |
 | **Local, Military, Business, Labor** | Only stories in that topic. A story can be in more than one topic. |
+| **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. |
 | **Archive** | Every story collected, organized by year, month and day |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
@@ -66,7 +67,7 @@ helps with typos (for example `Andersn` still finds *Andersen*).
 The search page has more options:
 
 - **Source:** only one news site.
-- **Topic:** only Local, Military, Business or Labor.
+- **Topic:** only Local, Military, Business, Labor or Community.
 - **From / To:** only stories published between two dates.
 - **Sort:**
   - *Best match* puts the most relevant first, slightly favoring recent

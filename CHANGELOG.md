@@ -3,6 +3,30 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## 1.0.1 (2026-09-29)
+
+### Added
+- **Guam Federation of Teachers** (gftunion.com) as a news site, under Labor.
+- **r/guam on Reddit**, under a new **Community** topic. Posts are read from
+  the community's feed; picture posts show the picture.
+- `feed_only` option in `sources.yaml`, for sites whose pages turn robots
+  away but whose feed works.
+- The Live source check can probe any addresses you give it, to try out a
+  site before adding it.
+
+### Fixed
+- A "bot check" page (such as "One moment, please..." or "Just a moment...")
+  is no longer mistaken for a site's content. The Sources page says so ("...
+  showed a bot check instead of the page"), and stories behind one are
+  retried later instead of being skipped for good. "HTTP 403" messages name
+  the firewall when it can be told, for example "(blocked by Cloudflare)".
+- A news site's feed that answers "too many requests" is read again a minute
+  later, like the story pages already were, instead of waiting for the next
+  hour. (This was the red "HTTP 429" on Pacific Daily News, the Daily Post and
+  Marianas Variety.)
+- A site asking to slow down is shown on the Sources page as a grey
+  "catching up" note, not as a red error; it finishes loading on its own.
+
 ## 1.0.0 (2026-09-27)
 
 The first release.

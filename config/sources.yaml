@@ -29,6 +29,8 @@
 #                         skipped as evergreen pages (default 30)
 #   ignore_robots         fetch this site even where its robots.txt disallows
 #                         crawlers (the site may block you for it)
+#   feed_only             build stories from the feed entries alone, without
+#                         opening the article pages (for sites that refuse bots)
 #   enabled               false to pause a source without deleting its articles
 #
 # Tested from GitHub's servers on 2026-09-27 (see .github/workflows/live-check.yml).
@@ -237,6 +239,23 @@ sources:
       - https://dol.guam.gov/feed/
     categories: [labor]
 
+  # WordPress (Divi). The union for GDOE teachers and support staff, GMH
+  # nurses, UOG and GCC staff and others. The feed carries only the latest few
+  # posts, so the front page is scanned too. It posts rarely, and only real
+  # posts match the article pattern, so older front-page posts are kept.
+  - slug: gft
+    name: Guam Federation of Teachers
+    homepage: https://gftunion.com/
+    feeds:
+      - https://gftunion.com/feed/
+    listing_pages:
+      - https://gftunion.com/
+    article_pattern: '^https?://(www\.)?gftunion\.com/20\d\d/[a-z0-9-]+/[a-z0-9-]+/?$'
+    sitemaps:
+      - https://gftunion.com/sitemap.xml
+    max_age_days: 365
+    categories: [labor]
+
   # Cloudflare challenge from data centers.
   - slug: gbm
     name: Guam Business Magazine
@@ -249,6 +268,20 @@ sources:
     exclude_url_patterns:
       - 'guambusinessmagazine\.com/(archives|digital-magazines|departments|advertise|subscribe)'
     categories: [business]
+
+  # Reddit's Guam community. Reddit's robots.txt turns all bots away and its
+  # post pages refuse them, but its public feed works (as it does for feed
+  # reader apps). So posts are built from the feed alone (feed_only), without
+  # opening them, and robots.txt is ignored for this one feed request an hour.
+  # Posts go under the Community topic; picture posts show the picture.
+  - slug: reddit-guam
+    name: r/guam (Reddit)
+    homepage: https://www.reddit.com/r/guam/
+    feeds:
+      - https://www.reddit.com/r/guam/new/.rss?limit=50
+    feed_only: true
+    ignore_robots: true
+    categories: [community]
 
   # Official press releases. Plentiful and duplicated by the news outlets, so
   # off by default.

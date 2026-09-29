@@ -260,6 +260,23 @@ site's own address (for example `/business/local/` becomes
 **A regional site that also covers Saipan, Palau or other islands:** add
 `require_guam: true` to keep only stories that mention Guam.
 
+**A Reddit community** (subreddit): Reddit's pages turn robots away, but each
+community's feed works. Use `feed_only: true` so posts are built from the
+feed without opening them, and `ignore_robots: true` because Reddit's
+robots.txt turns all robots away. This is how r/guam is set up; for another
+community, change `guam` in both addresses:
+
+```yaml
+  - slug: reddit-guam
+    name: r/guam (Reddit)
+    homepage: https://www.reddit.com/r/guam/
+    feeds:
+      - https://www.reddit.com/r/guam/new/.rss?limit=50
+    feed_only: true
+    ignore_robots: true
+    categories: [community]
+```
+
 ---
 
 ## Every option explained
@@ -279,12 +296,13 @@ entry are required.
 | `autodiscover_feeds` | `true` | Also use any feed that the listing pages advertise. |
 | `exclude_url_patterns` | `- '/opinion/'` | Skip story links whose address matches one of these patterns. Added to the shared list under `defaults:` at the top of the file. |
 | `exclude_sections` | `[Opinion, Sports]` | Skip stories that the site files under these sections or feed categories. Added to the shared list under `defaults:`. |
-| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business` or `labor`. |
+| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor` or `community`. |
 | `require_guam` | `true` | Keep only stories that mention Guam. What counts as "mentions Guam" is the `guam_keywords` list near the top of the file. |
 | `request_delay` | `5` | Seconds between requests to this site. Use it for sites that answer "too many requests" (HTTP 429). If the site's robots.txt asks for a longer delay, that is used instead. |
 | `max_age_days` | `30` | Links found on *listing pages* that are older than this are skipped. Home pages often link to old "evergreen" pages (station promos, guides); this keeps them out. Feed stories are never skipped for age. |
 | `body_selector` | `'.story-text'` | Where the story text is on the page. Only needed if the intro comes out wrong. To find it, open a story in Chrome or Firefox, right-click its first paragraph and choose **Inspect**. Look a few lines up for the box that holds all the paragraphs, such as `<div class="story-text">`, and write its class with a dot in front: `'.story-text'`. |
-| `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). |
+| `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). Also covers the photos its stories point to. |
+| `feed_only` | `true` | Build stories from the feed alone: the headline, text, photo and date the feed gives, without opening each story's page. For sites whose pages turn robots away but whose feed works, such as Reddit. Needs `feeds`. |
 | `sitemaps` | *(a list of addresses)* | Sitemap files for [importing older stories](#importing-older-stories). Usually found automatically. |
 
 ### Settings shared by all sites
@@ -305,9 +323,14 @@ At the top of `sources.yaml`:
 ### robots.txt
 
 Many sites have a file called `robots.txt` that tells automated programs which
-pages they may read. GU Headlines obeys it. Marianas Variety's robots.txt asks
-all robots except a few search engines to stay out; on your instructions it
-is set to `ignore_robots: true`.
+pages they may read. GU Headlines obeys it. Two sites are set to
+`ignore_robots: true` on your instructions:
+
+- **Marianas Variety**, whose robots.txt asks all robots except a few search
+  engines to stay out.
+- **r/guam**, because Reddit's robots.txt turns all robots away. Only the
+  community's public feed is read, once an hour, as feed reader apps do; the
+  posts themselves are never opened (`feed_only`).
 
 If you use `ignore_robots` on a site, know that the site owner has asked not
 to be read this way and may block your server. To turn the exception off,
@@ -334,13 +357,15 @@ The `check` command explains why each story was skipped:
 ## Reading the Sources page
 
 The **Sources** page (top bar) shows the last problem for each site in red.
-Common messages:
+A grey note starting with ↻ is not a problem: the site asked GU Headlines to
+slow down, and it finishes loading on its own. Common messages:
 
 | Message contains | Meaning | What to do |
 |---|---|---|
-| `HTTP 403` | The site refused the request. Usually its firewall (often Cloudflare) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. Otherwise pause the site. |
+| `HTTP 403`, `(blocked by Cloudflare)` | The site refused the request. Usually its firewall (the message names it when it can: Cloudflare, Akamai, SiteGround...) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. Otherwise pause the site. |
+| `showed a bot check instead of the page` | The site answered with a "One moment, please..." or "Just a moment..." page, which only a real browser gets past. GU Headlines doesn't try to get around these. Stories behind one are retried later. | Same as `HTTP 403`. If it lasts for days, ask the site to allow your server, or pause the site. |
 | `HTTP 404` | That feed or page no longer exists. The site has moved things around. | Find the new address with `probe` on the site's home page, and update `sources.yaml`. |
-| `HTTP 429` / `rate limited by the site; N pages left for later` | The site asked GU Headlines to slow down. | Nothing: it comes back every minute until done. If it happens every hour, add `request_delay: 5` (or higher). |
+| `HTTP 429`, or the grey note `catching up: the site asked us to slow down` | The site asked GU Headlines to slow down. | Nothing: it comes back every minute for the pages and feeds it couldn't read, until done. If it happens every hour, add `request_delay: 5` (or higher). |
 | `blocked by robots.txt` | The site's robots.txt forbids reading that address. | Pause the site, or see [robots.txt](#robotstxt). |
 | `ConnectError`, `ConnectTimeout`, `ReadTimeout` | The site didn't answer: it was down, or your internet was. | Nothing if it's occasional. It tries again next hour. |
 | `config error` (in the log) | A mistake in `sources.yaml` or `categories.yaml`. | Run `docker compose exec worker guheadlines sources` to see the problem. |

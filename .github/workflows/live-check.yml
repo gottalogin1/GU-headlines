@@ -2,10 +2,17 @@
 # looks like, what the scraper would store, and a full scrape into a throwaway
 # database. Run it from the Actions tab ("Run workflow") after editing
 # config/sources.yaml, or push a commit whose message contains [live].
+# To try out a site before adding it, run it with addresses in "urls": only
+# those are probed, and the full scrape is skipped.
 name: Live source check
 
 on:
   workflow_dispatch:
+    inputs:
+      urls:
+        description: "Only probe these addresses (separated by spaces)"
+        required: false
+        default: ""
   push:
     paths:
       - "config/**"
@@ -35,11 +42,27 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt && pip install -e .
       - name: Probe every configured URL
+        if: inputs.urls == ''
         run: guheadlines probe --all
+      - name: Probe the given addresses
+        if: inputs.urls != ''
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          # shellcheck disable=SC2086
+          guheadlines probe $URLS
+          ua=$(python -c "from guheadlines.settings import load_settings; print(load_settings().user_agent)")
+          for url in $URLS; do
+            echo "### raw start of $url"
+            curl -sSL -m 20 -A "$ua" -D - "$url" | head -c 3000 || true
+            echo
+          done
 
   scrape:
     name: Check and scrape sources
-    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
+    if: >-
+      (github.event_name != 'push' && inputs.urls == '') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     services:
