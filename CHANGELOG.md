@@ -3,7 +3,7 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
-## Unreleased
+## 1.0.1 (2026-09-29)
 
 ### Added
 - **Guam Federation of Teachers** (gftunion.com) as a news site, under Labor.
@@ -16,9 +16,10 @@ release, see [Updating](docs/maintenance.md#updating).
 
 ### Fixed
 - A "bot check" page (such as "One moment, please..." or "Just a moment...")
-  is no longer mistaken for a site's content. The Sources page names it
-  (for example "SiteGround showed a bot check instead of the page"), and
-  stories behind one are retried later instead of being skipped for good.
+  is no longer mistaken for a site's content. The Sources page says so ("...
+  showed a bot check instead of the page"), and stories behind one are
+  retried later instead of being skipped for good. "HTTP 403" messages name
+  the firewall when it can be told, for example "(blocked by Cloudflare)".
 - A news site's feed that answers "too many requests" is read again a minute
   later, like the story pages already were, instead of waiting for the next
   hour. (This was the red "HTTP 429" on Pacific Daily News, the Daily Post and
