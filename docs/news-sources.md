@@ -357,13 +357,15 @@ The `check` command explains why each story was skipped:
 ## Reading the Sources page
 
 The **Sources** page (top bar) shows the last problem for each site in red.
-Common messages:
+A grey note starting with ↻ is not a problem: the site asked GU Headlines to
+slow down, and it finishes loading on its own. Common messages:
 
 | Message contains | Meaning | What to do |
 |---|---|---|
-| `HTTP 403` | The site refused the request. Usually its firewall (often Cloudflare) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. Otherwise pause the site. |
+| `HTTP 403`, `(blocked by Cloudflare)` | The site refused the request. Usually its firewall (the message names it when it can: Cloudflare, Akamai, SiteGround...) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. Otherwise pause the site. |
+| `showed a bot check instead of the page` | The site answered with a "One moment, please..." or "Just a moment..." page, which only a real browser gets past. GU Headlines doesn't try to get around these. Stories behind one are retried later. | Same as `HTTP 403`. If it lasts for days, ask the site to allow your server, or pause the site. |
 | `HTTP 404` | That feed or page no longer exists. The site has moved things around. | Find the new address with `probe` on the site's home page, and update `sources.yaml`. |
-| `HTTP 429` / `rate limited by the site; N pages left for later` | The site asked GU Headlines to slow down. | Nothing: it comes back every minute until done. If it happens every hour, add `request_delay: 5` (or higher). |
+| `HTTP 429`, or the grey note `catching up: the site asked us to slow down` | The site asked GU Headlines to slow down. | Nothing: it comes back every minute until done. If it happens every hour, add `request_delay: 5` (or higher). |
 | `blocked by robots.txt` | The site's robots.txt forbids reading that address. | Pause the site, or see [robots.txt](#robotstxt). |
 | `ConnectError`, `ConnectTimeout`, `ReadTimeout` | The site didn't answer: it was down, or your internet was. | Nothing if it's occasional. It tries again next hour. |
 | `config error` (in the log) | A mistake in `sources.yaml` or `categories.yaml`. | Run `docker compose exec worker guheadlines sources` to see the problem. |
