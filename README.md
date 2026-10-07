@@ -27,7 +27,7 @@ needed; you will copy and paste a few commands.
 | 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page |
 | 3. [Changing settings](docs/settings.md) | Site name, how often it checks for news, photos, the port, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
-| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor, and how to change or add topics |
+| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 
@@ -49,6 +49,22 @@ Then open **http://localhost:8000** in your browser. The first stories appear
 within a few minutes. The full walkthrough is in
 [Getting started](docs/getting-started.md).
 
+## Updating to a new version
+
+New versions are listed on the
+[Releases page](https://github.com/gottalogin1/GU-headlines/releases), and
+[CHANGELOG.md](CHANGELOG.md) says what changed in each. From inside your
+`GU-headlines` folder:
+
+```sh
+./scripts/backup.sh            # a backup first, just in case
+git pull
+docker compose up -d --build
+```
+
+Your stories, photos and settings are kept. If `git pull` complains about
+your local changes, see [Updating](docs/maintenance.md#updating).
+
 ---
 
 ## What it does
@@ -62,8 +78,9 @@ within a few minutes. The full walkthrough is in
 - **Search** finds stories from any date. It understands word endings
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
+- **Community page** for posts from Reddit's r/guam, kept apart from the news.
 - **Sources page** shows, for each news site, when it was last checked and
-  whether anything went wrong.
+  whether anything went wrong, and lists the sites that can't be collected.
 - **Built to last**: a proper database (PostgreSQL), automatic database
   upgrades, a backup script, and settings kept in plain text files.
 

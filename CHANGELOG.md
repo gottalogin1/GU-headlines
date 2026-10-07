@@ -3,7 +3,7 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
-## Unreleased
+## 1.0.2 (2026-10-07)
 
 ### Changed
 - **r/guam posts appear only on the Community page.** They're no longer on
@@ -23,6 +23,15 @@ release, see [Updating](docs/maintenance.md#updating).
 - The top menu no longer hides its last items (Archive, Sources) on laptop
   screens since the Community topic was added. Below 1,200 pixels wide the
   menu has its own row.
+
+### Also
+- The README has an "Updating to a new version" section and a new
+  screenshot of the current design.
+
+### Updating from 1.0.1
+`git pull`, then `docker compose up -d --build`. Nothing else to do: r/guam
+posts you already have move to the Community page on the first check after
+the update.
 
 ## 1.0.1 (2026-09-29)
 
