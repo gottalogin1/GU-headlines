@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from guheadlines.db import session_scope
 from guheadlines.models import Article, Source
+from guheadlines.scraper.text import GUAM_TZ
 
 
 @pytest.fixture()
@@ -139,3 +140,51 @@ def test_status_shows_catch_up_pauses_as_notes(client):
     page = client.get("/status").text
     assert '<div class="muted small" title="catching up: the site asked us' in page
     assert '<div class="error small" title="feed https://www.postguam.com/rss: HTTP 404">' in page
+
+
+def test_community_only_source_stays_on_the_community_page(client):
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        reddit = Source(
+            slug="reddit-guam", name="r/guam (Reddit)", homepage="https://www.reddit.com/r/guam/"
+        )
+        session.add(reddit)
+        session.flush()
+        session.add(
+            Article(
+                source_id=reddit.id,
+                url="https://www.reddit.com/r/guam/comments/1abc/best_kelaguen_on_island/",
+                title="Best kelaguen on island?",
+                intro="Looking for recommendations near Tumon.",
+                categories=["community", "local"],  # as if tagged before only_in_topic
+                published_at=now - timedelta(hours=1),
+            )
+        )
+    post = "Best kelaguen on island?"
+    home = client.get("/").text
+    assert post not in home
+    assert "r/guam (Reddit)" not in home  # nor in the sidebar's list of news sources
+    assert post not in client.get("/category/local").text
+    assert post in client.get("/category/community").text
+    assert post in client.get("/source/reddit-guam").text
+    # Search results mark the matched word, so look for the post's link.
+    link = "comments/1abc/best_kelaguen_on_island"
+    assert link not in client.get("/search?q=kelaguen").text
+    assert link in client.get("/search?q=kelaguen&category=community").text
+    assert post in client.get("/search?source=reddit-guam").text
+    day = (now - timedelta(hours=1)).astimezone(GUAM_TZ).date()
+    assert post not in client.get(f"/archive/{day.year}/{day.month}/{day.day}").text
+    assert "Andersen to host Cope North" in client.get("/").text  # news is unaffected
+
+
+def test_sources_page_lists_sites_that_cannot_be_collected(client):
+    with session_scope() as session:
+        session.add(Source(slug="pnc", name="PNC News First", enabled=False))  # removed site
+    page = client.get("/status").text
+    assert "PNC News First" not in page
+    blocked = page.split("Can't be collected", 1)[1].split("Recent runs", 1)[0]
+    for name in ("Marianas Business Journal", "Andersen Air Force Base", "Guam Business Magazine"):
+        assert name in blocked
+    assert "Its firewall (Akamai) turns away automated visitors." in blocked
+    sidebar = client.get("/").text.split("Can't be collected", 1)[1]
+    assert "Guam Business Magazine" in sidebar and "guambusinessmagazine.com ↗" in sidebar

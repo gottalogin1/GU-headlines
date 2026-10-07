@@ -436,7 +436,7 @@ def test_feed_only_source_never_opens_the_posts(clean_db):
                 "feeds": [REDDIT_FEED],
                 "feed_only": True,
                 "ignore_robots": True,
-                "categories": ["community"],
+                "only_in_topic": "community",
             }
         ]
     }
@@ -455,7 +455,8 @@ def test_feed_only_source_never_opens_the_posts(clean_db):
     post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
     assert post.intro.startswith("My appointment at the Department of Revenue")
     assert post.author == "u/islandcommuter"
-    assert post.categories == ["community"]
+    # Only the Community topic, whatever a post mentions.
+    assert {tuple(a.categories) for a in articles.values()} == {("community",)}
     picture = articles[
         "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
     ]
@@ -491,3 +492,30 @@ def test_bot_check_pages_are_not_taken_for_content(clean_db, scraper, site, conf
             config.source("pnc"), None, Candidate(url=BARE, key=BARE, via="listing")
         )
     assert skip.value.status == "failed"
+
+
+def test_sites_that_cannot_be_scraped_are_never_fetched(clean_db, scraper, site, config):
+    config.source("pnc").cannot_scrape = "Its firewall turns away automated visitors."
+    assert scraper.run() == []
+    assert scraper.run(only=["pnc"]) == []  # not even when asked for by name
+    assert sum(site.requests.values()) == 0
+    with session_scope() as session:
+        assert session.scalar(select(Source).where(Source.slug == "pnc")) is not None
+
+
+def test_stories_stored_before_only_in_topic_move_to_that_topic(clean_db, config):
+    with session_scope() as session:
+        ids = sync_sources(session, config)
+        session.add(
+            Article(
+                source_id=ids["pnc"],
+                url="https://www.pncguam.com/some-story-about-the-port/",
+                title="Port Authority approves new cranes",
+                categories=["local", "business"],
+                published_at=datetime.now(timezone.utc),
+            )
+        )
+    config.source("pnc").only_in_topic = "community"
+    with session_scope() as session:
+        sync_sources(session, config)
+    assert [a.categories for a in _articles().values()] == [["community"]]

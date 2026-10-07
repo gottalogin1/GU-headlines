@@ -87,7 +87,7 @@ jobs:
       - run: guheadlines migrate
       - name: Dry-run each source
         run: |
-          for slug in $(python -c "from guheadlines.config import load_config; from pathlib import Path; print(' '.join(s.slug for s in load_config(Path('config')).sources))"); do
+          for slug in $(python -c "from guheadlines.config import load_config; from pathlib import Path; print(' '.join(s.slug for s in load_config(Path('config')).sources if not s.cannot_scrape))"); do
             guheadlines check --source "$slug" --limit 2 || true
             echo
           done

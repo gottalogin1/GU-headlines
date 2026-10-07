@@ -6,9 +6,9 @@ A tour of every page, and how to find older stories.
 
 | Link | Shows |
 |---|---|
-| **Latest** | Every story, newest first (the front page) |
+| **Latest** | Every news story, newest first (the front page). r/guam posts are not here; they have their own Community page. |
 | **Local, Military, Business, Labor** | Only stories in that topic. A story can be in more than one topic. |
-| **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. |
+| **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. They appear only here, and in search when you choose the Community topic. |
 | **Archive** | Every story collected, organized by year, month and day |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
@@ -97,9 +97,14 @@ The **Sources** link at the top opens a table with one row per news site:
 | **Total** | All stories ever saved from this site |
 | **Latest story** | When its newest story was published |
 
-Below the table, **Recent runs** lists the latest checks. For each check it
-shows how many links were found (**Links**), how many new stories were saved
-(**New**), and any problem.
+Below the table, **Can't be collected** lists the news sites that turn away
+automated visitors, with the reason and a link to visit each one directly.
+GU Headlines doesn't try to read them. The sidebar lists them too, under the
+other sources.
+
+**Recent runs** lists the latest checks. For each check it shows how many
+links were found (**Links**), how many new stories were saved (**New**), and
+any problem.
 
 What the red messages mean, and what to do about them, is in
 [News sources](news-sources.md#reading-the-sources-page).

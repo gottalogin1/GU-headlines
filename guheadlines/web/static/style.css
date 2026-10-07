@@ -131,7 +131,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 /* ---------- header ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
 .bar {
-  display: flex; align-items: center; gap: 18px;
+  display: flex; align-items: center; gap: 12px;
   padding: 10px 12px 10px 14px;
   border-radius: 999px;
 }
@@ -156,7 +156,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .nav > :last-child { margin-right: auto; }
 .nav::-webkit-scrollbar { display: none; }
 .nav a {
-  padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+  padding: 8px 10px; border-radius: 999px; white-space: nowrap;
   color: var(--text-soft); font-weight: 600; font-size: .9rem;
   transition: background-color .15s ease, color .15s ease;
 }
@@ -170,7 +170,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 
 .search {
-  display: flex; align-items: center; flex: 0 1 300px; min-width: 190px;
+  display: flex; align-items: center; flex: 0 1 210px; min-width: 170px;
   padding: 4px 4px 4px 12px; border-radius: 999px;
   background: rgba(255, 255, 255, .55); border: 1px solid var(--line);
 }
@@ -194,10 +194,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .search button:hover, .search-form button:hover { filter: brightness(1.08); }
 .search button:active, .search-form button:active { transform: translateY(1px); }
 
-@media (max-width: 1360px) {
-  .bar .brand-tagline { display: none; }
-}
-@media (max-width: 1080px) {
+/* The tagline is in the footer; the bar needs the room for the menu. */
+.bar .brand-tagline { display: none; }
+@media (max-width: 1200px) {
   .topbar { position: static; }
   .bar { flex-wrap: wrap; border-radius: var(--r-xl); gap: 10px; padding: 12px; }
   .nav {
@@ -223,6 +222,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .page-head p { margin: 2px 0; }
 .crumbs { font-size: .85rem; color: var(--muted); }
 .section-title { font-size: 1.25rem; font-weight: 750; letter-spacing: -.02em; margin: 34px 4px 12px; }
+.section-note { margin: -4px 4px 14px; max-width: 70ch; }
 
 /* ---------- story cards ---------- */
 .day { margin-bottom: 10px; }
@@ -326,6 +326,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 /* ---------- sidebar ---------- */
 .sidebar .panel { padding: 16px 18px; margin-bottom: 16px; border-radius: var(--r-lg); }
 .sidebar h2 { margin: 0 0 8px; font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sidebar .panel-sub { margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .sidebar p { margin: 4px 0; }
 .facets { list-style: none; margin: 0; padding: 0; }
 .facets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }

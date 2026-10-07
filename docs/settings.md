@@ -46,7 +46,7 @@ editor. This guide explains each one.
 | Setting | Default | What it does |
 |---|---|---|
 | `SITE_NAME` | `GU Headlines` | The name in the top bar, browser tab and footer. |
-| `SITE_TAGLINE` | `Guam news, updated every hour` | The short line under the name (shown on wide screens) and in the footer. If you change how often the site checks for news, update this too. |
+| `SITE_TAGLINE` | `Guam news, updated every hour` | The short line in the footer and in the description search engines show. If you change how often the site checks for news, update this too. |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
 | `WEB_PORT` | `8000` | The port the website uses: `http://your-server:8000`. Change it if something else already uses 8000, or set it to `80` to leave the port off the address (only if nothing else on the server uses port 80). |
 

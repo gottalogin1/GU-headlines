@@ -3,6 +3,27 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Changed
+- **r/guam posts appear only on the Community page.** They're no longer on
+  the front page, the other topics or the archive, nor in the sidebar's list
+  of sources; search shows them when you search within Community. Set with
+  the new `only_in_topic` option in `sources.yaml`.
+- **PNC News First is removed**, as it has closed. Sites removed from
+  `sources.yaml` no longer appear on the Sources page.
+- **Marianas Business Journal, Guam Business Magazine and Andersen Air Force
+  Base are no longer read**, as their firewalls turn away automated visitors.
+  They stay on the list in a separate "Can't be collected" area on the
+  Sources page and in the sidebar, with links to visit them. Set with the new
+  `cannot_scrape` option; `check --source` still tries one, to see whether it
+  works again.
+
+### Fixed
+- The top menu no longer hides its last items (Archive, Sources) on laptop
+  screens since the Community topic was added. Below 1,200 pixels wide the
+  menu has its own row.
+
 ## 1.0.1 (2026-09-29)
 
 ### Added

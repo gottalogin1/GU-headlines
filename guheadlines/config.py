@@ -68,6 +68,17 @@ class SourceConfig:
     # Build stories from the feed entries alone, without downloading the
     # article pages (for sites like Reddit whose pages refuse bots).
     feed_only: bool = False
+    # Put this source's stories in this one topic only, and show them only on
+    # that topic's page (not on the front page, other topics or the archive).
+    only_in_topic: str | None = None
+    # Why this site can't be collected (e.g. its firewall blocks us). Such a
+    # site is never fetched; the website lists it separately with a link.
+    cannot_scrape: str | None = None
+
+    @property
+    def collected(self) -> bool:
+        """Whether the scraper reads this source."""
+        return self.enabled and not self.cannot_scrape
 
     def is_excluded(self, url: str) -> bool:
         return any(p.search(url) for p in self.exclude_patterns)
@@ -106,6 +117,17 @@ class AppConfig:
     def enabled_sources(self) -> list[SourceConfig]:
         return [s for s in self.sources if s.enabled]
 
+    @property
+    def uncollectable_sources(self) -> list[SourceConfig]:
+        """Sites kept on the list that can't be collected (cannot_scrape)."""
+        return [s for s in self.sources if s.enabled and s.cannot_scrape]
+
+    def hidden_sources(self, topic: str | None = None) -> list[str]:
+        """Slugs of sources whose stories belong only on another topic's page
+        (only_in_topic), so a listing for `topic` (None: front page, archive,
+        search without a topic) should leave them out."""
+        return [s.slug for s in self.sources if s.only_in_topic and s.only_in_topic != topic]
+
     def source(self, slug: str) -> SourceConfig | None:
         return next((s for s in self.sources if s.slug == slug), None)
 
@@ -119,6 +141,15 @@ def _as_list(value) -> list:
     if isinstance(value, (list, tuple)):
         return list(value)
     return [value]
+
+
+def _reason(value) -> str | None:
+    """cannot_scrape: a reason, or just `true`."""
+    if value is None or value is False:
+        return None
+    if value is True or not str(value).strip():
+        return "This site turns away automated visitors."
+    return str(value).strip()
 
 
 def _compile(patterns: list[str], where: str) -> list[re.Pattern[str]]:
@@ -196,6 +227,8 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),
             feed_only=bool(raw.get("feed_only", False)),
+            only_in_topic=str(raw["only_in_topic"]) if raw.get("only_in_topic") else None,
+            cannot_scrape=_reason(raw.get("cannot_scrape")),
             max_age_days=int(raw.get("max_age_days", defaults.get("max_age_days", 30))),
             exclude_sections=[
                 str(x)
@@ -203,7 +236,9 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
                 + _as_list(raw.get("exclude_sections"))
             ],
         )
-        if source.enabled and not (source.feeds or source.listing_pages):
+        if source.only_in_topic and source.only_in_topic not in category_slugs:
+            raise ConfigError(f"{where}: unknown only_in_topic {source.only_in_topic!r}")
+        if source.collected and not (source.feeds or source.listing_pages):
             raise ConfigError(f"{where}: needs at least one feed or listing page")
         if source.feed_only and not source.feeds:
             raise ConfigError(f"{where}: feed_only needs at least one feed")

@@ -51,3 +51,44 @@ def test_invalid_config_is_reported():
             },
             {},
         )
+
+
+def test_shipped_sources(app_config):
+    assert app_config.source("pnc") is None  # PNC News First has closed
+    assert [s.slug for s in app_config.uncollectable_sources] == ["mbj", "andersen", "gbm"]
+    assert all(not s.collected for s in app_config.uncollectable_sources)
+    reddit = app_config.source("reddit-guam")
+    assert reddit.only_in_topic == "community" and reddit.collected
+    assert app_config.hidden_sources() == ["reddit-guam"]  # front page, archive
+    assert app_config.hidden_sources("community") == []
+
+
+def test_only_in_topic_and_cannot_scrape_options():
+    categories = {"categories": [{"slug": "community", "name": "Community"}]}
+    config = parse_config(
+        {
+            "sources": [
+                # A site that can't be scraped needs no feeds; `true` gets a reason.
+                {"slug": "blocked", "name": "Blocked", "cannot_scrape": True},
+                {
+                    "slug": "forum",
+                    "name": "Forum",
+                    "feeds": ["https://f.example/rss"],
+                    "only_in_topic": "community",
+                },
+            ]
+        },
+        categories,
+    )
+    blocked = config.source("blocked")
+    assert blocked.cannot_scrape and not blocked.collected
+    assert config.hidden_sources("labor") == ["forum"]
+    with pytest.raises(ConfigError, match="only_in_topic"):
+        parse_config(
+            {
+                "sources": [
+                    {"slug": "a", "name": "A", "feeds": ["https://a.b"], "only_in_topic": "x"}
+                ]
+            },
+            categories,
+        )

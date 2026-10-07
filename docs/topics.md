@@ -33,9 +33,9 @@ Three more rules:
   island" topic, marked `fallback: true`.
 - **Community** has no keywords, so news stories never land in it. It holds
   the r/guam posts, because that site in `sources.yaml` has
-  `categories: [community]`. A post can also get a news topic from its
-  headline (a post titled "Military housing question" is Community and
-  Military), but never Local, since it already has a topic.
+  `only_in_topic: community`: its posts get only that topic, whatever they
+  mention, and appear only on the Community page (not on the front page,
+  the other topics or the archive).
 
 ## How keywords match
 

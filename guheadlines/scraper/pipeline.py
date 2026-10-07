@@ -164,6 +164,17 @@ def sync_sources(session: Session, config: AppConfig) -> dict[str, int]:
         if slug not in configured:
             row.enabled = False
     session.flush()
+    for cfg in config.sources:
+        if cfg.only_in_topic:
+            # Keep stories stored before only_in_topic was set in that one topic.
+            session.execute(
+                update(Article)
+                .where(
+                    Article.source_id == existing[cfg.slug].id,
+                    Article.categories != [cfg.only_in_topic],
+                )
+                .values(categories=[cfg.only_in_topic])
+            )
     return {slug: row.id for slug, row in existing.items()}
 
 
@@ -201,11 +212,15 @@ class Scraper:
             with session_scope() as session:
                 ids = sync_sources(session, self.config)
             if catch_up is not None:
-                sources = [s for s in self.config.sources if s.slug in catch_up and s.enabled]
+                sources = [s for s in self.config.sources if s.slug in catch_up and s.collected]
+            elif only:
+                sources = [s for s in self.config.sources if s.slug in only]
+                for source in sources:
+                    if source.cannot_scrape:
+                        log.warning("[%s] not scraped: %s", source.slug, source.cannot_scrape)
+                sources = [s for s in sources if not s.cannot_scrape]
             else:
-                sources = [
-                    s for s in self.config.sources if (s.slug in only if only else s.enabled)
-                ]
+                sources = [s for s in self.config.sources if s.collected]
             carry = catch_up or {}
             started = _now()
             with ThreadPoolExecutor(max_workers=self.settings.max_workers) as pool:
@@ -607,6 +622,7 @@ class Scraper:
             keywords=keywords,
             url=canonical,
             forced=source.categories,
+            only=source.only_in_topic,
         )
         image_url = (data.image_url if data else None) or cand.image_url
         if image_url and source_id is not None and self._is_generic_image(source_id, image_url):
