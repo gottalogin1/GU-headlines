@@ -32,6 +32,20 @@
     {% endfor %}
   </ul>
   <p class="muted small">Stories this week. Name: that outlet's stories here; ↗ its website. <a href="/status">Status →</a></p>
+  {% if sidebar.uncollectable %}
+  <h3 class="panel-sub">Can't be collected</h3>
+  <ul class="facets">
+    {% for s in sidebar.uncollectable %}
+    <li>
+      <span class="facet-name">
+        <span>{{ s.name }}</span>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">These sites block automated visitors. Visit them directly.</p>
+  {% endif %}
 </section>
 
 <section class="panel">

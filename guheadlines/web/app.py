@@ -195,10 +195,17 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
     def sidebar():
         with session_scope() as session:
             week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-            return {
-                "facets_week": queries.facet_counts(session, week_ago),
-                "last_updated": queries.last_updated(session),
-            }
+            facets = queries.facet_counts(session, week_ago)
+            last_updated = queries.last_updated(session)
+        # News sources only: sites that can't be collected are listed apart, and
+        # only_in_topic sources (r/guam) are reached through their topic.
+        left_out = {s.slug for s in config.uncollectable_sources} | set(config.hidden_sources())
+        facets["sources"] = [s for s in facets["sources"] if s["slug"] not in left_out]
+        return {
+            "facets_week": facets,
+            "last_updated": last_updated,
+            "uncollectable": config.uncollectable_sources,
+        }
 
     context.setdefault("title", None)
     response = templates.TemplateResponse(
@@ -235,9 +242,17 @@ def _listing(request: Request, template: str, filters: Filters, page: int, **con
     )
 
 
+def _hidden(topic: str | None = None) -> tuple[str, ...]:
+    """Sources to leave out of a listing for `topic` (only_in_topic sources
+    whose stories belong on another topic's page)."""
+    return tuple(config_cache.get().hidden_sources(topic))
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, page: int = Query(1, ge=1, le=10000)):
-    return _listing(request, "index.html", Filters(), page, active_nav="latest")
+    return _listing(
+        request, "index.html", Filters(hide_sources=_hidden()), page, active_nav="latest"
+    )
 
 
 @app.get("/category/{slug}", response_class=HTMLResponse)
@@ -248,7 +263,7 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
     return _listing(
         request,
         "index.html",
-        Filters(category=slug),
+        Filters(category=slug, hide_sources=_hidden(slug)),
         page,
         active_nav=slug,
         heading=category.name,
@@ -303,6 +318,7 @@ def search(
         date_from=_parse_date(date_from),
         date_to=_parse_date(date_to),
         sort=sort,
+        hide_sources=_hidden(category or None),
     )
     fuzzy = False
     result = None
@@ -313,7 +329,8 @@ def search(
             if filters.sort == "relevance":
                 filters.sort = "newest"
             result = queries.list_articles(session, filters, page, settings.page_size)
-        sources = queries.all_sources(session)
+        config = config_cache.get()
+        sources = queries.all_sources(session, keep={s.slug for s in config.sources})
     return render(
         request,
         "search.html",
@@ -329,7 +346,7 @@ def search(
 @app.get("/archive", response_class=HTMLResponse)
 def archive(request: Request):
     with session_scope() as session:
-        years = queries.archive_months(session)
+        years = queries.archive_months(session, list(_hidden()))
     return render(request, "archive.html", years=years, title="Archive", active_nav="archive")
 
 
@@ -338,7 +355,7 @@ def archive_month(request: Request, year: int, month: int):
     if not (1990 <= year <= 2200 and 1 <= month <= 12):
         raise HTTPException(404)
     with session_scope() as session:
-        days = queries.archive_days(session, year, month)
+        days = queries.archive_days(session, year, month, list(_hidden()))
     return render(
         request,
         "archive_month.html",
@@ -356,7 +373,7 @@ def archive_day(request: Request, year: int, month: int, day: int, page: int = Q
         the_day = date(year, month, day)
     except ValueError:
         raise HTTPException(404) from None
-    filters = Filters(date_from=the_day, date_to=the_day)
+    filters = Filters(date_from=the_day, date_to=the_day, hide_sources=_hidden())
     return _listing(
         request,
         "index.html",
@@ -373,11 +390,22 @@ def archive_day(request: Request, year: int, month: int, day: int, page: int = Q
 
 @app.get("/status", response_class=HTMLResponse)
 def status(request: Request):
+    config = config_cache.get()
     with session_scope() as session:
         sources = queries.source_status(session)
         runs = queries.recent_runs(session)
+    # Sites removed from sources.yaml are left out; those that can't be
+    # collected get their own list.
+    listed = {s.slug for s in config.sources if not s.cannot_scrape}
+    sources = [row for row in sources if row["source"].slug in listed]
     return render(
-        request, "status.html", sources=sources, runs=runs, title="Sources", active_nav="status"
+        request,
+        "status.html",
+        sources=sources,
+        uncollectable=config.uncollectable_sources,
+        runs=runs,
+        title="Sources",
+        active_nav="status",
     )
 
 

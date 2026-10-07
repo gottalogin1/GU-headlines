@@ -253,6 +253,11 @@ def cmd_check(args, settings: Settings) -> None:
     source = config.source(args.source)
     if not source:
         raise SystemExit(f"unknown source: {args.source}")
+    if source.cannot_scrape:
+        print(
+            f"note: {source.slug} is marked cannot_scrape ({source.cannot_scrape}); the worker "
+            "never reads it. This check tries it anyway, to see whether it works again."
+        )
     with session_scope() as session:
         source_id = sync_sources(session, config)[source.slug]
     scraper = Scraper(settings, config)
@@ -349,6 +354,7 @@ def cmd_reclassify(args, settings: Settings) -> None:
                 keywords=row.keywords,
                 url=row.url,
                 forced=source.categories if source else None,
+                only=source.only_in_topic if source else None,
             )
             if categories != list(row.categories or []):
                 updates.append((row.id, categories))
@@ -370,7 +376,10 @@ def cmd_probe(args, settings: Settings) -> None:
     urls = list(args.url or [])
     if args.source or args.all:
         config = _config(settings)
-        chosen = config.sources if args.all else [config.source(s) for s in args.source]
+        if args.all:  # sites that can't be scraped are left alone
+            chosen = [s for s in config.sources if not s.cannot_scrape]
+        else:
+            chosen = [config.source(s) for s in args.source]
         for source in chosen:
             if source is None:
                 raise SystemExit("unknown source")
@@ -407,8 +416,8 @@ def cmd_sources(args, settings: Settings) -> None:
     except Exception as exc:
         print(f"(database unavailable: {type(exc).__name__})")
     for s in config.sources:
-        state = "on " if s.enabled else "off"
-        print(f"{s.slug:<12} {state} {counts.get(s.slug, 0):>7} articles  {s.name}")
+        state = "can't" if s.cannot_scrape else ("on" if s.enabled else "off")
+        print(f"{s.slug:<12} {state:<5} {counts.get(s.slug, 0):>7} articles  {s.name}")
 
 
 def main(argv: list[str] | None = None) -> None:

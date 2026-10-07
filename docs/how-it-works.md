@@ -33,7 +33,7 @@ database upgrades (Alembic migrations) when they start.
 
 ## What happens every hour
 
-For each enabled news site:
+For each news site that is switched on (and not marked `cannot_scrape`):
 
 1. **Discover.** Fetch the configured feeds and listing pages. Feeds are
    requested with `If-None-Match` / `If-Modified-Since`, so an unchanged feed
@@ -107,7 +107,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 |---|---|
 | `scrape` | Check all enabled sites now. `--source SLUG` for one site (repeatable). `--until-done` keeps catching up every `CATCH_UP_SECONDS` until nothing is left (`--max-rounds N` limits it, default 60). |
 | `check --source SLUG` | Dry run: what the site's feeds and pages give, and what would be saved for the first few new stories (`--limit N`, default 3). Saves nothing. |
-| `probe URL…` | Describe a page or feed: status, CMS, advertised feeds, common link shapes, what the extractor gets. `--source SLUG` probes a site's configured addresses; `--all` probes every site. Needs no database. |
+| `probe URL…` | Describe a page or feed: status, CMS, advertised feeds, common link shapes, what the extractor gets. `--source SLUG` probes a site's configured addresses; `--all` probes every site except those marked `cannot_scrape`. Needs no database. |
 | `backfill --source SLUG --since YYYY-MM-DD` | Import older stories from the site's sitemaps (`--limit N`, default 300). |
 | `reclassify` | Re-apply `categories.yaml` to every stored story. |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |

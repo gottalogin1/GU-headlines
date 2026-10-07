@@ -31,12 +31,18 @@
 #                         crawlers (the site may block you for it)
 #   feed_only             build stories from the feed entries alone, without
 #                         opening the article pages (for sites that refuse bots)
+#   only_in_topic         put this site's stories in that one topic only, and
+#                         show them only on that topic's page (not on the
+#                         front page, other topics or the archive)
+#   cannot_scrape         the reason this site can't be collected; it is never
+#                         read, and the website lists it separately with a link.
+#                         Delete the line to collect it again.
 #   enabled               false to pause a source without deleting its articles
 #
-# Tested from GitHub's servers on 2026-09-27 (see .github/workflows/live-check.yml).
-# Sites marked "Cloudflare challenge" answered 403 to data-center IP addresses
-# with any user agent; they usually work from a home or business connection.
-# Run `guheadlines check --source <slug>` on your server to see.
+# Tested from GitHub's servers on 2026-09-29 (see .github/workflows/live-check.yml).
+# Sites marked cannot_scrape refuse automated visitors (their firewall answers
+# 403). To see whether one works again from your server, run
+# `guheadlines check --source <slug>`; if it does, delete its cannot_scrape line.
 
 defaults:
   exclude_sections:
@@ -141,14 +147,6 @@ sources:
       - https://www.kuam.com/
     article_pattern: '/story/\d+/'
 
-  # WordPress. Cloudflare challenge from data centers.
-  - slug: pnc
-    name: PNC News First
-    homepage: https://www.pncguam.com/
-    feeds:
-      - https://www.pncguam.com/feed/
-    article_pattern: '^https?://(www\.)?pncguam\.com/[a-z0-9][a-z0-9-]{8,}/?$'
-
   # WordPress. The feed works everywhere; the front page has a Cloudflare challenge.
   - slug: kandit
     name: KANDIT News Group
@@ -159,11 +157,13 @@ sources:
       - 'obituar'
       - '/notice-of-'
 
-  # Drupal. Cloudflare challenge from data centers; robots.txt asks for a
-  # 10-second crawl delay, which is honoured automatically.
+  # Drupal. Its firewall refuses automated visitors, so it isn't collected.
+  # The settings below are kept for when it works again (robots.txt asks for a
+  # 10-second crawl delay, which is honoured automatically).
   - slug: mbj
     name: Marianas Business Journal
     homepage: https://www.mbjguam.com/
+    cannot_scrape: Its firewall (Cloudflare) turns away automated visitors.
     listing_pages:
       - https://www.mbjguam.com/guam
       - https://www.mbjguam.com/news
@@ -223,10 +223,12 @@ sources:
     require_guam: true
     categories: [military]
 
-  # af.mil sites (Akamai) refuse data-center IPs.
+  # af.mil sites refuse automated visitors, so it isn't collected. The
+  # settings below are kept for when it works again.
   - slug: andersen
     name: Andersen Air Force Base
     homepage: https://www.andersen.af.mil/
+    cannot_scrape: Its firewall (Akamai) turns away automated visitors.
     listing_pages:
       - https://www.andersen.af.mil/News/
     article_pattern: '/News/Article-Display/Article/\d+/'
@@ -256,10 +258,12 @@ sources:
     max_age_days: 365
     categories: [labor]
 
-  # Cloudflare challenge from data centers.
+  # Its firewall refuses automated visitors, so it isn't collected. The
+  # settings below are kept for when it works again.
   - slug: gbm
     name: Guam Business Magazine
     homepage: https://www.guambusinessmagazine.com/
+    cannot_scrape: Its firewall (Cloudflare) turns away automated visitors.
     feeds:
       - https://www.guambusinessmagazine.com/feed/
     listing_pages:
@@ -273,7 +277,8 @@ sources:
   # post pages refuse them, but its public feed works (as it does for feed
   # reader apps). So posts are built from the feed alone (feed_only), without
   # opening them, and robots.txt is ignored for this one feed request an hour.
-  # Posts go under the Community topic; picture posts show the picture.
+  # Posts appear only on the Community page (only_in_topic), not on the front
+  # page or the other topics. Picture posts show the picture.
   - slug: reddit-guam
     name: r/guam (Reddit)
     homepage: https://www.reddit.com/r/guam/
@@ -281,7 +286,7 @@ sources:
       - https://www.reddit.com/r/guam/new/.rss?limit=50
     feed_only: true
     ignore_robots: true
-    categories: [community]
+    only_in_topic: community
 
   # Official press releases. Plentiful and duplicated by the news outlets, so
   # off by default.

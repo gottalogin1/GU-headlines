@@ -8,8 +8,9 @@ news sites, picks up any **new** stories, and shows them on one page with the
 to the news site that published it.
 
 Stories are sorted into four topics, **Local, Military, Business and Labor**,
-plus **Community** for posts from Reddit's r/guam, and everything is kept, so you can search for a story from last week or from
-three years ago.
+and everything is kept, so you can search for a story from last week or from
+three years ago. Posts from Reddit's r/guam have their own **Community** page,
+away from the news.
 
 ![The front page (sample stories)](docs/screenshot.jpg)
 
@@ -26,7 +27,7 @@ needed; you will copy and paste a few commands.
 | 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page |
 | 3. [Changing settings](docs/settings.md) | Site name, how often it checks for news, photos, the port, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
-| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor, and how to change or add topics |
+| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 
@@ -48,6 +49,22 @@ Then open **http://localhost:8000** in your browser. The first stories appear
 within a few minutes. The full walkthrough is in
 [Getting started](docs/getting-started.md).
 
+## Updating to a new version
+
+New versions are listed on the
+[Releases page](https://github.com/gottalogin1/GU-headlines/releases), and
+[CHANGELOG.md](CHANGELOG.md) says what changed in each. From inside your
+`GU-headlines` folder:
+
+```sh
+./scripts/backup.sh            # a backup first, just in case
+git pull
+docker compose up -d --build
+```
+
+Your stories, photos and settings are kept. If `git pull` complains about
+your local changes, see [Updating](docs/maintenance.md#updating).
+
 ---
 
 ## What it does
@@ -61,8 +78,9 @@ within a few minutes. The full walkthrough is in
 - **Search** finds stories from any date. It understands word endings
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
+- **Community page** for posts from Reddit's r/guam, kept apart from the news.
 - **Sources page** shows, for each news site, when it was last checked and
-  whether anything went wrong.
+  whether anything went wrong, and lists the sites that can't be collected.
 - **Built to last**: a proper database (PostgreSQL), automatic database
   upgrades, a backup script, and settings kept in plain text files.
 
@@ -83,19 +101,18 @@ These are set up out of the box. You can add, pause or remove sites; see
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz, Andersen) | Military news releases |
 | Guam Department of Labor | Posts rarely |
 | Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
-| r/guam on Reddit | Community posts, under their own **Community** topic; read from the community's feed only |
-| PNC News First, Marianas Business Journal, Guam Business Magazine, Andersen Air Force Base | These sites block some internet addresses (see below) |
+| r/guam on Reddit | Shown only on the **Community** page, not on the front page; read from the community's feed only |
 | Office of the Governor | Press releases; switched off unless you turn it on |
 
-These four sites block traffic from cloud and data-center servers:
-- PNC News First
+**Listed but not collected.** These sites turn away automated visitors, so
+GU Headlines doesn't try to read them. The Sources page and the sidebar list
+them separately, with links to visit them directly:
 - Marianas Business Journal
 - Guam Business Magazine
 - Andersen Air Force Base
 
-They usually work from a home or business internet connection. After you
-install, the **Sources** page on your site shows whether they are working for
-you.
+To see whether one has started working, and how to switch it back on, see
+[News sources](docs/news-sources.md#sites-that-cant-be-collected).
 
 ## Folder guide
 

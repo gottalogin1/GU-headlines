@@ -28,8 +28,12 @@ def classify(
     keywords: str | list[str] | None = None,
     url: str | None = None,
     forced: list[str] | None = None,
+    only: str | None = None,
 ) -> list[str]:
-    """Return category slugs in config order."""
+    """Return category slugs in config order. `only` (a source's only_in_topic)
+    puts the story in that one topic, whatever it mentions."""
+    if only:
+        return [only]
     if isinstance(keywords, list):
         keywords = " ".join(keywords)
     title_text = fold(title or "")

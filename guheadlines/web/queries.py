@@ -58,6 +58,9 @@ class Filters:
     date_from: date | None = None
     date_to: date | None = None
     sort: str = "relevance"  # relevance | newest | oldest
+    # Sources left out unless asked for by name (only_in_topic sources whose
+    # stories belong on another topic's page).
+    hide_sources: tuple[str, ...] = ()
 
     @property
     def active(self) -> bool:
@@ -79,9 +82,16 @@ def _article_query() -> Select:
     ).join(Source, Source.id == Article.source_id)
 
 
+def _hidden(slugs: tuple[str, ...] | list[str]):
+    """Condition leaving out the articles of these sources."""
+    return Article.source_id.not_in(select(Source.id).where(Source.slug.in_(slugs)))
+
+
 def _apply_filters(stmt: Select, f: Filters) -> Select:
     if f.source:
         stmt = stmt.where(Source.slug == f.source)
+    elif f.hide_sources:
+        stmt = stmt.where(_hidden(f.hide_sources))
     if f.category:
         stmt = stmt.where(Article.categories.contains([f.category]))
     if f.date_from:
@@ -183,43 +193,50 @@ def facet_counts(session: Session, since: datetime | None = None) -> dict:
     }
 
 
-def all_sources(session: Session) -> list[dict]:
-    """Every source, including paused ones whose old stories are still searchable."""
-    rows = session.execute(select(Source.slug, Source.name).order_by(Source.name)).all()
-    return [{"slug": slug, "name": name} for slug, name in rows]
+def all_sources(session: Session, keep: set[str] | frozenset[str] = frozenset()) -> list[dict]:
+    """Sources to offer as a search filter: those in `keep`, plus any other
+    (paused or removed) whose old stories are still searchable."""
+    rows = session.execute(
+        select(Source.slug, Source.name, func.count(Article.id))
+        .outerjoin(Article, Article.source_id == Source.id)
+        .group_by(Source.slug, Source.name)
+        .order_by(Source.name)
+    ).all()
+    return [{"slug": slug, "name": name} for slug, name, count in rows if slug in keep or count]
 
 
 def last_updated(session: Session) -> datetime | None:
     return session.scalar(select(func.max(Source.last_run_at)))
 
 
-def archive_months(session: Session) -> list[dict]:
+def archive_months(session: Session, hide_sources: list[str] | None = None) -> list[dict]:
     """[{year, months: [{month, count}]}] in Guam local time, newest first."""
     local = func.timezone("Pacific/Guam", Article.published_at)
     year = func.extract("year", local).label("y")
     month = func.extract("month", local).label("m")
-    rows = session.execute(
-        select(year, month, func.count()).group_by(year, month).order_by(year.desc(), month.desc())
-    ).all()
+    stmt = select(year, month, func.count()).group_by(year, month)
+    if hide_sources:
+        stmt = stmt.where(_hidden(hide_sources))
+    rows = session.execute(stmt.order_by(year.desc(), month.desc())).all()
     years: dict[int, list[dict]] = {}
     for y, m, count in rows:
         years.setdefault(int(y), []).append({"month": int(m), "count": count})
     return [{"year": y, "months": months} for y, months in years.items()]
 
 
-def archive_days(session: Session, year: int, month: int) -> list[dict]:
+def archive_days(
+    session: Session, year: int, month: int, hide_sources: list[str] | None = None
+) -> list[dict]:
     start = date(year, month, 1)
     end = date(year + (month == 12), (month % 12) + 1, 1)
     local_day = func.date(func.timezone("Pacific/Guam", Article.published_at)).label("d")
-    rows = session.execute(
-        select(local_day, func.count())
-        .where(
-            Article.published_at >= local_day_bounds(start)[0],
-            Article.published_at < local_day_bounds(end)[0],
-        )
-        .group_by(local_day)
-        .order_by(local_day.desc())
-    ).all()
+    stmt = select(local_day, func.count()).where(
+        Article.published_at >= local_day_bounds(start)[0],
+        Article.published_at < local_day_bounds(end)[0],
+    )
+    if hide_sources:
+        stmt = stmt.where(_hidden(hide_sources))
+    rows = session.execute(stmt.group_by(local_day).order_by(local_day.desc())).all()
     return [{"day": d, "count": c} for d, c in rows]
 
 

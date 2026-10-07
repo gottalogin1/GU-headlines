@@ -8,7 +8,7 @@ option.
 
 - [How it reads a news site](#how-it-reads-a-news-site)
 - [Editing sources.yaml safely](#editing-sourcesyaml-safely)
-- [Common tasks](#common-tasks): pause, remove, rename, add, test
+- [Common tasks](#common-tasks): pause, remove, rename, test, sites that can't be collected
 - [Adding a new news site, step by step](#adding-a-new-news-site-step-by-step)
 - [Every option explained](#every-option-explained)
 - [Fixing problems](#fixing-problems)
@@ -71,10 +71,14 @@ docker compose exec worker guheadlines sources
 If the file is fine, it lists your sites:
 
 ```
-postguam     on       812 articles  The Guam Daily Post
-guampdn      on       640 articles  Pacific Daily News
-governor     off        0 articles  Office of the Governor
+postguam     on        812 articles  The Guam Daily Post
+guampdn      on        640 articles  Pacific Daily News
+mbj          can't       0 articles  Marianas Business Journal
+governor     off         0 articles  Office of the Governor
 ```
+
+`on` is collected, `off` is paused, and `can't` is marked
+[`cannot_scrape`](#sites-that-cant-be-collected).
 
 If something is wrong, it says so instead, for example
 `config error: sources.yaml [mysite]: needs at least one feed or listing page`,
@@ -102,8 +106,8 @@ docker compose exec worker guheadlines scrape --source SLUG
 Add `enabled: false` to it:
 
 ```yaml
-  - slug: gbm
-    name: Guam Business Magazine
+  - slug: stripes
+    name: Stars and Stripes
     enabled: false
     feeds:
       ...
@@ -120,9 +124,42 @@ It's included but paused. Find `slug: governor` and remove its
 
 ### Remove a site
 
-Pausing is usually better. If you do delete a site's whole block from the
-file, its old stories stay (they're part of your archive) and the site is
-shown as paused.
+Delete the site's whole block from the file (from its `- slug:` line down to
+the line before the next `- slug:`). Its old stories stay in your archive and
+in search, and the site disappears from the Sources page and the sidebar.
+PNC News First was removed this way when it closed.
+
+### Sites that can't be collected
+
+Some sites turn away automated visitors whatever you do: their firewall
+answers `HTTP 403`, or shows a bot check. Instead of letting them fail every
+hour, mark them with `cannot_scrape` and a short reason:
+
+```yaml
+  - slug: mbj
+    name: Marianas Business Journal
+    homepage: https://www.mbjguam.com/
+    cannot_scrape: Its firewall (Cloudflare) turns away automated visitors.
+    listing_pages:
+      ...
+```
+
+GU Headlines then never reads the site. The Sources page lists it under
+**Can't be collected**, with your reason and a link to the site, and the
+sidebar lists it below the other sources. Marianas Business Journal, Guam
+Business Magazine and Andersen Air Force Base are set up this way. Their
+feeds and pages are kept in the file for when they work again.
+
+**To see whether one works again** (for example from a different internet
+connection), run a dry run. It tries the site even though it's marked, and
+saves nothing:
+
+```sh
+docker compose exec worker guheadlines check --source mbj
+```
+
+If it finds stories, delete the `cannot_scrape` line. The site is collected
+from the next check.
 
 ### Rename a site
 
@@ -274,8 +311,11 @@ community, change `guam` in both addresses:
       - https://www.reddit.com/r/guam/new/.rss?limit=50
     feed_only: true
     ignore_robots: true
-    categories: [community]
+    only_in_topic: community
 ```
+
+`only_in_topic: community` keeps the posts on the Community page only, away
+from the news on the front page.
 
 ---
 
@@ -302,6 +342,8 @@ entry are required.
 | `max_age_days` | `30` | Links found on *listing pages* that are older than this are skipped. Home pages often link to old "evergreen" pages (station promos, guides); this keeps them out. Feed stories are never skipped for age. |
 | `body_selector` | `'.story-text'` | Where the story text is on the page. Only needed if the intro comes out wrong. To find it, open a story in Chrome or Firefox, right-click its first paragraph and choose **Inspect**. Look a few lines up for the box that holds all the paragraphs, such as `<div class="story-text">`, and write its class with a dot in front: `'.story-text'`. |
 | `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). Also covers the photos its stories point to. |
+| `only_in_topic` | `community` | Put this site's stories in that one topic only, whatever they mention, and show them only on that topic's page: not on the front page, the other topics or the archive. Search shows them when you search within that topic. Use a topic *slug* from `categories.yaml`. |
+| `cannot_scrape` | `Its firewall (Cloudflare) turns away automated visitors.` | The site can't be collected. GU Headlines never reads it, and lists it separately on the Sources page and in the sidebar, with this reason and a link. See [Sites that can't be collected](#sites-that-cant-be-collected). |
 | `feed_only` | `true` | Build stories from the feed alone: the headline, text, photo and date the feed gives, without opening each story's page. For sites whose pages turn robots away but whose feed works, such as Reddit. Needs `feeds`. |
 | `sitemaps` | *(a list of addresses)* | Sitemap files for [importing older stories](#importing-older-stories). Usually found automatically. |
 
@@ -362,8 +404,8 @@ slow down, and it finishes loading on its own. Common messages:
 
 | Message contains | Meaning | What to do |
 |---|---|---|
-| `HTTP 403`, `(blocked by Cloudflare)` | The site refused the request. Usually its firewall (the message names it when it can: Cloudflare, Akamai, SiteGround...) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. Otherwise pause the site. |
-| `showed a bot check instead of the page` | The site answered with a "One moment, please..." or "Just a moment..." page, which only a real browser gets past. GU Headlines doesn't try to get around these. Stories behind one are retried later. | Same as `HTTP 403`. If it lasts for days, ask the site to allow your server, or pause the site. |
+| `HTTP 403`, `(blocked by Cloudflare)` | The site refused the request. Usually its firewall (the message names it when it can: Cloudflare, Akamai, SiteGround...) blocks the kind of internet address your server has. | Nothing, if it still works sometimes. Cloud servers are blocked more often than home connections. Adding contact details to `SCRAPER_USER_AGENT` ([Settings](settings.md#being-a-good-visitor)) can help. If it never works, mark it [`cannot_scrape`](#sites-that-cant-be-collected). |
+| `showed a bot check instead of the page` | The site answered with a "One moment, please..." or "Just a moment..." page, which only a real browser gets past. GU Headlines doesn't try to get around these. Stories behind one are retried later. | Same as `HTTP 403`. If it lasts for days, ask the site to allow your server, or mark it [`cannot_scrape`](#sites-that-cant-be-collected). |
 | `HTTP 404` | That feed or page no longer exists. The site has moved things around. | Find the new address with `probe` on the site's home page, and update `sources.yaml`. |
 | `HTTP 429`, or the grey note `catching up: the site asked us to slow down` | The site asked GU Headlines to slow down. | Nothing: it comes back every minute for the pages and feeds it couldn't read, until done. If it happens every hour, add `request_delay: 5` (or higher). |
 | `blocked by robots.txt` | The site's robots.txt forbids reading that address. | Pause the site, or see [robots.txt](#robotstxt). |
@@ -409,7 +451,7 @@ archive with earlier stories from a site, use `backfill`. It reads the site's
 **sitemap** (a list of all its pages that most news sites publish):
 
 ```sh
-docker compose exec worker guheadlines backfill --source pnc --since 2025-01-01 --limit 500
+docker compose exec worker guheadlines backfill --source kandit --since 2025-01-01 --limit 500
 ```
 
 - `--since` is the earliest date to import (year-month-day).
