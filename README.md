@@ -24,7 +24,7 @@ needed; you will copy and paste a few commands.
 | Guide | What it covers |
 |---|---|
 | 1. [Getting started](docs/getting-started.md) | Installing it on your computer or server, step by step |
-| 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page |
+| 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page, light and dark mode |
 | 3. [Changing settings](docs/settings.md) | Site name, how often it checks for news, photos, the port, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
