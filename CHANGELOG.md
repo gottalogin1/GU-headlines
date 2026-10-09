@@ -3,6 +3,26 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## 1.0.3 (2026-10-09)
+
+### Added
+- **A light/dark switch** at the right of the top bar. On a first visit the
+  site follows the device's setting, and stays dark when the browser gives no
+  answer. A choice made with the switch is remembered in that browser;
+  switching back to the device's mode follows the device again.
+
+### Changed
+- **Light mode is a plain white page**, with white cards set off by thin
+  borders, instead of the tinted background.
+- To fit the switch, the top menu is a little tighter, and the search box
+  takes whatever room is left.
+- The README screenshot shows the new light mode.
+
+### Updating from 1.0.2
+`git pull`, then `docker compose up -d --build`. Nothing else to do. If a
+browser still shows the old look, reload the page once (Ctrl+Shift+R, or
+Cmd+Shift+R on a Mac).
+
 ## 1.0.2 (2026-10-07)
 
 ### Changed

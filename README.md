@@ -24,7 +24,7 @@ needed; you will copy and paste a few commands.
 | Guide | What it covers |
 |---|---|
 | 1. [Getting started](docs/getting-started.md) | Installing it on your computer or server, step by step |
-| 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page |
+| 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page, light and dark mode |
 | 3. [Changing settings](docs/settings.md) | Site name, how often it checks for news, photos, the port, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
@@ -79,6 +79,8 @@ your local changes, see [Updating](docs/maintenance.md#updating).
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
 - **Community page** for posts from Reddit's r/guam, kept apart from the news.
+- **Light and dark mode**: follows your device's setting, with a switch in the
+  top bar. Light mode is a plain white page.
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Built to last**: a proper database (PostgreSQL), automatic database

@@ -1,33 +1,40 @@
 /* GU Headlines: frosted glass, soft curves, readable text. One file, no build step. */
 
+/* Dark is the default theme. A small script in base.html sets data-theme on
+   <html>: the visitor's choice from the switch in the top bar, else their
+   device's light/dark setting, else dark. */
 :root {
-  color-scheme: light;
-  --bg: #eef3f9;
-  --text: #0f172a;
-  --text-soft: #334155;
-  --muted: #5b6b82;
-  --line: rgba(15, 23, 42, .08);
-  --accent: #2563eb;
-  --accent-2: #0ea5e9;
-  --link: #1d4ed8;
-  --mark: #fde68a;
-  --focus: #2563eb;
+  color-scheme: dark;
+  --bg: #0a1020;
+  --text: #e8edf5;
+  --text-soft: #c9d2e0;
+  --muted: #97a3b6;
+  --line: rgba(255, 255, 255, .08);
+  --accent: #6ea8ff;
+  --accent-2: #38bdf8;
+  --link: #9cc3ff;
+  --mark: #7c5e10;
+  --focus: #8fb8ff;
+  --error: #fca5a5;
+  --field-bg: rgba(255, 255, 255, .06);  /* search box, the light/dark switch */
+  --input-bg: rgba(255, 255, 255, .05);  /* search page fields */
+  --backdrop-opacity: .55;               /* the soft colours behind the glass */
 
   /* Glass surfaces. Cards carrying body text are nearly opaque for contrast. */
-  --glass: rgba(255, 255, 255, .58);
-  --glass-strong: rgba(255, 255, 255, .80);
-  --glass-border: rgba(255, 255, 255, .85);
-  --glass-edge: rgba(15, 23, 42, .06);
-  --gloss: linear-gradient(180deg, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 42%);
-  --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 12px 32px -14px rgba(15, 40, 80, .22);
-  --shadow-hover: 0 2px 4px rgba(15, 23, 42, .05), 0 22px 44px -18px rgba(15, 40, 80, .32);
+  --glass: rgba(22, 30, 50, .50);
+  --glass-strong: rgba(20, 28, 46, .74);
+  --glass-border: rgba(255, 255, 255, .09);
+  --glass-edge: rgba(0, 0, 0, .25);
+  --gloss: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 40%);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -18px rgba(0, 0, 0, .7);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, .3), 0 24px 52px -18px rgba(0, 0, 0, .85);
   --blur: blur(22px) saturate(170%);
 
-  --tag-local: #0f766e;     --tag-local-bg: rgba(20, 184, 166, .14);
-  --tag-military: #4d7c0f;  --tag-military-bg: rgba(132, 204, 22, .16);
-  --tag-business: #1d4ed8;  --tag-business-bg: rgba(59, 130, 246, .13);
-  --tag-labor: #b45309;     --tag-labor-bg: rgba(245, 158, 11, .16);
-  --tag-community: #6d28d9; --tag-community-bg: rgba(139, 92, 246, .13);
+  --tag-local: #5eead4;     --tag-local-bg: rgba(45, 212, 191, .13);
+  --tag-military: #bef264;  --tag-military-bg: rgba(163, 230, 53, .12);
+  --tag-business: #93c5fd;  --tag-business-bg: rgba(96, 165, 250, .14);
+  --tag-labor: #fcd34d;     --tag-labor-bg: rgba(251, 191, 36, .13);
+  --tag-community: #c4b5fd; --tag-community-bg: rgba(167, 139, 250, .14);
 
   --r-xl: 28px;
   --r-lg: 22px;
@@ -37,32 +44,35 @@
     "Helvetica Neue", Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #0a1020;
-    --text: #e8edf5;
-    --text-soft: #c9d2e0;
-    --muted: #97a3b6;
-    --line: rgba(255, 255, 255, .08);
-    --accent: #6ea8ff;
-    --accent-2: #38bdf8;
-    --link: #9cc3ff;
-    --mark: #7c5e10;
-    --focus: #8fb8ff;
-    --glass: rgba(22, 30, 50, .50);
-    --glass-strong: rgba(20, 28, 46, .74);
-    --glass-border: rgba(255, 255, 255, .09);
-    --glass-edge: rgba(0, 0, 0, .25);
-    --gloss: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 40%);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -18px rgba(0, 0, 0, .7);
-    --shadow-hover: 0 2px 4px rgba(0, 0, 0, .3), 0 24px 52px -18px rgba(0, 0, 0, .85);
-    --tag-local: #5eead4;     --tag-local-bg: rgba(45, 212, 191, .13);
-    --tag-military: #bef264;  --tag-military-bg: rgba(163, 230, 53, .12);
-    --tag-business: #93c5fd;  --tag-business-bg: rgba(96, 165, 250, .14);
-    --tag-labor: #fcd34d;     --tag-labor-bg: rgba(251, 191, 36, .13);
-    --tag-community: #c4b5fd; --tag-community-bg: rgba(167, 139, 250, .14);
-  }
+/* Light theme: a plain white page with white cards set off by thin borders. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --text: #0f172a;
+  --text-soft: #334155;
+  --muted: #5b6b82;
+  --line: rgba(15, 23, 42, .09);
+  --accent: #2563eb;
+  --accent-2: #0ea5e9;
+  --link: #1d4ed8;
+  --mark: #fde68a;
+  --focus: #2563eb;
+  --error: #b91c1c;
+  --field-bg: #f1f5f9;
+  --input-bg: #ffffff;
+  --backdrop-opacity: 0;
+  --glass: rgba(255, 255, 255, .86);
+  --glass-strong: #ffffff;
+  --glass-border: rgba(15, 23, 42, .10);
+  --glass-edge: rgba(15, 23, 42, .04);
+  --gloss: none;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -14px rgba(15, 23, 42, .18);
+  --shadow-hover: 0 2px 4px rgba(15, 23, 42, .06), 0 16px 36px -16px rgba(15, 23, 42, .26);
+  --tag-local: #0f766e;     --tag-local-bg: rgba(20, 184, 166, .14);
+  --tag-military: #4d7c0f;  --tag-military-bg: rgba(132, 204, 22, .16);
+  --tag-business: #1d4ed8;  --tag-business-bg: rgba(59, 130, 246, .13);
+  --tag-labor: #b45309;     --tag-labor-bg: rgba(245, 158, 11, .16);
+  --tag-community: #6d28d9; --tag-community-bg: rgba(139, 92, 246, .13);
 }
 
 * { box-sizing: border-box; }
@@ -87,9 +97,7 @@ body::before {
     radial-gradient(34vw 34vw at 92% 4%, rgba(99, 102, 241, .26), transparent 70%),
     radial-gradient(42vw 42vw at 88% 78%, rgba(20, 184, 166, .24), transparent 70%),
     radial-gradient(36vw 36vw at 6% 92%, rgba(244, 114, 182, .16), transparent 70%);
-}
-@media (prefers-color-scheme: dark) {
-  body::before { opacity: .55; }
+  opacity: var(--backdrop-opacity);
 }
 
 a { color: var(--link); text-decoration: none; }
@@ -131,7 +139,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 /* ---------- header ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
 .bar {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 8px;
   padding: 10px 12px 10px 14px;
   border-radius: 999px;
 }
@@ -150,13 +158,13 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .brand-name { font-weight: 750; font-size: 1.12rem; letter-spacing: -.02em; }
 .brand-tagline { font-size: .74rem; color: var(--muted); }
 
-.nav { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav { display: flex; gap: 2px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 /* Centred when there is room, scrollable (never clipped) when there is not. */
 .nav > :first-child { margin-left: auto; }
 .nav > :last-child { margin-right: auto; }
 .nav::-webkit-scrollbar { display: none; }
 .nav a {
-  padding: 8px 10px; border-radius: 999px; white-space: nowrap;
+  padding: 8px 8px; border-radius: 999px; white-space: nowrap;
   color: var(--text-soft); font-weight: 600; font-size: .9rem;
   transition: background-color .15s ease, color .15s ease;
 }
@@ -170,12 +178,31 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 
 .search {
-  display: flex; align-items: center; flex: 0 1 210px; min-width: 170px;
+  display: flex; align-items: center; flex: 1 1 190px; min-width: 170px; max-width: 360px; margin-left: auto;
   padding: 4px 4px 4px 12px; border-radius: 999px;
-  background: rgba(255, 255, 255, .55); border: 1px solid var(--line);
+  background: var(--field-bg); border: 1px solid var(--line);
 }
-@media (prefers-color-scheme: dark) { .search { background: rgba(255, 255, 255, .06); } }
 .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, .15); }
+
+/* The light/dark switch. Its look follows aria-checked (on = dark). */
+.theme-toggle {
+  flex: none; display: inline-flex; align-items: center;
+  width: 52px; height: 30px; padding: 3px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--field-bg);
+  transition: border-color .15s ease;
+}
+.theme-toggle[hidden] { display: none; }
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-knob {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: #ffffff; color: #b45309; box-shadow: 0 1px 3px rgba(15, 23, 42, .3);
+  transition: transform .2s ease, background-color .2s ease;
+}
+.theme-knob svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.theme-toggle .icon-moon { display: none; }
+.theme-toggle[aria-checked="true"] .theme-knob { transform: translateX(22px); background: #1e293b; color: #fde68a; }
+.theme-toggle[aria-checked="true"] .icon-sun { display: none; }
+.theme-toggle[aria-checked="true"] .icon-moon { display: block; }
 .search-icon { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
 .search input {
   flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
@@ -355,10 +382,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .field input, .field select {
   font: inherit; padding: 10px 12px; border-radius: var(--r-sm); min-width: 0;
   border: 1px solid var(--line); color: var(--text);
-  background: rgba(255, 255, 255, .7);
+  background: var(--input-bg);
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, .05);
 }
-@media (prefers-color-scheme: dark) { .field input, .field select { background: rgba(255, 255, 255, .05); } }
 .field input:focus, .field select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, .15); }
 .field.actions { flex-direction: row; align-items: center; align-self: end; gap: 14px; min-height: 44px; }
 .reset { font-size: .9rem; }
@@ -392,8 +418,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .status-table.compact td { padding: 8px 16px; }
 .status-table tr.disabled { opacity: .55; }
 .badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); margin-left: 6px; font-weight: 650; }
-.error { color: #b91c1c; }
-@media (prefers-color-scheme: dark) { .error { color: #fca5a5; } }
+.error { color: var(--error); }
 
 /* ---------- misc ---------- */
 .empty { padding: 26px 28px; margin-top: 12px; border-radius: var(--r-xl); }
@@ -404,17 +429,13 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 /* ---------- accessibility and fallbacks ---------- */
 /* Without backdrop blur, translucent panels would show busy colour: go solid. */
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  :root { --glass: rgba(255, 255, 255, .92); --glass-strong: rgba(255, 255, 255, .96); }
-  @media (prefers-color-scheme: dark) {
-    :root { --glass: rgba(18, 26, 44, .95); --glass-strong: rgba(18, 26, 44, .97); }
-  }
+  :root { --glass: rgba(18, 26, 44, .95); --glass-strong: rgba(18, 26, 44, .97); }
+  :root[data-theme="light"] { --glass: #ffffff; --glass-strong: #ffffff; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --glass: #ffffff; --glass-strong: #ffffff; --gloss: none; --glass-border: rgba(15, 23, 42, .18); --muted: #475569; }
+  :root { --glass: #131b2e; --glass-strong: #131b2e; --gloss: none; --glass-border: rgba(255, 255, 255, .22); --muted: #b3bdcc; }
+  :root[data-theme="light"] { --glass: #ffffff; --glass-strong: #ffffff; --glass-border: rgba(15, 23, 42, .18); --muted: #475569; }
   body::before { display: none; }
-  @media (prefers-color-scheme: dark) {
-    :root { --glass: #131b2e; --glass-strong: #131b2e; --glass-border: rgba(255, 255, 255, .22); --muted: #b3bdcc; }
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }

@@ -111,5 +111,15 @@ What the red messages mean, and what to do about them, is in
 
 ## Light and dark
 
-The site follows your device's light or dark setting automatically. It works
-on phones: the menu scrolls sideways, and photos appear above each story.
+The switch at the right of the top bar (a sun in light mode, a moon in dark
+mode) changes between a white page and a dark one.
+
+- On a first visit, the site follows your device's light or dark setting.
+  Devices without a setting count as light; browsers report them that way.
+- If the browser gives no answer at all (some older browsers, or JavaScript
+  switched off), the site is dark.
+- Your choice is remembered in that browser. Switch back to the mode your
+  device uses, and the site follows your device again.
+
+It works on phones too: the menu scrolls sideways, and photos appear above
+each story.
