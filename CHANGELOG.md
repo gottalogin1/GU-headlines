@@ -3,6 +3,21 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Added
+- **A light/dark switch** at the right of the top bar. On a first visit the
+  site follows the device's setting, and stays dark when the browser gives no
+  answer. A choice made with the switch is remembered in that browser;
+  switching back to the device's mode follows the device again.
+
+### Changed
+- **Light mode is a plain white page**, with white cards set off by thin
+  borders, instead of the tinted background.
+- To fit the switch, the top menu is a little tighter, and the search box
+  takes whatever room is left.
+- The README screenshot shows the new light mode.
+
 ## 1.0.2 (2026-10-07)
 
 ### Changed

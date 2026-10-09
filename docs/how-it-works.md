@@ -23,7 +23,7 @@ page to run GU Headlines.
 | Container | What it is | Details |
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
-| `web` | The website (Python, FastAPI) | Pages are built on the server, so no JavaScript is needed. Serves saved photos from the `media` volume. Listens on port 8000 (`WEB_PORT`). |
+| `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 (`WEB_PORT`). |
 | `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. |
 
 `web` and `worker` are the same program (`guheadlines`) started with

@@ -188,3 +188,16 @@ def test_sources_page_lists_sites_that_cannot_be_collected(client):
     assert "Its firewall (Akamai) turns away automated visitors." in blocked
     sidebar = client.get("/").text.split("Can't be collected", 1)[1]
     assert "Guam Business Magazine" in sidebar and "guambusinessmagazine.com ↗" in sidebar
+
+
+def test_light_dark_switch(client):
+    page = client.get("/").text
+    # The switch is in the top bar; the script shows it and picks the theme:
+    # the saved choice, else the device setting, else dark.
+    assert 'id="theme-toggle"' in page and 'role="switch"' in page
+    assert 'saved() || device() || "dark"' in page
+    css = client.get("/static/style.css").text
+    dark, light = css.split(':root[data-theme="light"] {', 1)
+    assert "color-scheme: dark;" in dark.split(":root {", 1)[1]  # dark by default
+    assert "--bg: #ffffff;" in light.split("}", 1)[0]  # light mode is plain white
+    assert "prefers-color-scheme" not in css  # the script decides, not the CSS

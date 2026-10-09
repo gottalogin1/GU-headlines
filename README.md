@@ -79,6 +79,8 @@ your local changes, see [Updating](docs/maintenance.md#updating).
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
 - **Community page** for posts from Reddit's r/guam, kept apart from the news.
+- **Light and dark mode**: follows your device's setting, with a switch in the
+  top bar. Light mode is a plain white page.
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Built to last**: a proper database (PostgreSQL), automatic database
