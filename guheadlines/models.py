@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     Computed,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -147,3 +148,58 @@ class ScrapeRun(Base):
     new_articles: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class JobSource(Base):
+    """One row per job board in jobs.yaml; powers the source list on /jobs."""
+
+    __tablename__ = "job_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    homepage: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    # Postings found on the last successful check.
+    last_count: Mapped[int | None] = mapped_column(Integer)
+
+    jobs: Mapped[list[Job]] = relationship(back_populates="source")
+
+
+class Job(Base):
+    """A job posting. Fields a posting does not give are left empty."""
+
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("job_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    # The posting's page (or its PDF when that is all there is); the unique key.
+    url: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    employer: Mapped[str | None] = mapped_column(Text)
+    pay: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(Text)
+    open_date: Mapped[date | None] = mapped_column(Date)
+    close_date: Mapped[date | None] = mapped_column(Date)
+    # A closing condition that is not a date, e.g. "Open until filled".
+    close_note: Mapped[str | None] = mapped_column(Text)
+    pdf_url: Mapped[str | None] = mapped_column(Text)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # The scrape date: when the posting was last found on its board.
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # When the posting's own page was last read (None: only the listing so far).
+    detail_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set when the posting is no longer listed on its board.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    source: Mapped[JobSource] = relationship(back_populates="jobs")

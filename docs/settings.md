@@ -65,6 +65,8 @@ SITE_TAGLINE=Every Guam story, every hour
 | `SCRAPE_ON_START` | `true` | Also check immediately when GU Headlines starts, instead of waiting for the next scheduled check. |
 | `MAX_NEW_PER_SOURCE` | `40` | The most new stories saved from one site in one round. Anything left over is picked up in a catch-up round (next setting). This keeps the first load and very busy days from hammering one site. |
 | `CATCH_UP_SECONDS` | `60` | When a site isn't fully loaded (it had more stories than one round takes, or it said "too many requests"), come back for that site after this many seconds, and keep coming back until it's done. Then it returns to the regular schedule. The minimum is 30. If a site asks for a longer pause, that is honored (up to 10 minutes). |
+| `JOBS_INTERVAL_HOURS` | `6` | How often to read the job boards for the [Jobs page](jobs.md), in hours. They are also read when GU Headlines starts. |
+| `USAJOBS_API_KEY`, `USAJOBS_EMAIL` | (empty) | A free key for the USAJOBS job board and the email address it was sent to. Without them that board is skipped. See [Jobs](jobs.md#usajobs). |
 | `PER_HOST_DELAY` | `1.5` | Seconds to wait between two requests to the same news site. Higher is gentler. Individual sites can be slowed down further in `sources.yaml` (`request_delay`). |
 | `SCRAPER_WORKERS` | `4` | How many news sites are checked at the same time. |
 | `REQUEST_TIMEOUT` | `25` | Seconds to wait for a news site to answer before giving up (it will try again later). |

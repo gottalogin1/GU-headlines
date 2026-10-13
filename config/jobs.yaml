@@ -1,0 +1,124 @@
+# Job boards for the Jobs page.
+#
+# The worker reads them every JOBS_INTERVAL_HOURS (default 6). Changes take
+# effect on the next check. Try a board with:
+#     docker compose exec worker guheadlines jobs --check --source <slug>
+#
+# Per-board options:
+#   parser          how the board is read (see docs/jobs.md):
+#                     hafajobs               apply.hafajobs.com job tables
+#                     pdf_links              a page listing announcement PDFs
+#                     uog                    University of Guam (PeopleAdmin + PDFs)
+#                     peopleadmin            any *.peopleadmin.com portal
+#                     federalgovernmentjobs  federalgovernmentjobs.us location pages
+#                     usajobs                the USAJOBS API (needs a free key)
+#                     guamjobsonline         guamjobsonline.com search results
+#                     govguam                jobs.guam.gov
+#                     sections               one heading per job, description below
+#   pages           the listing pages to read (next pages are followed)
+#   employer        who is hiring, when a posting doesn't say
+#   location        where, when a posting doesn't say
+#   request_delay   seconds between requests to this site
+#   ignore_robots   read this site even where its robots.txt disallows it
+#   cannot_scrape   why this board can't be collected; it is never read, and
+#                   the Jobs page lists it with a link. Delete the line to try
+#                   it again.
+#   enabled         false to pause a board without deleting its postings
+#
+# Pay, open date and close date are left empty when a posting doesn't give
+# them; the Jobs page always shows when each posting was last seen.
+#
+# Tested from GitHub's servers on 2026-10-13 (see .github/workflows/live-check.yml).
+
+sources:
+  - slug: govguam
+    name: GovGuam Jobs
+    homepage: https://jobs.guam.gov/
+    parser: govguam
+    pages:
+      - https://jobs.guam.gov/public/jobs
+    employer: Government of Guam
+    location: Guam
+    cannot_scrape: >-
+      The site is built with JavaScript, and the job-list service behind it
+      answers automated requests with a server error (HTTP 500), even when
+      they match what the site itself sends.
+
+  - slug: guamjobsonline
+    name: GuamJobsOnline
+    homepage: https://guamjobsonline.com/
+    parser: guamjobsonline
+    pages:
+      - https://guamjobsonline.com/open_search.php
+    location: Guam
+
+  - slug: gdoe
+    name: Guam Department of Education
+    homepage: https://gdoe.net/District/Department/14-Human-Resources-Division/1753-Employment-Opportunities-and-Status.html
+    parser: pdf_links
+    pages:
+      - https://gdoe.net/District/Department/14-Human-Resources-Division/1753-Employment-Opportunities-and-Status.html
+    employer: Guam Department of Education
+    location: Guam
+
+  - slug: federal-jobs
+    name: Federal jobs (federalgovernmentjobs.us)
+    homepage: https://federalgovernmentjobs.us/job-location/guam-gu.html
+    parser: federalgovernmentjobs
+    pages:
+      - https://federalgovernmentjobs.us/job-location/guam-gu.html?ps=100
+    location: Guam
+
+  - slug: usajobs
+    name: USAJOBS
+    homepage: https://www.usajobs.gov/Search/Results?l=Guam
+    parser: usajobs
+    pages:
+      - https://data.usajobs.gov/api/search?LocationName=Guam
+    location: Guam
+
+  - slug: uog
+    name: University of Guam
+    homepage: https://www.uog.edu/administration/administration-finance/human-resources/job-opportunities
+    parser: uog
+    # UOG's PeopleAdmin portal (uog.peopleadmin.com) would add dates and pay,
+    # but its robots.txt turns away all crawlers but a few search engines.
+    pages:
+      - https://www.uog.edu/administration/administration-finance/human-resources/job-opportunities
+    employer: University of Guam
+    location: Mangilao, Guam
+
+  - slug: gcc
+    name: Guam Community College
+    homepage: https://apply.hafajobs.com/guam/GCC/jobs
+    parser: hafajobs
+    pages:
+      - https://apply.hafajobs.com/guam/GCC/jobs/open
+    employer: Guam Community College
+    location: Guam
+
+  - slug: gcc-partners
+    name: Guam Community College partners
+    homepage: https://apply.hafajobs.com/guam/gccpartners/jobs
+    parser: hafajobs
+    pages:
+      - https://apply.hafajobs.com/guam/gccpartners/jobs/open
+    location: Guam
+
+  - slug: american-job-center
+    name: American Job Center (Guam DOL)
+    homepage: https://dol.guam.gov/employment-and-training/american-job-center/
+    parser: pdf_links
+    cannot_scrape: >-
+      This page lists no openings itself. The American Job Center's job bank is
+      HireGuam (hireguam.com), whose firewall (Imperva) turns away automated
+      visitors.
+
+  - slug: guamtemps
+    name: GuamTemps
+    homepage: https://www.guamtemps.com/jobs
+    parser: sections
+    pages:
+      - https://www.guamtemps.com/jobs
+    employer: GuamTemps
+    location: Guam

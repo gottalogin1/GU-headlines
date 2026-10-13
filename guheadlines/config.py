@@ -259,3 +259,79 @@ def load_config(config_dir: Path) -> AppConfig:
     except yaml.YAMLError as exc:
         raise ConfigError(f"invalid YAML: {exc}") from exc
     return parse_config(sources_data, categories_data)
+
+
+# ------------------------------------------------------------------- jobs
+
+
+@dataclass
+class JobSourceConfig:
+    slug: str
+    name: str
+    # How the board is read: a parser name from guheadlines.jobs.parsers.
+    parser: str
+    homepage: str | None = None
+    # The board's listing pages (the parser may follow its own "next" links).
+    pages: list[str] = field(default_factory=list)
+    # Used when a posting does not say who is hiring or where.
+    employer: str | None = None
+    location: str | None = None
+    enabled: bool = True
+    request_delay: float | None = None
+    ignore_robots: bool = False
+    # Why this board can't be collected; it is listed on the Jobs page with a link.
+    cannot_scrape: str | None = None
+
+    @property
+    def collected(self) -> bool:
+        return self.enabled and not self.cannot_scrape
+
+
+def parse_jobs_config(data: dict, parsers: set[str] | frozenset[str] = frozenset()) -> list:
+    """The job boards in jobs.yaml. `parsers`, when given, are the known parser names."""
+    boards: list[JobSourceConfig] = []
+    seen: set[str] = set()
+    for raw in _as_list((data or {}).get("sources")):
+        slug = str(raw.get("slug", "")).strip()
+        where = f"jobs.yaml [{slug or '?'}]"
+        if not _SLUG_RE.match(slug):
+            raise ConfigError(f"{where}: invalid or missing slug")
+        if slug in seen:
+            raise ConfigError(f"{where}: duplicate slug")
+        seen.add(slug)
+        if not raw.get("name"):
+            raise ConfigError(f"{where}: missing name")
+        parser = str(raw.get("parser") or "").strip()
+        if parsers and parser not in parsers:
+            raise ConfigError(f"{where}: unknown parser {parser!r} (one of {sorted(parsers)})")
+        board = JobSourceConfig(
+            slug=slug,
+            name=str(raw["name"]),
+            parser=parser,
+            homepage=raw.get("homepage"),
+            pages=[str(u) for u in _as_list(raw.get("pages"))],
+            employer=raw.get("employer"),
+            location=raw.get("location"),
+            enabled=bool(raw.get("enabled", True)),
+            request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
+            ignore_robots=bool(raw.get("ignore_robots", False)),
+            cannot_scrape=_reason(raw.get("cannot_scrape")),
+        )
+        if board.collected and not board.pages:
+            raise ConfigError(f"{where}: needs at least one page")
+        boards.append(board)
+    return boards
+
+
+def load_jobs_config(config_dir: Path) -> list[JobSourceConfig]:
+    """config/jobs.yaml; no file means no job boards."""
+    from .jobs.parsers import PARSERS
+
+    path = config_dir / "jobs.yaml"
+    if not path.exists():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"jobs.yaml: invalid YAML: {exc}") from exc
+    return parse_jobs_config(data, set(PARSERS))

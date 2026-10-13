@@ -56,6 +56,12 @@ class Settings:
     image_max_width: int = 720
     page_size: int = 30
     log_level: str = "INFO"
+    # How often the worker reads the job boards in config/jobs.yaml.
+    jobs_interval_hours: int = 6
+    # A free key from developer.usajobs.gov, and the email it was issued to,
+    # for the USAJOBS board; without them that board is skipped.
+    usajobs_api_key: str = ""
+    usajobs_email: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -113,6 +119,9 @@ def load_settings() -> Settings:
         image_max_width=_int(env.get("IMAGE_MAX_WIDTH"), defaults.image_max_width),
         page_size=max(5, min(100, _int(env.get("PAGE_SIZE"), defaults.page_size))),
         log_level=env.get("LOG_LEVEL", "INFO").upper(),
+        jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
+        usajobs_api_key=env.get("USAJOBS_API_KEY", "").strip(),
+        usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
     )
 
 

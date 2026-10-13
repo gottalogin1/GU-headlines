@@ -30,6 +30,7 @@ needed; you will copy and paste a few commands.
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
+| [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 
 ---
 
@@ -81,6 +82,10 @@ your local changes, see [Updating](docs/maintenance.md#updating).
 - **Community page** for posts from Reddit's r/guam, kept apart from the news.
 - **Light and dark mode**: follows your device's setting, with a switch in the
   top bar. Light mode is a plain white page.
+- **Jobs page** lists openings on Guam from eight job boards (GuamJobsOnline,
+  GDOE, federal jobs, USAJOBS, UOG, GCC and its partners, GuamTemps), with
+  pay, location, open and closing dates, the announcement PDF and when each
+  posting was last seen. See [Jobs](docs/jobs.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Built to last**: a proper database (PostgreSQL), automatic database
@@ -124,6 +129,7 @@ GU-headlines/
 ├── CHANGELOG.md        what changed in each release
 ├── config/
 │   ├── sources.yaml    the list of news sites
+│   ├── jobs.yaml       the job boards for the Jobs page
 │   └── categories.yaml the topics and their keywords
 ├── docs/               the guides linked above
 ├── docker-compose.yml  tells Docker how to run everything

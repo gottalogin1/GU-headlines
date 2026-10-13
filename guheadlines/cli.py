@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, text, update
 
-from .config import AppConfig, ConfigError, load_config
+from .config import AppConfig, ConfigError, load_config, load_jobs_config
 from .db import MIGRATION_LOCK_KEY, advisory_lock, get_engine, session_scope
 from .models import Article
 from .settings import PACKAGE_DIR, Settings, get_settings
@@ -205,6 +205,26 @@ def cmd_worker(args, settings: Settings) -> None:
     interval = settings.scrape_interval_minutes * 60
     config = _config(settings)
     pending: dict = {}
+    next_jobs = 0.0  # when the job boards are due (time.monotonic); 0: on the first run
+
+    def run_jobs_if_due() -> None:
+        """Job boards change more slowly than news: read them every JOBS_INTERVAL_HOURS."""
+        nonlocal next_jobs
+        if time.monotonic() < next_jobs:
+            return
+        # A minute's slack, so a clock-aligned run at the due hour is not skipped.
+        next_jobs = time.monotonic() + settings.jobs_interval_hours * 3600 - 60
+        try:
+            boards = load_jobs_config(settings.config_dir)
+        except ConfigError as exc:
+            log.error("jobs.yaml error, job boards not read: %s", exc)
+            return
+        if not any(b.collected for b in boards):
+            return
+        try:
+            _run_jobs(settings, boards)
+        except Exception:
+            log.exception("job check failed")
 
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
@@ -230,6 +250,7 @@ def cmd_worker(args, settings: Settings) -> None:
     )
     if settings.scrape_on_start:
         run_once()
+        run_jobs_if_due()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -240,6 +261,8 @@ def cmd_worker(args, settings: Settings) -> None:
         if stop.wait(delay):
             break
         run_once(catch_up=kind == "catch-up")
+        if kind == "regular":
+            run_jobs_if_due()
     log.info("worker stopped")
 
 
@@ -368,10 +391,86 @@ def cmd_reclassify(args, settings: Settings) -> None:
     print(f"re-tagged {changed} of {total} articles")
 
 
+def _jobs_config(settings: Settings):
+    try:
+        return load_jobs_config(settings.config_dir)
+    except ConfigError as exc:
+        raise SystemExit(f"config error: {exc}") from None
+
+
+def _run_jobs(settings: Settings, boards, only: list[str] | None = None):
+    from .jobs.pipeline import JobScraper
+
+    scraper = JobScraper(settings, boards)
+    try:
+        return scraper.run(only=only)
+    finally:
+        scraper.close()
+
+
+def cmd_jobs(args, settings: Settings) -> None:
+    """Read the job boards in config/jobs.yaml now (or, with --check, only show
+    what each board gives, without a database)."""
+    boards = _jobs_config(settings)
+    known = {b.slug for b in boards}
+    for slug in args.source or []:
+        if slug not in known:
+            raise SystemExit(f"unknown job board {slug!r}; see config/jobs.yaml")
+    chosen = [b for b in boards if not args.source or b.slug in args.source]
+    if not args.check:
+        wait_for_db()
+        migrate()
+        results = _run_jobs(settings, boards, only=args.source)
+        if results is None:
+            raise SystemExit("another job check is running")
+        for r in results:
+            note = f"  ERROR: {r.error}" if r.error else ""
+            print(
+                f"{r.slug:<18} {r.found:>4} postings  {r.new:>4} new  "
+                f"{r.removed:>4} removed  {r.details:>4} pages read{note}"
+            )
+        return
+
+    from .jobs.parsers import BoardError
+    from .jobs.pipeline import JobScraper
+    from .scraper.http import FetchError
+
+    scraper = JobScraper(settings, boards)
+    try:
+        for board in chosen:
+            print(f"### {board.slug}: {board.name}")
+            if board.cannot_scrape:
+                print(f"  not collected: {board.cannot_scrape}\n")
+                continue
+            if not board.enabled:
+                print("  paused (enabled: false)\n")
+                continue
+            try:
+                postings = scraper.collect(board)
+            except (FetchError, BoardError) as exc:
+                print(f"  ERROR: {exc}\n")
+                continue
+            print(f"  {len(postings)} postings")
+            wanted = [p for p in postings if p.detail_url][: args.details]
+            scraper.read_details(board, wanted)
+            for p in postings[: args.limit]:
+                print(f"  - {p.title}\n    {p.url}")
+                for name in ("employer", "location", "pay", "open_date", "close_date"):
+                    print(f"    {name}: {getattr(p, name) or '-'}")
+                if p.close_note:
+                    print(f"    close_note: {p.close_note}")
+                if p.pdf_url and p.pdf_url != p.url:
+                    print(f"    pdf: {p.pdf_url}")
+                print(f"    description: {(p.description or '-')[:240]}")
+            print()
+    finally:
+        scraper.close()
+
+
 def cmd_probe(args, settings: Settings) -> None:
     """Describe pages/feeds (no database needed) to help write sources.yaml."""
     from .scraper.http import HttpClient
-    from .scraper.probe import probe
+    from .scraper.probe import outline, probe
 
     urls = list(args.url or [])
     if args.source or args.all:
@@ -394,6 +493,10 @@ def cmd_probe(args, settings: Settings) -> None:
         respect_robots=False,  # we want to see the page even if robots.txt says no
     ) as client:
         for url in urls:
+            if args.outline:
+                outline(client, url)
+                print()
+                continue
             probe(client, url)
             if not client.robots_permits(url):
                 print(f"  NOTE: robots.txt disallows this URL for {client.robots_agent}")
@@ -454,6 +557,16 @@ def main(argv: list[str] | None = None) -> None:
     backfill.add_argument("--since", required=True, help="YYYY-MM-DD")
     backfill.add_argument("--limit", type=int, default=300)
 
+    jobs = sub.add_parser("jobs", help="read the job boards in config/jobs.yaml now")
+    jobs.add_argument("--source", action="append", help="only this board (repeatable)")
+    jobs.add_argument(
+        "--check", action="store_true", help="only show what each board gives; save nothing"
+    )
+    jobs.add_argument("--limit", type=int, default=4, help="with --check: postings to show")
+    jobs.add_argument(
+        "--details", type=int, default=2, help="with --check: posting pages to read per board"
+    )
+
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -461,6 +574,11 @@ def main(argv: list[str] | None = None) -> None:
     probe.add_argument("url", nargs="*")
     probe.add_argument("--source", action="append", help="probe this source's URLs")
     probe.add_argument("--all", action="store_true", help="probe every configured source")
+    probe.add_argument(
+        "--outline",
+        action="store_true",
+        help="show the page's structure (tables, repeated blocks, links) instead",
+    )
 
     args = parser.parse_args(argv)
     handler = {
@@ -473,6 +591,7 @@ def main(argv: list[str] | None = None) -> None:
         "reclassify": cmd_reclassify,
         "sources": cmd_sources,
         "probe": cmd_probe,
+        "jobs": cmd_jobs,
     }[args.command]
     handler(args, settings)
 

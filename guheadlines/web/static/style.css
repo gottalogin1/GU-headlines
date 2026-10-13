@@ -446,3 +446,21 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   body::before, .topbar, .sidebar, .pagination { display: none; }
   .story, .panel { box-shadow: none; background: #fff; border: 1px solid #ddd; }
 }
+
+/* ---------- jobs ---------- */
+.job-filter .job-words { grid-column: span 2; }
+.job-employer { margin: 0 0 8px; font-size: .9rem; color: var(--muted); }
+.job-employer strong { color: var(--text-soft); }
+.job-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px;
+  margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--line);
+}
+.job-facts dt { font-size: .68rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.job-facts dd { margin: 2px 0 0; font-size: .92rem; color: var(--text); overflow-wrap: anywhere; }
+.not-given { color: var(--muted); }
+.job-description { white-space: pre-line; }
+.job-links { display: flex; flex-wrap: wrap; gap: 0 10px; margin: 0; }
+@media (max-width: 640px) {
+  .job-filter .job-words { grid-column: 1 / -1; }
+  .job-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

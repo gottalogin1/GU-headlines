@@ -153,3 +153,108 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
     out(f"    image={data.image_url}")
     out(f"    section={data.section!r} keywords={data.keywords[:6]}")
     out(f"    intro={(data.intro or '')[:300]!r}")
+
+
+_API_RE = re.compile(r"""["'`](https?://[^"'`\s]{6,200}|/api/[^"'`\s]{1,150})["'`]""")
+# Relative API paths in a script that look like they list postings or items.
+_PATH_RE = re.compile(
+    r"""["'`]((?=[\w/{}$.?=&-]*(?:job|posting|vacanc|announce|opening|position))"""
+    r"""/?[A-Za-z][\w-]*/[\w/{}$.?=&-]+)["'`]""",
+    re.IGNORECASE,
+)
+
+
+def _short(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def outline(client: HttpClient, url: str, *, out=print) -> None:
+    """Print a page's readable structure (headings, tables, repeated blocks,
+    links), to write a parser for a listing page such as a jobs board. For a
+    page built by JavaScript, list the addresses its scripts call."""
+    out(f"### outline of {url}")
+    try:
+        result = client.get(url)
+    except FetchError as exc:
+        out(f"  ERROR: {exc}")
+        return
+    if (
+        "json" in result.content_type
+        or "xml" in result.content_type
+        or (result.content_type == "text/plain")
+    ):
+        out(f"  {result.content_type}: {result.content[:6000].decode('utf-8', errors='replace')}")
+        return
+    soup = BeautifulSoup(result.content, "lxml")
+    for tag in soup(["style", "noscript", "svg"]):
+        tag.decompose()
+    scripts = [s.get("src") for s in soup.find_all("script") if s.get("src")]
+    inline = " ".join(s.get_text() for s in soup.find_all("script") if not s.get("src"))
+    for tag in soup(["script"]):
+        tag.decompose()
+    for chrome in soup.select("header, footer, nav"):
+        chrome.decompose()
+    text = soup.get_text(" ", strip=True)
+    out(f"  {len(text):,} characters of text")
+
+    for heading in soup.find_all(["h1", "h2", "h3", "h4"])[:30]:
+        out(f"  <{heading.name}> {_short(heading.get_text(' '), 120)}")
+
+    for number, table in enumerate(soup.find_all("table")[:6], 1):
+        rows = table.find_all("tr")
+        out(f"  TABLE {number}: {len(rows)} rows, class={table.get('class')} id={table.get('id')}")
+        for row in rows[:6]:
+            cells = [_short(c.get_text(" "), 50) for c in row.find_all(["th", "td"])]
+            links = [a["href"][:120] for a in row.find_all("a", href=True)][:3]
+            out(f"    | {' | '.join(cells)}" + (f"   links={links}" if links else ""))
+        if rows:
+            out(f"    first data row html: {_short(str(rows[min(1, len(rows) - 1)]), 1500)}")
+
+    # Repeated blocks with a link inside: job cards, list items...
+    blocks: Counter[str] = Counter()
+    examples: dict[str, list] = defaultdict(list)
+    for node in soup.find_all(["div", "li", "article", "section", "p"]):
+        classes = node.get("class") or []
+        if not classes or not node.find("a", href=True):
+            continue
+        key = f"{node.name}.{'.'.join(classes[:3])}"
+        blocks[key] += 1
+        if len(examples[key]) < 2:
+            examples[key].append(node)
+    for key, count in blocks.most_common(8):
+        if count < 3:
+            break
+        out(f"  BLOCK {key} x{count}")
+        for node in examples[key]:
+            out(f"    text: {_short(node.get_text(' '), 300)}")
+        out(f"    html: {_short(str(examples[key][0]), 1500)}")
+
+    main = soup.find("main") or soup.body or soup
+    anchors = main.find_all("a", href=True)
+    out(f"  {len(anchors)} links in the page body; first 60:")
+    for anchor in anchors[:60]:
+        out(f"    - {_short(anchor.get_text(' '), 70)!r} -> {anchor['href'][:160]}")
+
+    if len(text) < 1500:
+        # Probably built by JavaScript: show what its scripts call.
+        found = sorted(set(_API_RE.findall(inline)))[:40]
+        for src in scripts[:4]:
+            script_url = normalize_url(src, base=result.url)
+            if not script_url or not same_site(script_url, result.url):
+                continue
+            try:
+                body = client.get(script_url).content.decode("utf-8", errors="replace")
+            except FetchError as exc:
+                out(f"  script {script_url}: {exc}")
+                continue
+            hits = sorted(set(_API_RE.findall(body)))
+            paths = sorted(set(_PATH_RE.findall(body)))
+            out(f"  script {script_url}: {len(body):,} bytes, {len(hits)} addresses")
+            found += hits[:80] + paths[:80]
+            # How the script calls the first few (method, body), in its own words.
+            for path in [p for p in paths if "public" in p.lower()][:6]:
+                at = body.find(path)
+                out(f"  around {path}: {_short(body[max(0, at - 1200) : at + 300], 1500)}")
+        for address in found:
+            out(f"    calls {address}")

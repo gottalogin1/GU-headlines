@@ -48,6 +48,7 @@ def session_scope(url: str | None = None) -> Iterator[Session]:
 # even if several containers are started.
 MIGRATION_LOCK_KEY = 0x6775_0001
 SCRAPE_LOCK_KEY = 0x6775_0002
+JOBS_LOCK_KEY = 0x6775_0003
 
 
 @contextmanager
