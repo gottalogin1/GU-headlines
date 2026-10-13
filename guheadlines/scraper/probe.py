@@ -251,6 +251,6 @@ def outline(client: HttpClient, url: str, *, out=print) -> None:
             # How the script calls the first few (method, body), in its own words.
             for path in [p for p in paths if "public" in p.lower()][:6]:
                 at = body.find(path)
-                out(f"  around {path}: {_short(body[max(0, at - 300) : at + 500], 800)}")
+                out(f"  around {path}: {_short(body[max(0, at - 1200) : at + 300], 1500)}")
         for address in found:
             out(f"    calls {address}")
