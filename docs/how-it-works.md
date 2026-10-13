@@ -24,7 +24,7 @@ page to run GU Headlines.
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 (`WEB_PORT`). |
-| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. |
+| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)). |
 
 `web` and `worker` are the same program (`guheadlines`) started with
 different commands. Both read `config/` from your folder (mounted
@@ -107,9 +107,10 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 |---|---|
 | `scrape` | Check all enabled sites now. `--source SLUG` for one site (repeatable). `--until-done` keeps catching up every `CATCH_UP_SECONDS` until nothing is left (`--max-rounds N` limits it, default 60). |
 | `check --source SLUG` | Dry run: what the site's feeds and pages give, and what would be saved for the first few new stories (`--limit N`, default 3). Saves nothing. |
-| `probe URL…` | Describe a page or feed: status, CMS, advertised feeds, common link shapes, what the extractor gets. `--source SLUG` probes a site's configured addresses; `--all` probes every site except those marked `cannot_scrape`. Needs no database. |
+| `probe URL…` | Describe a page or feed: status, CMS, advertised feeds, common link shapes, what the extractor gets. `--outline` instead prints the page's headings, tables, repeated blocks and links (and, for a page built with JavaScript, the addresses its scripts call), for writing a job-board parser. `--source SLUG` probes a site's configured addresses; `--all` probes every site except those marked `cannot_scrape`. Needs no database. |
 | `backfill --source SLUG --since YYYY-MM-DD` | Import older stories from the site's sitemaps (`--limit N`, default 300). |
 | `reclassify` | Re-apply `categories.yaml` to every stored story. |
+| `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
 | `migrate` | Apply database upgrades (done automatically on start). |
 | `web` | Run the website (`--port`, `--workers`). |
@@ -125,6 +126,8 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `http_cache` | Feed validators (`ETag`, `Last-Modified`, content hash) for conditional requests |
 | `ignored_images` | Photos detected as logos or placeholders |
 | `scrape_runs` | One row per site per check, for the Sources page (kept 180 days) |
+| `job_sources` | One row per job board: name, homepage, on/off, last check, last error, postings found |
+| `jobs` | The job postings: URL (unique), title, employer, pay, description, location, open and close date, closing note, PDF, first and last seen, and when the board stopped listing it |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
 
@@ -139,11 +142,13 @@ Three workflows run in GitHub Actions:
   a push that changes `config/` or the scraper with `[live]` in the commit
   message. It:
   - runs `probe --all`,
-  - runs `check` on every site,
+  - runs `check` on every site, and `jobs --check` on every job board
+    (*only_jobs* runs just that),
   - does a full `scrape --until-done` and a second, hourly-style scrape into
     a throwaway database,
   - prints a summary,
-  - starts the website and checks every page,
+  - reads the job boards into the same database,
+  - starts the website and checks every page, the Jobs page included,
   - saves screenshots of the site as a 3-day artifact on the run page.
 
   GitHub's servers are in a US data center, so sites that block data-center

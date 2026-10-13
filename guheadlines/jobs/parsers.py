@@ -60,7 +60,7 @@ _MONTHS = (
     "june|july|august|september|october|november|december"
 )
 _DATE_RES = [
-    (re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b"), "ymd"),
+    (re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)"), "ymd"),  # also 2026-08-26T00:00
     (re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b"), "mdy"),
     (re.compile(rf"\b({_MONTHS})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})\b", re.I), "Mdy"),
     (re.compile(rf"\b(\d{{1,2}})\s+({_MONTHS})\.?,?\s+(\d{{4}})\b", re.I), "dMy"),

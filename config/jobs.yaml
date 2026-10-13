@@ -39,6 +39,10 @@ sources:
       - https://jobs.guam.gov/public/jobs
     employer: Government of Guam
     location: Guam
+    cannot_scrape: >-
+      The site is built with JavaScript, and the job-list service behind it
+      answers automated requests with a server error (HTTP 500), even when
+      they match what the site itself sends.
 
   - slug: guamjobsonline
     name: GuamJobsOnline
@@ -77,8 +81,9 @@ sources:
     name: University of Guam
     homepage: https://www.uog.edu/administration/administration-finance/human-resources/job-opportunities
     parser: uog
+    # UOG's PeopleAdmin portal (uog.peopleadmin.com) would add dates and pay,
+    # but its robots.txt turns away all crawlers but a few search engines.
     pages:
-      - https://uog.peopleadmin.com/postings/search
       - https://www.uog.edu/administration/administration-finance/human-resources/job-opportunities
     employer: University of Guam
     location: Mangilao, Guam

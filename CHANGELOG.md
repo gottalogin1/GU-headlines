@@ -3,6 +3,29 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Added
+- **A Jobs page** (new **Jobs** link in the top bar) listing openings on Guam
+  from GuamJobsOnline, the Guam Department of Education, federal jobs
+  (federalgovernmentjobs.us and, with a free key, USAJOBS), the University of
+  Guam, Guam Community College and its partners, and GuamTemps. Each posting
+  shows its title, employer, pay, location, open and closing dates, the start
+  of the description, the announcement PDF when there is one, and when it was
+  last scraped. Anything a posting doesn't give is left blank. Filter by word
+  or board. See [Jobs](docs/jobs.md).
+- GovGuam Jobs and the American Job Center are listed with the reason they
+  can't be collected.
+- `guheadlines jobs` reads the boards now; `--check` shows what each gives.
+  The worker reads them every `JOBS_INTERVAL_HOURS` (default 6).
+- A board that is blocked, needs JavaScript, shows no postings or errors is
+  marked with the reason on the Jobs page, and keeps its earlier postings.
+
+### Updating
+`git pull`, then `docker compose up -d --build`. The database is upgraded
+automatically, and the job boards are read when the worker starts. To include
+USAJOBS, add a key to `.env` (see [Jobs](docs/jobs.md#usajobs)).
+
 ## 1.0.3 (2026-10-09)
 
 ### Added

@@ -10,6 +10,7 @@ A tour of every page, and how to find older stories.
 | **Local, Military, Business, Labor** | Only stories in that topic. A story can be in more than one topic. |
 | **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. They appear only here, and in search when you choose the Community topic. |
 | **Archive** | Every story collected, organized by year, month and day |
+| **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
 
@@ -84,6 +85,18 @@ Click **Clear** to reset all options.
 **Archive** lists every month that has stories, with a count. Click a month
 to see its days, then a day to see that day's stories. **←** and **→** step
 to the previous or next month (or day).
+
+## The Jobs page
+
+The **Jobs** link lists open positions on Guam, newest first, from the job
+boards in `config/jobs.yaml`. Each posting shows its title (click to open it
+on the board), who is hiring, pay, location, open and closing dates, the
+start of the description, a link to the announcement PDF when there is one,
+and **Scraped**: the last time it was found on its board. A dash means the
+posting doesn't say. Use **Words** and **Board** to narrow the list. The
+sidebar lists each board with its number of open postings, a red **⚠** when
+its last check failed, and the boards that can't be collected. More in
+[Jobs](jobs.md).
 
 ## The Sources page
 

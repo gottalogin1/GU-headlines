@@ -50,7 +50,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt && pip install -e .
       - name: Probe every configured URL
-        if: inputs.urls == ''
+        if: inputs.urls == '' && !inputs.only_jobs
         run: guheadlines probe --all
       - name: Probe the given addresses
         if: inputs.urls != ''

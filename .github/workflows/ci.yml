@@ -62,7 +62,7 @@ jobs:
           exit 1
       - name: Pages respond
         run: |
-          for path in / /category/military /category/labor "/search?q=guam" /archive /status /robots.txt /static/style.css; do
+          for path in / /category/military /category/labor "/search?q=guam" /archive /jobs /status /robots.txt /static/style.css; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$path")
             echo "$path -> $code"
             test "$code" = 200
