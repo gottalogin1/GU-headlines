@@ -3,6 +3,7 @@ retries transient errors and supports conditional GETs."""
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import threading
@@ -242,8 +243,9 @@ class HttpClient:
         accept: str | None = None,
         max_bytes: int = MAX_BODY_BYTES,
         check_robots: bool = True,
+        headers: dict[str, str] | None = None,
     ) -> FetchResult:
-        headers = {}
+        headers = dict(headers or {})
         if accept:
             headers["Accept"] = accept
         if etag:
@@ -256,6 +258,19 @@ class HttpClient:
             "GET", url, headers=headers, max_bytes=max_bytes, check_robots=check_robots
         )
 
+    def post_json(self, url: str, payload, *, headers: dict[str, str] | None = None) -> FetchResult:
+        """POST a JSON body (for the search APIs some job boards load their lists from)."""
+        return self._request(
+            "POST",
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                **(headers or {}),
+            },
+            content=json.dumps(payload).encode(),
+        )
+
     def _request(
         self,
         method: str,
@@ -264,6 +279,7 @@ class HttpClient:
         headers: dict[str, str] | None = None,
         max_bytes: int = MAX_BODY_BYTES,
         check_robots: bool = True,
+        content: bytes | None = None,
     ) -> FetchResult:
         if check_robots and not self.allowed(url):
             raise RobotsDisallowed(f"blocked by robots.txt: {url}")
@@ -272,7 +288,7 @@ class HttpClient:
         for attempt in range(self.retries + 1):
             self._throttle(url)
             try:
-                with self._client.stream(method, url, headers=headers) as response:
+                with self._client.stream(method, url, headers=headers, content=content) as response:
                     status = response.status_code
                     if status in RETRY_STATUSES and attempt < self.retries:
                         last_error = FetchError(f"HTTP {status}", status)

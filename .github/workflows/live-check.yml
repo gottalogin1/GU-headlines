@@ -17,6 +17,10 @@ on:
         description: "With urls: show each page's structure (tables, repeated blocks, links)"
         type: boolean
         default: false
+      only_jobs:
+        description: "Only check the job boards (config/jobs.yaml), not the news sites"
+        type: boolean
+        default: false
   push:
     paths:
       - "config/**"
@@ -68,10 +72,29 @@ jobs:
             echo
           done
 
+  jobs:
+    name: Check job boards
+    if: >-
+      (github.event_name != 'push' && inputs.urls == '') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - name: What each job board gives (nothing is saved)
+        env:
+          LOG_LEVEL: DEBUG
+        run: guheadlines jobs --check --limit 3 --details 2
+
   scrape:
     name: Check and scrape sources
     if: >-
-      (github.event_name != 'push' && inputs.urls == '') ||
+      (github.event_name != 'push' && inputs.urls == '' && !inputs.only_jobs) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -108,6 +131,8 @@ jobs:
         run: guheadlines scrape --until-done --max-rounds 8
       - name: Re-run like the hourly worker (should fetch only new pages)
         run: guheadlines scrape
+      - name: Read the job boards
+        run: guheadlines jobs
       - name: Summary
         run: |
           q() { psql "$DATABASE_URL" -P pager=off -c "$1"; }
@@ -120,6 +145,11 @@ jobs:
           q "SELECT s.slug, r.candidates, r.new_articles, r.failed, left(r.error, 160) AS error
              FROM scrape_runs r JOIN sources s ON s.id = r.source_id ORDER BY r.id"
           q "SELECT status, left(reason, 60) AS reason, count(*) FROM seen_urls GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 25"
+          q "SELECT s.slug, count(j.id) AS jobs, count(j.pay) AS pay, count(j.open_date) AS opens,
+                    count(j.close_date) AS closes, count(j.description) AS described,
+                    count(j.pdf_url) AS pdfs, left(s.last_error, 120) AS error
+             FROM job_sources s LEFT JOIN jobs j ON j.source_id = s.id GROUP BY s.slug, s.last_error
+             ORDER BY jobs DESC"
           q "SELECT slug, day, title, categories, img, intro FROM (
                SELECT s.slug, a.published_at::date AS day, left(a.title, 70) AS title,
                       a.categories, a.image_path IS NOT NULL AS img, left(a.intro, 90) AS intro,
@@ -131,7 +161,7 @@ jobs:
           guheadlines web --port 8000 --workers 1 > web.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
           echo
-          for path in / /category/local /category/military /category/business /category/labor "/search?q=guam" "/search?q=hagatna" /archive /status; do
+          for path in / /category/local /category/military /category/business /category/labor "/search?q=guam" "/search?q=hagatna" /archive /status /jobs; do
             code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
             echo "$path -> HTTP $code, $(grep -c 'class="story' page.html) stories, $(grep -c 'class="thumb-img"' page.html) with photos"
             test "$code" = 200
