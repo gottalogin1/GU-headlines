@@ -156,6 +156,12 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
 
 
 _API_RE = re.compile(r"""["'`](https?://[^"'`\s]{6,200}|/api/[^"'`\s]{1,150})["'`]""")
+# Relative API paths in a script that look like they list postings or items.
+_PATH_RE = re.compile(
+    r"""["'`](/?[A-Za-z][\w-]*/[\w/{}$.-]*(?:job|posting|vacanc|announce|opening|position)"""
+    r"""[\w/{}$.?=&-]*)["'`]""",
+    re.IGNORECASE,
+)
 
 
 def _short(text: str, limit: int) -> str:
@@ -239,7 +245,8 @@ def outline(client: HttpClient, url: str, *, out=print) -> None:
                 out(f"  script {script_url}: {exc}")
                 continue
             hits = sorted(set(_API_RE.findall(body)))
+            paths = sorted(set(_PATH_RE.findall(body)))
             out(f"  script {script_url}: {len(body):,} bytes, {len(hits)} addresses")
-            found += hits[:80]
+            found += hits[:80] + paths[:80]
         for address in found:
             out(f"    calls {address}")
