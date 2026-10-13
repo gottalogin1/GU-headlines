@@ -75,6 +75,7 @@
           <a href="/category/{{ c.slug }}" {% if active_nav == c.slug %}aria-current="page"{% endif %}>{{ c.name }}</a>
           {% endfor %}
           <a href="/archive" {% if active_nav == 'archive' %}aria-current="page"{% endif %}>Archive</a>
+          <a href="/jobs" {% if active_nav == 'jobs' %}aria-current="page"{% endif %}>Jobs</a>
           <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
         </nav>
         <form class="search" action="/search" method="get" role="search">
@@ -96,7 +97,7 @@
 
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
-    <aside class="sidebar">{% include "_sidebar.html" %}</aside>
+    <aside class="sidebar">{% block sidebar %}{% include "_sidebar.html" %}{% endblock %}</aside>
   </div>
 
   <footer class="footer">

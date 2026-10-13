@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% block main %}
+{% set blank %}<span class="not-given" title="Not given in the posting">—</span>{% endset %}
+<header class="page-head">
+  <h1>Jobs</h1>
+  <p class="muted">Openings on Guam from {{ boards|length }} job boards, checked every {{ settings.jobs_interval_hours }} hours. Every posting links to the board that published it.</p>
+</header>
+
+<form class="search-form job-filter" action="/jobs" method="get">
+  <div class="field job-words">
+    <label for="jq">Words</label>
+    <input id="jq" type="search" name="q" value="{{ job_filters.q }}" placeholder="e.g. nurse, Tamuning, teacher" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="jsource">Board</label>
+    <select id="jsource" name="source">
+      <option value="">All boards</option>
+      {% for b in boards %}<option value="{{ b.board.slug }}" {% if job_filters.source == b.board.slug %}selected{% endif %}>{{ b.board.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if job_filters.q or job_filters.source %}<a class="reset" href="/jobs">Clear</a>{% endif %}
+  </div>
+</form>
+
+<p class="result-count">{{ "{:,}".format(result.total) }} open {{ "posting" if result.total == 1 else "postings" }}{% if job_filters.q %} matching “{{ job_filters.q }}”{% endif %}</p>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No openings here yet</h2>
+  <p>The job boards are read every {{ settings.jobs_interval_hours }} hours, starting when the worker boots. Each board's state is listed {% if boards %}beside this list{% else %}here once it has been read{% endif %}.</p>
+</div>
+{% endif %}
+
+{% for item in result.items %}
+{% set j = item.job %}
+<article class="story no-photo job">
+  <div class="story-body">
+  <h3 class="headline"><a href="{{ j.url }}" target="_blank" rel="noopener" title="Open on {{ j.url|domain }}">{{ j.title }}</a></h3>
+  <p class="job-employer">{% if j.employer %}<strong>{{ j.employer }}</strong> · {% endif %}{% if item.source_homepage %}<a href="{{ item.source_homepage }}" target="_blank" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
+  <dl class="job-facts">
+    <div><dt>Pay</dt><dd>{{ j.pay or blank }}</dd></div>
+    <div><dt>Location</dt><dd>{{ j.location or blank }}</dd></div>
+    <div><dt>Opens</dt><dd>{% if j.open_date %}<time datetime="{{ j.open_date.isoformat() }}">{{ j.open_date|fmt_day }}</time>{% else %}{{ blank }}{% endif %}</dd></div>
+    <div><dt>Closes</dt><dd>{% if j.close_date %}<time datetime="{{ j.close_date.isoformat() }}">{{ j.close_date|fmt_day }}</time>{% if j.close_note %} <span class="muted">({{ j.close_note|lower }})</span>{% endif %}{% elif j.close_note %}{{ j.close_note }}{% else %}{{ blank }}{% endif %}</dd></div>
+  </dl>
+  {% if j.description %}<p class="intro job-description">{{ j.description|truncate(420) }}</p>{% endif %}
+  <p class="meta">
+    <span title="{{ j.last_seen_at|fmt_datetime }}">Scraped {{ j.last_seen_at|fmt_day }}</span>
+    {% if j.first_seen_at|to_local and (j.first_seen_at|to_local).date() != (j.last_seen_at|to_local).date() %}<span aria-hidden="true">·</span> <span title="{{ j.first_seen_at|fmt_datetime }}">first seen {{ j.first_seen_at|fmt_day }}</span>{% endif %}
+  </p>
+  <p class="job-links">
+    <a class="read-link" href="{{ j.url }}" target="_blank" rel="noopener">
+      View the posting at <span class="read-domain">{{ j.url|domain }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
+    {% if j.pdf_url and j.pdf_url != j.url %}
+    <a class="read-link" href="{{ j.pdf_url }}" target="_blank" rel="noopener">Job announcement (PDF)
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+    </a>
+    {% endif %}
+  </p>
+  </div>
+</article>
+{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>Job boards</h2>
+  {% if boards %}
+  <ul class="facets">
+    {% for b in boards %}
+    {% set s = b.board %}
+    <li>
+      <span class="facet-name">
+        <a href="/jobs?source={{ s.slug }}">{{ s.name }}</a>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.last_run_at %}<span class="muted small" title="{{ s.last_run_at|fmt_datetime }}">checked {{ s.last_run_at|rel_time }}</span>{% endif %}
+        {% if s.last_error %}<span class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(140) }}</span>{% endif %}
+      </span>
+      <span class="count">{{ b.open }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Open postings per board. ⚠ marks a board that couldn't be read on its last check; its earlier postings stay listed.</p>
+  {% else %}
+  <p class="muted">Waiting for the first check.</p>
+  {% endif %}
+  {% if uncollectable %}
+  <h3 class="panel-sub">Can't be collected</h3>
+  <ul class="facets">
+    {% for s in uncollectable %}
+    <li>
+      <span class="facet-name">
+        <span>{{ s.name }}</span>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        <span class="muted small">{{ s.cannot_scrape }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>About these listings</h2>
+  <p class="small">Pay, location and dates appear when the posting gives them, and are left blank when it doesn't. <strong>Scraped</strong> is the last time the posting was found on its board, so you can tell how fresh it is even without a closing date.</p>
+  <p class="small">Postings leave this page when their board stops listing them or their closing date has passed. Always check the details with the employer before applying.</p>
+</section>
+{% endblock %}

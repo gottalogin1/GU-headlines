@@ -135,7 +135,7 @@ class JobScraper:
         done = set()
         for posting in postings[:MAX_DETAILS]:
             try:
-                result = self.client.get(posting.detail_url)
+                result = self.client.get(posting.detail_url, headers=parser.detail_headers)
                 parser.detail(result, posting)
                 done.add(posting.url)
             except FetchError as exc:

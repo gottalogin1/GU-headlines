@@ -15,13 +15,13 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from sqlalchemy import select
 
-from ..config import AppConfig, ConfigError, load_config
+from ..config import AppConfig, ConfigError, JobSourceConfig, load_config, load_jobs_config
 from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
 from . import queries
-from .queries import MARK_END, MARK_START, Filters
+from .queries import MARK_END, MARK_START, Filters, JobFilters
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -64,6 +64,26 @@ class _ConfigCache:
 config_cache = _ConfigCache()
 
 
+class _JobsConfigCache:
+    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy)."""
+
+    def __init__(self) -> None:
+        self._boards: list[JobSourceConfig] = []
+        self._loaded: float | None = None
+
+    def get(self) -> list[JobSourceConfig]:
+        if self._loaded is None or time.monotonic() - self._loaded > 60:
+            try:
+                self._boards = load_jobs_config(settings.config_dir)
+            except ConfigError as exc:
+                log.error("jobs config error: %s", exc)
+            self._loaded = time.monotonic()
+        return self._boards
+
+
+jobs_config_cache = _JobsConfigCache()
+
+
 class _TTLCache:
     def __init__(self, ttl: float) -> None:
         self.ttl = ttl
@@ -102,6 +122,15 @@ def fmt_date_long(value: date | datetime | None) -> str:
     if isinstance(value, datetime):
         value = to_local(value).date()
     return f"{value:%A}, {value:%B} {value.day}, {value.year}"
+
+
+def fmt_day(value: date | datetime | None) -> str:
+    """Oct 13, 2026"""
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        value = to_local(value).date()
+    return f"{value:%b} {value.day}, {value.year}"
 
 
 def rel_time(dt: datetime | None) -> str:
@@ -158,6 +187,7 @@ def domain(url: str | None) -> str:
 templates.env.filters.update(
     fmt_datetime=fmt_datetime,
     fmt_date_long=fmt_date_long,
+    fmt_day=fmt_day,
     rel_time=rel_time,
     highlight=highlight,
     paragraphs=paragraphs,
@@ -406,6 +436,35 @@ def status(request: Request):
         runs=runs,
         title="Sources",
         active_nav="status",
+    )
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+def jobs(
+    request: Request,
+    q: str = Query("", max_length=200),
+    source: str = Query("", max_length=60),
+    page: int = Query(1, ge=1, le=10000),
+):
+    boards_config = jobs_config_cache.get()
+    job_filters = JobFilters(q=q.strip(), source=source.strip() or None)
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        result = queries.list_jobs(session, job_filters, page, settings.page_size, today)
+        boards = queries.job_boards(session, today)
+    if page > 1 and not result.items:
+        raise HTTPException(404)
+    # Boards that can't be collected are listed apart, with the reason.
+    collected = {b.slug for b in boards_config if b.collected}
+    return render(
+        request,
+        "jobs.html",
+        result=result,
+        job_filters=job_filters,
+        boards=[b for b in boards if b["board"].slug in collected],
+        uncollectable=[b for b in boards_config if b.enabled and b.cannot_scrape],
+        title="Jobs on Guam",
+        active_nav="jobs",
     )
 
 

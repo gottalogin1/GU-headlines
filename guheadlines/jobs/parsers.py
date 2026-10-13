@@ -117,6 +117,33 @@ def find_pay(text: str | None) -> str | None:
     return clean_text(match.group(1)) if match else None
 
 
+_PAY_UNIT_RE = re.compile(
+    r"^(.*?)\s*(?:/|per|an|a)?\s*\b(hour|hr|month|year|yr|week|day|annum)$", re.I
+)
+
+
+def tidy_pay(text: str | None) -> str | None:
+    """'2400.00 month' -> '$2,400.00 per month'; 'COMMENSURATE WITH EXPERIENCE hour'
+    -> 'Commensurate with experience' (a unit without an amount means nothing)."""
+    text = clean_text(text)
+    if not text:
+        return None
+    unit = None
+    match = _PAY_UNIT_RE.match(text)
+    if match and match.group(1):
+        text, unit = match.group(1).strip(" ,-"), match.group(2).lower()
+        unit = {"hr": "hour", "yr": "year"}.get(unit, unit)
+    if not re.search(r"\d", text):
+        return text.capitalize() if text.isupper() and " " in text else text
+    if "$" not in text:
+        text = re.sub(
+            r"(?<![\d.,])(\d[\d,]*(?:\.\d+)?)",
+            lambda m: f"${float(m.group(1).replace(',', '')):,.2f}",
+            text,
+        )
+    return f"{text} per {unit}" if unit else text
+
+
 def absolute(href: str | None, base: str) -> str | None:
     """An absolute link with spaces escaped; None for javascript:, mailto:, #anchors."""
     href = (href or "").strip()
@@ -162,6 +189,8 @@ def needs_javascript(result: FetchResult) -> bool:
 class Parser:
     """Reads one kind of job board."""
 
+    detail_headers: dict[str, str] | None = None  # sent with each posting's own page
+
     def listing(self, result: FetchResult, board) -> Listing:
         raise NotImplementedError
 
@@ -181,6 +210,10 @@ class HafaJobs(Parser):
     table of open jobs with offered-by, open date and close date."""
 
     _DETAIL_RE = re.compile(r"https?://apply\.hafajobs\.com/[\w/.-]+/job_detail/GJF-\d+")
+    # A link's label or the announcement number ("JA030-26"), not a description.
+    _NOT_DESCRIPTION_RE = re.compile(
+        r"^\W*(view (the )?job announcement|[A-Z]{1,4}\s?\d+-\d+)\W*$", re.I
+    )
 
     def listing(self, result, board):
         soup = BeautifulSoup(result.content, "lxml")
@@ -237,7 +270,7 @@ class HafaJobs(Parser):
             elif "location" in name:
                 posting.location = value
             elif "description" in name or "summary" in name or "duties" in name:
-                if value.lower() not in ("view the job announcement", "view job announcement"):
+                if not self._NOT_DESCRIPTION_RE.match(value):
                     posting.description = short(value)
                 for anchor in entity.find_all("a", href=True):
                     link = absolute(anchor["href"], result.url)
@@ -383,7 +416,7 @@ class GuamJobsOnline(Parser):
                 title=title,
                 employer=fields.get("employer") or board.employer,
                 location=fields.get("location") or board.location,
-                pay=fields.get("pay"),
+                pay=tidy_pay(fields.get("pay")),
                 open_date=find_date(fields.get("date")),
                 description=short(text_of(snippet)),
                 detail_url=url,
@@ -435,8 +468,12 @@ class SectionsPage(Parser):
         def finish():
             if current is not None:
                 text = " ".join(lines)
-                current.description = short(text)
+                posted = re.search(r"date posted:?\s*(.{0,40})", text, re.I)
+                current.open_date = find_date(posted.group(1)) if posted else None
                 current.pay = find_pay(text)
+                # "Date posted: ... Pay: ... Job description: <the description>"
+                body = re.split(r"job description:?", text, maxsplit=1, flags=re.I)
+                current.description = short(body[-1])
                 postings.append(current)
 
         for node in root.find_all([self.heading, "p", "li"]):
@@ -655,12 +692,15 @@ class GovGuam(Parser):
     announcements, newest first."""
 
     API = "https://gfmis-realprod-prd-jobapplicant-api.azurewebsites.us/api"
-    PAGE_SIZE = 50
+    PAGE_SIZE = 15  # what the public page asks for
+    # Sent as the public page does (the API serves that site).
+    HEADERS = {"Origin": "https://jobs.guam.gov", "Referer": "https://jobs.guam.gov/"}
+    detail_headers = HEADERS
 
     def collect(self, client, board, settings) -> list[Posting]:
         postings: list[Posting] = []
         rows_total = None
-        for page in range(1, 21):
+        for page in range(1, 41):
             payload = {
                 "tableName": "",
                 "searchParams": "[]",
@@ -675,7 +715,7 @@ class GovGuam(Parser):
                     "DATEADD(HOUR, 17, CAST(DATE_CLOSED AS DATE)) > GETDATE())"
                 ),
             }
-            result = client.post_json(f"{self.API}/Public/Getjobs", payload)
+            result = client.post_json(f"{self.API}/Public/Getjobs", payload, headers=self.HEADERS)
             data = json.loads(result.content)
             rows = data.get("results") or []
             rows_total = data.get("rowCount", rows_total)

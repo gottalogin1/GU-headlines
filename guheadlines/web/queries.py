@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import Select, Text, and_, func, literal, literal_column, select, text, true
 from sqlalchemy.orm import Session
 
-from ..models import SEARCH_CONFIG, Article, ScrapeRun, Source
+from ..models import SEARCH_CONFIG, Article, Job, JobSource, ScrapeRun, Source
 from ..scraper.text import GUAM_TZ
 
 # ts_headline markers; replaced by <mark> after HTML-escaping the snippet.
@@ -273,3 +273,56 @@ def recent_runs(session: Session, limit: int = 40) -> list[dict]:
 
 def db_ok(session: Session) -> bool:
     return session.execute(text("SELECT 1")).scalar() == 1
+
+
+# ------------------------------------------------------------------- jobs
+
+
+@dataclass
+class JobFilters:
+    q: str = ""
+    source: str | None = None
+
+
+def _open_jobs(today: date):
+    """Postings still listed on their board and not past their closing date."""
+    return and_(
+        Job.removed_at.is_(None),
+        (Job.close_date.is_(None)) | (Job.close_date >= today),
+        JobSource.enabled.is_(True),
+    )
+
+
+def list_jobs(session: Session, f: JobFilters, page: int, per_page: int, today: date) -> Page:
+    stmt = (
+        select(Job, JobSource.name.label("source_name"), JobSource.homepage.label("homepage"))
+        .join(JobSource, JobSource.id == Job.source_id)
+        .where(_open_jobs(today))
+    )
+    if f.source:
+        stmt = stmt.where(JobSource.slug == f.source)
+    if f.q:
+        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(" ", Job.title, Job.employer, Job.location, Job.description)
+        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    total = _count(session, stmt)
+    # Newest openings first; a posting without an open date counts from when it was first seen.
+    newest = func.coalesce(Job.open_date, func.date(Job.first_seen_at))
+    stmt = stmt.order_by(newest.desc(), Job.id.desc()).limit(per_page).offset((page - 1) * per_page)
+    items = [
+        {"job": row[0], "source_name": row.source_name, "source_homepage": row.homepage}
+        for row in session.execute(stmt)
+    ]
+    return Page(items, total, page, per_page)
+
+
+def job_boards(session: Session, today: date) -> list[dict]:
+    """Each job board with its open postings, for the Jobs page's source list."""
+    rows = session.execute(
+        select(JobSource, func.count(Job.id).filter(_open_jobs(today)).label("open"))
+        .outerjoin(Job, Job.source_id == JobSource.id)
+        .where(JobSource.enabled.is_(True))
+        .group_by(JobSource.id)
+        .order_by(JobSource.name)
+    ).all()
+    return [{"board": r[0], "open": r.open} for r in rows]

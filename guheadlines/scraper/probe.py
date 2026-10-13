@@ -179,8 +179,10 @@ def outline(client: HttpClient, url: str, *, out=print) -> None:
     except FetchError as exc:
         out(f"  ERROR: {exc}")
         return
-    if "json" in result.content_type:
-        out(f"  JSON: {result.content[:6000].decode('utf-8', errors='replace')}")
+    if "json" in result.content_type or "xml" in result.content_type or (
+        result.content_type == "text/plain"
+    ):
+        out(f"  {result.content_type}: {result.content[:6000].decode('utf-8', errors='replace')}")
         return
     soup = BeautifulSoup(result.content, "lxml")
     for tag in soup(["style", "noscript", "svg"]):

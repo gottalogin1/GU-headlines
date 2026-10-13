@@ -323,6 +323,7 @@ class HttpClient:
                                 note = f" (blocked by {service})"
                             elif is_bot_check(result):
                                 note = " (blocked by a bot check)"
+                        log.debug("HTTP %s body from %s: %r", status, url, body[:500])
                         raise FetchError(f"HTTP {status} for {url}{note}", status)
                     if is_bot_check(result):
                         service = bot_check_service(result) or "The site"
