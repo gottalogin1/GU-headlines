@@ -158,8 +158,8 @@ def probe(client: HttpClient, url: str, *, max_shapes: int = 15, out=print) -> N
 _API_RE = re.compile(r"""["'`](https?://[^"'`\s]{6,200}|/api/[^"'`\s]{1,150})["'`]""")
 # Relative API paths in a script that look like they list postings or items.
 _PATH_RE = re.compile(
-    r"""["'`](/?[A-Za-z][\w-]*/[\w/{}$.-]*(?:job|posting|vacanc|announce|opening|position)"""
-    r"""[\w/{}$.?=&-]*)["'`]""",
+    r"""["'`]((?=[\w/{}$.?=&-]*(?:job|posting|vacanc|announce|opening|position))"""
+    r"""/?[A-Za-z][\w-]*/[\w/{}$.?=&-]+)["'`]""",
     re.IGNORECASE,
 )
 
