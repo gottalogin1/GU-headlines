@@ -248,5 +248,9 @@ def outline(client: HttpClient, url: str, *, out=print) -> None:
             paths = sorted(set(_PATH_RE.findall(body)))
             out(f"  script {script_url}: {len(body):,} bytes, {len(hits)} addresses")
             found += hits[:80] + paths[:80]
+            # How the script calls the first few (method, body), in its own words.
+            for path in [p for p in paths if "public" in p.lower()][:6]:
+                at = body.find(path)
+                out(f"  around {path}: {_short(body[max(0, at - 300) : at + 500], 800)}")
         for address in found:
             out(f"    calls {address}")
