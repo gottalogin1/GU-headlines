@@ -13,6 +13,10 @@ on:
         description: "Only probe these addresses (separated by spaces)"
         required: false
         default: ""
+      outline:
+        description: "With urls: show each page's structure (tables, repeated blocks, links)"
+        type: boolean
+        default: false
   push:
     paths:
       - "config/**"
@@ -48,7 +52,13 @@ jobs:
         if: inputs.urls != ''
         env:
           URLS: ${{ inputs.urls }}
+          OUTLINE: ${{ inputs.outline }}
         run: |
+          if [ "$OUTLINE" = "true" ]; then
+            # shellcheck disable=SC2086
+            guheadlines probe --outline $URLS
+            exit 0
+          fi
           # shellcheck disable=SC2086
           guheadlines probe $URLS
           ua=$(python -c "from guheadlines.settings import load_settings; print(load_settings().user_agent)")

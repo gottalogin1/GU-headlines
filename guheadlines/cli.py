@@ -371,7 +371,7 @@ def cmd_reclassify(args, settings: Settings) -> None:
 def cmd_probe(args, settings: Settings) -> None:
     """Describe pages/feeds (no database needed) to help write sources.yaml."""
     from .scraper.http import HttpClient
-    from .scraper.probe import probe
+    from .scraper.probe import outline, probe
 
     urls = list(args.url or [])
     if args.source or args.all:
@@ -394,6 +394,10 @@ def cmd_probe(args, settings: Settings) -> None:
         respect_robots=False,  # we want to see the page even if robots.txt says no
     ) as client:
         for url in urls:
+            if args.outline:
+                outline(client, url)
+                print()
+                continue
             probe(client, url)
             if not client.robots_permits(url):
                 print(f"  NOTE: robots.txt disallows this URL for {client.robots_agent}")
@@ -461,6 +465,11 @@ def main(argv: list[str] | None = None) -> None:
     probe.add_argument("url", nargs="*")
     probe.add_argument("--source", action="append", help="probe this source's URLs")
     probe.add_argument("--all", action="store_true", help="probe every configured source")
+    probe.add_argument(
+        "--outline",
+        action="store_true",
+        help="show the page's structure (tables, repeated blocks, links) instead",
+    )
 
     args = parser.parse_args(argv)
     handler = {
