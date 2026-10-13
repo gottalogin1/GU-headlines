@@ -35,6 +35,10 @@ env:
   REQUEST_TIMEOUT: "20"
   MEDIA_DIR: /tmp/media
   LOG_LEVEL: INFO
+  # The USAJOBS board reads these repository secrets; without them it reports
+  # that it needs a key.
+  USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
+  USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
 
 jobs:
   probe:

@@ -82,6 +82,10 @@ search API instead, which needs a free key:
    ```
 3. `docker compose up -d` to apply.
 
+The live check on GitHub (see [How it works](how-it-works.md#github-checks))
+reads the same two values from repository secrets named `USAJOBS_API_KEY`
+and `USAJOBS_EMAIL` (Settings → Secrets and variables → Actions).
+
 Until then the Jobs page shows that the board needs a key. Many of the same
 federal openings come in through federalgovernmentjobs.us anyway.
 

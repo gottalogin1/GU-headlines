@@ -3,7 +3,7 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
-## Unreleased
+## 1.1.0 (2026-10-13)
 
 ### Added
 - **A Jobs page** (new **Jobs** link in the top bar) listing openings on Guam
@@ -21,7 +21,7 @@ release, see [Updating](docs/maintenance.md#updating).
 - A board that is blocked, needs JavaScript, shows no postings or errors is
   marked with the reason on the Jobs page, and keeps its earlier postings.
 
-### Updating
+### Updating from 1.0.3
 `git pull`, then `docker compose up -d --build`. The database is upgraded
 automatically, and the job boards are read when the worker starts. To include
 USAJOBS, add a key to `.env` (see [Jobs](docs/jobs.md#usajobs)).
