@@ -8,6 +8,12 @@ SITEGROUND_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</
 <script src="/.well-known/sgcaptcha/?r=%2Ffeed%2F"></script></head>
 <body><h1>Please wait while your request is being verified...</h1></body></html>"""
 
+# Like the untitled 202 page DVIDS's search pages answered from GitHub's
+# network in October 2026 (1,983 bytes, server CloudFront).
+JS_CHALLENGE = b"""<!DOCTYPE html><html lang="en"><head><title></title>
+<script src="/challenge.js"></script></head>
+<body><noscript><h1>JavaScript is disabled</h1></noscript></body></html>"""
+
 
 def _html(content: bytes, content_type: str = "text/html") -> FetchResult:
     return FetchResult("https://x.com/", 200, content, {"content-type": content_type})
@@ -43,5 +49,26 @@ def test_bot_checks_raise_with_the_service_named():
         assert blocked.value.status == 403  # handled like a bot wall's 403
         with pytest.raises(FetchError, match=r"HTTP 403 .* \(blocked by Cloudflare\)"):
             client.get("https://www.example.com/story/")
+    finally:
+        client.close()
+
+
+def test_javascript_challenge_is_a_bot_check():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(
+            202,
+            content=JS_CHALLENGE,
+            headers={"content-type": "text/html", "server": "CloudFront"},
+        )
+
+    client = _client(handler)
+    try:
+        with pytest.raises(Blocked, match="The site showed a bot check"):
+            client.get("https://www.dvidshub.net/search/?filter%5Btype%5D=news")
+        assert is_bot_check(
+            FetchResult("https://x.com/", 200, b"<html></html>", {"x-amzn-waf-action": "challenge"})
+        )
     finally:
         client.close()
