@@ -209,16 +209,17 @@ sources:
     require_guam: true
     categories: [military]
 
-  # DVIDS unit pages; its RSS ignores unit filters, so the search pages are
-  # scanned instead. Dates are read from the "Date:" line on each story.
+  # DVIDS unit pages, which list each command's latest stories. Its RSS
+  # ignores unit filters, and its search pages answer automated visitors with
+  # a JavaScript challenge (HTTP 202, since October 2026), so they aren't used.
+  # Dates are read from the "Date:" line on each story.
   - slug: dvids
     name: DVIDS (Guam commands)
     homepage: https://www.dvidshub.net/unit/CJR-M
     listing_pages:
-      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=CJR-M&sort=date
-      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=USNB-Guam&sort=date
-      - https://www.dvidshub.net/search/?filter%5Btype%5D=news&filter%5Bunit%5D=MCBCAMPBLAZ&sort=date
-      - https://www.dvidshub.net/search/?q=Andersen+Air+Force+Base&filter%5Btype%5D=news&sort=date
+      - https://www.dvidshub.net/unit/CJR-M
+      - https://www.dvidshub.net/unit/USNB-Guam
+      - https://www.dvidshub.net/unit/MCBCAMPBLAZ
     article_pattern: '/news/\d+/'
     require_guam: true
     categories: [military]
