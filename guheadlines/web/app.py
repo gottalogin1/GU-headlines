@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import time
+from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
@@ -14,6 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from sqlalchemy import select
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ..config import AppConfig, ConfigError, JobSourceConfig, load_config, load_jobs_config
 from ..db import session_scope
@@ -27,10 +32,117 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 HERE = Path(__file__).resolve().parent
 
+STATIC_DIR = HERE / "static"
+
+# --------------------------------------------------------- static files
+
+
+def _file_version(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+
+
+# Each static file's address carries a hash of its contents (style.css?v=1a2b3c...),
+# so browsers can keep it for a year and still get a new copy after any edit.
+_static_versions = {p.name: _file_version(p) for p in STATIC_DIR.iterdir() if p.is_file()}
+
+
+def static_url(name: str) -> str:
+    return f"/static/{name}?v={_static_versions[name]}"
+
+
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles that also tells browsers how long they may keep each file."""
+
+    def __init__(self, *args, cache_control: Callable[[Scope], str], **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._cache_control = cache_control
+
+    def file_response(self, full_path, stat_result, scope: Scope, status_code: int = 200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = self._cache_control(scope)
+        return response
+
+
+def _static_cache(scope: Scope) -> str:
+    # Addresses made by static_url() change whenever the file does.
+    if b"v=" in scope.get("query_string", b""):
+        return "public, max-age=31536000, immutable"
+    return "public, max-age=3600"
+
+
+def _media_cache(scope: Scope) -> str:
+    # Stored photos are named after a hash of their source address and never
+    # rewritten in place.
+    return "public, max-age=2592000"
+
+
+# ------------------------------------------------------ security headers
+
+# The light/dark script is inlined in every page (see base.html); the policy
+# allows exactly that script and nothing else inline.
+THEME_SCRIPT = (STATIC_DIR / "theme.js").read_text(encoding="utf-8")
+_theme_hash = base64.b64encode(hashlib.sha256(THEME_SCRIPT.encode("utf-8")).digest()).decode()
+
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        f"script-src 'sha256-{_theme_hash}'",
+        "style-src 'self'",
+        # Stories without a stored copy show the photo from the news site itself.
+        "img-src 'self' https: http: data:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+
+SECURITY_HEADERS = [
+    (b"content-security-policy", CONTENT_SECURITY_POLICY.encode()),
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+]
+
+
+class SecurityHeadersMiddleware:
+    """Adds SECURITY_HEADERS to every response (pages, files and errors alike)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                names = {name for name, _ in message.get("headers", [])}
+                extra = [(n, v) for n, v in SECURITY_HEADERS if n not in names]
+                message["headers"] = [*message.get("headers", []), *extra]
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 app = FastAPI(title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None)
-app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+# Pages are mostly text and shrink to a fraction of their size; photos are
+# already compressed and left alone.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+app.add_middleware(SecurityHeadersMiddleware)
+app.mount(
+    "/static",
+    CachedStaticFiles(directory=STATIC_DIR, cache_control=_static_cache),
+    name="static",
+)
 settings.media_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
+app.mount(
+    "/media",
+    CachedStaticFiles(directory=settings.media_dir, cache_control=_media_cache),
+    name="media",
+)
 templates = Jinja2Templates(directory=HERE / "templates")
 
 MONTHS = [
@@ -42,6 +154,9 @@ MONTHS = [
 # ------------------------------------------------------------------ config
 
 
+CONFIG_RELOAD_SECONDS = 60
+
+
 class _ConfigCache:
     """Re-reads the YAML config at most once a minute, keeping the last good copy."""
 
@@ -50,13 +165,13 @@ class _ConfigCache:
         self._loaded = 0.0
 
     def get(self) -> AppConfig:
-        if self._config is None or time.monotonic() - self._loaded > 60:
+        if self._config is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
                 self._config = load_config(settings.config_dir)
             except ConfigError as exc:
                 log.error("config error: %s", exc)
                 if self._config is None:
-                    raise
+                    raise  # no good copy to fall back on
             self._loaded = time.monotonic()
         return self._config
 
@@ -65,14 +180,15 @@ config_cache = _ConfigCache()
 
 
 class _JobsConfigCache:
-    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy)."""
+    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy;
+    a broken file at startup means no boards rather than a broken site)."""
 
     def __init__(self) -> None:
         self._boards: list[JobSourceConfig] = []
         self._loaded: float | None = None
 
     def get(self) -> list[JobSourceConfig]:
-        if self._loaded is None or time.monotonic() - self._loaded > 60:
+        if self._loaded is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
                 self._boards = load_jobs_config(settings.config_dir)
             except ConfigError as exc:
@@ -85,11 +201,13 @@ jobs_config_cache = _JobsConfigCache()
 
 
 class _TTLCache:
+    """Keeps computed values for `ttl` seconds (per web worker process)."""
+
     def __init__(self, ttl: float) -> None:
         self.ttl = ttl
         self._data: dict[str, tuple[float, object]] = {}
 
-    def get(self, key: str, compute):
+    def get(self, key: str, compute: Callable[[], object]):
         hit = self._data.get(key)
         if hit and time.monotonic() - hit[0] < self.ttl:
             return hit[1]
@@ -98,6 +216,8 @@ class _TTLCache:
         return value
 
 
+# The sidebar's counts run several queries; every page shows them, so they are
+# shared between requests for two minutes.
 sidebar_cache = _TTLCache(ttl=120)
 
 
@@ -178,6 +298,20 @@ def is_note(message: str | None) -> bool:
     return bool(message) and all(part.startswith(CATCH_UP_NOTE) for part in parts)
 
 
+def safe_url(url: str | None) -> str:
+    """The address itself if it is a web (http/https) link, else "".
+
+    Links and photo addresses come from scraped pages and feeds; this keeps a
+    javascript: or data: address from ever reaching an href or src.
+    """
+    url = (url or "").strip()
+    try:
+        scheme = urlsplit(url).scheme.lower()
+    except ValueError:
+        return ""
+    return url if scheme in ("http", "https") else ""
+
+
 def domain(url: str | None) -> str:
     """https://www.guampdn.com/news/... -> guampdn.com"""
     host = (urlsplit(url or "").hostname or "").lower()
@@ -193,12 +327,19 @@ templates.env.filters.update(
     paragraphs=paragraphs,
     to_local=to_local,
     domain=domain,
+    safe_url=safe_url,
 )
 templates.env.tests.update(note=is_note)
-templates.env.globals.update(settings=settings, months=MONTHS)
+templates.env.globals.update(
+    settings=settings,
+    months=MONTHS,
+    static_url=static_url,
+    theme_script=Markup(THEME_SCRIPT),
+)
 
 
 def group_by_day(items: list[dict]) -> list[tuple[str, list[dict]]]:
+    """[(day label, items)] in the given order; items are sorted newest or oldest first."""
     groups: list[tuple[str, list[dict]]] = []
     current = None
     for item in items:
@@ -220,6 +361,8 @@ def page_url(request: Request, **changes) -> str:
 
 
 def render(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
+    """Render a page with what every page needs: the sections, the sidebar and
+    the pagination helper."""
     config = config_cache.get()
 
     def sidebar():
@@ -258,6 +401,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
 
 
 def _listing(request: Request, template: str, filters: Filters, page: int, **context):
+    """A page of stories grouped by day (home, topic, source and archive day pages)."""
     with session_scope() as session:
         result = queries.list_articles(session, filters, page, settings.page_size)
     if page > 1 and not result.items:

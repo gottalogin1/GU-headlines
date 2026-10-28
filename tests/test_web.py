@@ -201,3 +201,40 @@ def test_light_dark_switch(client):
     assert "color-scheme: dark;" in dark.split(":root {", 1)[1]  # dark by default
     assert "--bg: #ffffff;" in light.split("}", 1)[0]  # light mode is plain white
     assert "prefers-color-scheme" not in css  # the script decides, not the CSS
+
+
+def test_scraped_links_must_be_web_addresses():
+    from guheadlines.web.app import safe_url
+
+    assert safe_url("https://www.kuam.com/story") == "https://www.kuam.com/story"
+    assert safe_url(" http://example.com/a ") == "http://example.com/a"
+    for bad in ("javascript:alert(1)", " JavaScript:alert(1)", "data:text/html,x", "", None):
+        assert safe_url(bad) == ""
+
+
+def test_security_and_caching_headers(client):
+    page = client.get("/")
+    csp = page.headers["content-security-policy"]
+    assert "script-src 'sha256-" in csp and "'unsafe-inline'" not in csp
+    assert "frame-ancestors 'none'" in csp
+    assert page.headers["x-content-type-options"] == "nosniff"
+    assert page.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    # The light/dark script is inlined and matches the hash the policy allows.
+    from guheadlines.web.app import THEME_SCRIPT
+
+    assert f"<script>{THEME_SCRIPT}</script>" in page.text
+    # Pages are compressed; the stylesheet's address changes with its contents.
+    assert page.headers.get("content-encoding") == "gzip"
+    css_link = page.text.split('rel="stylesheet" href="', 1)[1].split('"', 1)[0]
+    assert css_link.startswith("/static/style.css?v=")
+    css = client.get(css_link)
+    assert "immutable" in css.headers["cache-control"]
+    assert css.headers["x-content-type-options"] == "nosniff"
+
+
+def test_top_photo_loads_first(client):
+    html = client.get("/").text
+    # The top story's photo (and its blurred backdrop) is fetched right away.
+    top = html.split('class="story', 2)[1]
+    assert top.count('fetchpriority="high"') == 2 and 'loading="lazy"' not in top
+    assert html.count('fetchpriority="high"') == 2
