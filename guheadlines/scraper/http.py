@@ -98,6 +98,8 @@ def bot_check_service(result: FetchResult) -> str | None:
         return "Imperva"
     if b"ddos-guard" in head:
         return "DDoS-Guard"
+    if "x-amzn-waf-action" in headers or b"awswaf" in head:
+        return "AWS WAF"
     return None
 
 
@@ -107,6 +109,11 @@ def is_bot_check(result: FetchResult) -> bool:
         return False
     if len(result.content) > _BOT_CHECK_MAX_BYTES:
         return False
+    if "x-amzn-waf-action" in result.headers:
+        return True
+    # AWS WAF's challenge: an untitled 202 page that needs JavaScript to continue.
+    if result.status == 202 and b"javascript is disabled" in result.content[:50_000].lower():
+        return True
     return bool(_BOT_CHECK_TITLE_RE.search(result.content[:50_000]))
 
 
