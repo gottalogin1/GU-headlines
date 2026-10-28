@@ -234,6 +234,9 @@ def test_listing_pages_without_metadata(clean_db, scraper, config):
     from guheadlines.scraper.pipeline import Skip
 
     source = config.source("pnc")
+    # The fixture page is dated 2026-09-20; keep it inside the age limit whenever
+    # the tests run.
+    source.max_age_days = 100_000
     draft = scraper.build_draft(source, None, Candidate(url=BARE, key=BARE, via="listing"))
     assert draft.title == "Port board approves new crane purchase"
     assert draft.intro.startswith("The Port Authority of Guam board")
