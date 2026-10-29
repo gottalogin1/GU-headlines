@@ -11,10 +11,15 @@ KEEP_DAYS="${KEEP_DAYS:-30}"
 DIR="${BACKUP_DIR:-./backups}"
 mkdir -p "$DIR"
 
-# shellcheck disable=SC1091
-[ -f .env ] && . ./.env
-USER_NAME="${POSTGRES_USER:-guheadlines}"
-DB_NAME="${POSTGRES_DB:-guheadlines}"
+# Read just the two names from .env. Sourcing it would run values with spaces,
+# like SITE_NAME=GU Headlines, as commands.
+env_value() {
+    [ -f .env ] && sed -n "s/^$1=//p" .env | tail -n 1 | tr -d "\r\"'" || true
+}
+USER_NAME="$(env_value POSTGRES_USER)"
+USER_NAME="${USER_NAME:-guheadlines}"
+DB_NAME="$(env_value POSTGRES_DB)"
+DB_NAME="${DB_NAME:-guheadlines}"
 STAMP="$(date +%Y%m%d-%H%M)"
 OUT="$DIR/guheadlines-$STAMP.sql.gz"
 
