@@ -122,6 +122,14 @@ This creates `backups/photos-YYYYMMDD.tgz`.
 **Windows:** `backup.sh` needs a Linux-style shell. Run it from
 [WSL](https://learn.microsoft.com/windows/wsl/install) or Git Bash.
 
+If it fails with errors like `$'\r': command not found`, your copy was
+downloaded before the project fixed its line endings. Fix it once, from the
+same WSL or Git Bash window, then run the backup again:
+
+```sh
+sed -i 's/\r$//' scripts/backup.sh .env
+```
+
 ---
 
 ## Restoring from a backup
