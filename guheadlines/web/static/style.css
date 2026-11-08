@@ -35,6 +35,10 @@
   --tag-business: #93c5fd;  --tag-business-bg: rgba(96, 165, 250, .14);
   --tag-labor: #fcd34d;     --tag-labor-bg: rgba(251, 191, 36, .13);
   --tag-community: #c4b5fd; --tag-community-bg: rgba(167, 139, 250, .14);
+  --tag-tourism: #67e8f9;   --tag-tourism-bg: rgba(34, 211, 238, .13);
+  --tag-sports: #fca5a5;    --tag-sports-bg: rgba(248, 113, 113, .14);
+  --tag-food: #fdba74;      --tag-food-bg: rgba(251, 146, 60, .14);
+  --tag-cnmi: #f9a8d4;      --tag-cnmi-bg: rgba(244, 114, 182, .14);
 
   --r-xl: 28px;
   --r-lg: 22px;
@@ -73,6 +77,10 @@
   --tag-business: #1d4ed8;  --tag-business-bg: rgba(59, 130, 246, .13);
   --tag-labor: #b45309;     --tag-labor-bg: rgba(245, 158, 11, .16);
   --tag-community: #6d28d9; --tag-community-bg: rgba(139, 92, 246, .13);
+  --tag-tourism: #0e7490;   --tag-tourism-bg: rgba(6, 182, 212, .13);
+  --tag-sports: #b91c1c;    --tag-sports-bg: rgba(239, 68, 68, .12);
+  --tag-food: #c2410c;      --tag-food-bg: rgba(249, 115, 22, .14);
+  --tag-cnmi: #be185d;      --tag-cnmi-bg: rgba(236, 72, 153, .12);
 }
 
 * { box-sizing: border-box; }
@@ -297,6 +305,10 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tag-business { color: var(--tag-business); background: var(--tag-business-bg); }
 .tag-labor { color: var(--tag-labor); background: var(--tag-labor-bg); }
 .tag-community { color: var(--tag-community); background: var(--tag-community-bg); }
+.tag-tourism { color: var(--tag-tourism); background: var(--tag-tourism-bg); }
+.tag-sports { color: var(--tag-sports); background: var(--tag-sports-bg); }
+.tag-food { color: var(--tag-food); background: var(--tag-food-bg); }
+.tag-cnmi { color: var(--tag-cnmi); background: var(--tag-cnmi-bg); }
 .headline { font-size: 1.2rem; line-height: 1.3; font-weight: 720; letter-spacing: -.015em; margin: 0 0 6px; }
 .headline a { color: var(--text); }
 .headline a:hover { color: var(--link); }
@@ -370,6 +382,10 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .dot.tag-business { background: var(--tag-business); }
 .dot.tag-labor { background: var(--tag-labor); }
 .dot.tag-community { background: var(--tag-community); }
+.dot.tag-tourism { background: var(--tag-tourism); }
+.dot.tag-sports { background: var(--tag-sports); }
+.dot.tag-food { background: var(--tag-food); }
+.dot.tag-cnmi { background: var(--tag-cnmi); }
 
 /* ---------- search ---------- */
 .search-form {

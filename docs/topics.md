@@ -1,7 +1,10 @@
 # Topics
 
-Stories are sorted into topics: **Local, Military, Business and Labor** out of
-the box, plus **Community** for posts from Reddit's r/guam. A story can belong
+Stories are sorted into topics: **Local, Military, Business, Labor, Tourism,
+Sports, Food and Saipan & CNMI** out of the box, plus **Community** for posts
+from Reddit's r/guam. **Saipan & CNMI** needs only one mention of Saipan,
+Tinian, Rota or the CNMI (`min_score: 1`), so stories from Saipan never land
+in Local. A story can belong
 to more than one (a contract for the military buildup can be Military *and*
 Business). Topics are defined in
 **`config/categories.yaml`**, which you can edit to add keywords or whole new

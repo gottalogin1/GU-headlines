@@ -98,18 +98,23 @@ These are set up out of the box. You can add, pause or remove sites; see
 
 | News site | Notes |
 |---|---|
-| The Guam Daily Post | |
-| Pacific Daily News | |
+| The Guam Daily Post | Local news, business and lifestyle |
+| Pacific Daily News | Local news, sports and lifestyle |
 | KUAM News | |
 | KANDIT News Group | Opinion pieces, obituaries and public notices are skipped |
-| Pacific Island Times | Guam stories only |
-| Marianas Variety | Guam stories only; loads slowly because the site limits how fast it can be read |
-| Stars and Stripes | Guam stories only |
+| Pacific Island Times | Guam and CNMI stories only |
+| Marianas Variety | Guam and CNMI stories, including sports; loads slowly because the site limits how fast it can be read |
+| Stars and Stripes | Guam and CNMI stories only |
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz, Andersen) | Military news releases |
 | Guam Department of Labor | Posts rarely |
 | Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
 | r/guam on Reddit | Shown only on the **Community** page, not on the front page; read from the community's feed only |
-| Office of the Governor | Press releases; switched off unless you turn it on |
+| Office of the Governor | Press releases |
+| Guam Sports Network (GSPN) | Sports |
+| Guam Football Association | Soccer: the Matao and local leagues |
+| Guam Visitors Bureau | Tourism news releases |
+| Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
+| RNZ Pacific | Guam and CNMI stories only |
 
 **Listed but not collected.** These sites turn away automated visitors, so
 GU Headlines doesn't try to read them. The Sources page and the sidebar list

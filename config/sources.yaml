@@ -23,12 +23,17 @@
 #                         extractor picks the wrong intro paragraph
 #   exclude_sections      skip stories filed under these sections/feed categories
 #                         (added to the defaults below)
+#   allow_sections        collect these sections even though the defaults skip
+#                         them (e.g. [Sports]); also lifts the default URL
+#                         pattern for that section (/sports/, /lifestyle/, ...)
 #   request_delay         seconds between requests to this site (default
 #                         PER_HOST_DELAY; robots.txt Crawl-delay is also honoured)
 #   max_age_days          links found on listing pages older than this are
 #                         skipped as evergreen pages (default 30)
 #   ignore_robots         fetch this site even where its robots.txt disallows
 #                         crawlers (the site may block you for it)
+#   undated               the site's pages show no date: accept pages that match
+#                         article_pattern without one, dated when first found
 #   feed_only             build stories from the feed entries alone, without
 #                         opening the article pages (for sites that refuse bots)
 #   only_in_topic         put this site's stories in that one topic only, and
@@ -85,8 +90,10 @@ defaults:
     - '/(search|login|register|subscribe|account|contact|about|advertise|privacy|terms)(/|$|\?)'
     - '\.(pdf|jpe?g|png|gif|webp|mp3|mp4|zip|docx?|xlsx?)$'
 
-# Words that mark an article as being about Guam; used by sources with
-# require_guam: true (regional outlets that also cover the CNMI, Palau, FSM, ...).
+# Words that mark an article as being about Guam or the CNMI (Saipan, Tinian);
+# used by sources with require_guam: true (regional outlets that also cover
+# Palau, the FSM, Hawaii, ...). Rota is left out because Stars and Stripes also
+# covers Naval Station Rota in Spain.
 guam_keywords:
   - guam
   - guåhan
@@ -107,6 +114,11 @@ guam_keywords:
   - govguam
   - chamoru
   - chamorro
+  - saipan
+  - tinian
+  - cnmi
+  - northern mariana*
+  - garapan
 
 sources:
   # BLOX/TownNews site. Feeds carry 50 stories each; the site rate-limits bursts.
@@ -117,11 +129,15 @@ sources:
     feeds:
       - https://www.postguam.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
       - https://www.postguam.com/search/?f=rss&t=article&c=business/local&l=50&s=start_time&sd=desc
+      - https://www.postguam.com/search/?f=rss&t=article&c=lifestyle&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.postguam.com/news/local/
     article_pattern: '/article_[0-9a-f-]+\.html'
+    # Lifestyle stories are collected; food ones land in Food. (Its sports
+    # feed hasn't had a local story since June 2026, so it isn't read.)
+    allow_sections: [Lifestyle]
     exclude_url_patterns:
-      - '/(news|business)/(world|nation|national)/'
+      - '/(news|business|lifestyles?)/(world|nation|national)/'
       - '/forum/'
 
   # BLOX/TownNews site (since the 2021 sale from Gannett).
@@ -131,11 +147,15 @@ sources:
     request_delay: 5
     feeds:
       - https://www.guampdn.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc
+      - https://www.guampdn.com/search/?f=rss&t=article&c=sports&l=50&s=start_time&sd=desc
+      - https://www.guampdn.com/search/?f=rss&t=article&c=lifestyle&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.guampdn.com/news/
     article_pattern: '/article_[0-9a-f-]+\.html'
+    # Sports (many are GSPN's stories, reposted) and lifestyle are collected.
+    allow_sections: [Sports, Lifestyle]
     exclude_url_patterns:
-      - '/(news|business)/(world|nation|national)/'
+      - '/(news|business|sports|lifestyles?)/(world|nation|national)/'
       - '/pika/'
 
   # No feed; story text is rendered by JavaScript and read from the page's JSON.
@@ -172,7 +192,7 @@ sources:
       - 'mbjguam\.com/(guam|news|gallery|digital-newspaper|databank|northern-mariana-islands|japan|marshall-islands|palau|public-notices|corporate-giving|making-moves)/?$'
     categories: [business]
 
-  # Wix blog feed. Regional outlet: Guam stories only.
+  # Wix blog feed. Regional outlet: Guam and CNMI stories only.
   - slug: pactimes
     name: Pacific Island Times
     homepage: https://www.pacificislandtimes.com/
@@ -180,7 +200,8 @@ sources:
       - https://www.pacificislandtimes.com/blog-feed.xml
     require_guam: true
 
-  # BLOX/TownNews site, Saipan-based: Guam stories only. Its robots.txt
+  # BLOX/TownNews site, Saipan-based: Guam and CNMI stories (require_guam
+  # also accepts Saipan, Tinian and the CNMI). Its robots.txt
   # disallows crawlers other than a few search engines; fetched anyway by the
   # site owner's choice (ignore_robots), at the same slow pace as the other
   # BLOX sites.
@@ -193,12 +214,14 @@ sources:
       - https://www.mvariety.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
       - https://www.mvariety.com/search/?f=rss&t=article&c=news/regional&l=50&s=start_time&sd=desc
       - https://www.mvariety.com/search/?f=rss&t=article&c=business/business_news&l=50&s=start_time&sd=desc
+      - https://www.mvariety.com/search/?f=rss&t=article&c=sports&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.mvariety.com/news/local/
     article_pattern: '/article_[0-9a-f-]+\.html'
     exclude_url_patterns:
-      - '/(news|business)/(world|nation|national)/'
+      - '/(news|business|sports)/(world|nation|national)/'
       - '/views/'
+    allow_sections: [Sports]
     require_guam: true
 
   - slug: stripes
@@ -288,14 +311,74 @@ sources:
     ignore_robots: true
     only_in_topic: community
 
-  # Official press releases. Plentiful and duplicated by the news outlets, so
-  # off by default.
+  # Official press releases. Many are also reported by the news outlets.
   - slug: governor
     name: Office of the Governor
     homepage: https://governor.guam.gov/
-    enabled: false
     feeds:
       - https://governor.guam.gov/feed/?post_type=press_release
     listing_pages:
       - https://governor.guam.gov/
     article_pattern: '/press_release/'
+
+  # --- Sports ---------------------------------------------------------------
+
+  # WordPress. Guam's main sports site: school leagues, national teams,
+  # Guam athletes abroad. The feed carries the latest 10 posts with photos.
+  - slug: gspn
+    name: Guam Sports Network
+    homepage: https://www.guamsportsnetwork.com/
+    feeds:
+      - https://www.guamsportsnetwork.com/feed/
+    allow_sections: [Sports]
+    categories: [sports]
+
+  # WordPress. Guam Football Association: national teams and local leagues.
+  - slug: guamfa
+    name: Guam Football Association
+    homepage: https://guamfa.com/
+    feeds:
+      - https://guamfa.com/feed/
+    allow_sections: [Sports]
+    exclude_url_patterns:
+      - '/(events|event)/'
+    categories: [sports]
+
+  # --- Tourism --------------------------------------------------------------
+
+  # Drupal, no feed. News releases are linked from the listing page with
+  # addresses straight off the root (/tumon-night-market-brings-holiday-cheer).
+  # Its pages show no date, so each release is dated when first found.
+  - slug: gvb
+    name: Guam Visitors Bureau
+    homepage: https://www.guamvisitorsbureau.com/
+    listing_pages:
+      - https://www.guamvisitorsbureau.com/news-releases
+    article_pattern: '^https?://(www\.)?guamvisitorsbureau\.com/[a-z0-9]+(-[a-z0-9]+){3,}/?$'
+    exclude_url_patterns:
+      - 'guamvisitorsbureau\.com/news-releases'
+    undated: true
+    categories: [tourism]
+
+  # --- General news ---------------------------------------------------------
+
+  # Isla Public Media (KPRG, Guam's NPR station). Grove CMS; its feed is
+  # empty, so the news page is scanned. The newsroom's own stories are at
+  # /news/<date>/<slug> (NPR's national and world stories, at /<date>/<slug>,
+  # are left out).
+  - slug: isla
+    name: Isla Public Media (KPRG)
+    homepage: https://www.islapublic.org/
+    listing_pages:
+      - https://www.islapublic.org/news
+    article_pattern: '/news/\d{4}-\d\d-\d\d/'
+    require_guam: true
+
+  # RNZ Pacific (Radio New Zealand): the whole Pacific, so Guam and CNMI
+  # stories only.
+  - slug: rnz
+    name: RNZ Pacific
+    homepage: https://www.rnz.co.nz/international/pacific-news
+    feeds:
+      - https://www.rnz.co.nz/rss/pacific.xml
+    require_guam: true

@@ -179,24 +179,16 @@ categories:
 
   - slug: business
     name: Business
-    description: Economy, tourism, companies, prices, contracts and development.
+    description: Economy, companies, prices, contracts and development.
     keywords:
       - business*
       - economy
       - economic*
       - GDP
-      - tourism
-      - tourist*
-      - visitor arrivals
-      - visitors
-      - Guam Visitors Bureau
-      - GVB
-      - hotel*
       - airline*
       - United Airlines
       - flights
       - retail*
-      - restaurant*
       - bank*
       - credit union
       - loan*
@@ -313,6 +305,131 @@ categories:
       - retirement fund
       - pension*
       - Civil Service Commission
+
+  - slug: tourism
+    name: Tourism
+    description: Visitors, arrivals, hotels, airlines and the Guam Visitors Bureau.
+    keywords:
+      - tourism
+      - tourist*
+      - visitor arrivals
+      - visitor industry
+      - visitors
+      - Guam Visitors Bureau
+      - GVB
+      - hotel*
+      - resort*
+      - travel*
+      - travelers
+      - cruise ship*
+      - air service
+      - flights
+      - airline*
+      - Japan market
+      - Korea market
+      - tour operator*
+      - optional tour*
+      - Tumon Bay
+      - Guam Hotel and Restaurant Association
+      - GHRA
+
+  - slug: sports
+    name: Sports
+    description: Local teams, leagues, school sports and Guam athletes abroad.
+    keywords:
+      - sport*
+      - athlete*
+      - athletic*
+      - basketball
+      - baseball
+      - softball
+      - football
+      - soccer
+      - futsal
+      - volleyball
+      - rugby
+      - boxing
+      - MMA
+      - jiu-jitsu
+      - judo
+      - wrestling
+      - swimmer*
+      - swim meet
+      - track and field
+      - cross country
+      - marathon
+      - triathlon
+      - golf
+      - tennis
+      - canoe*
+      - paddling
+      - cycling
+      - IIAAG
+      - GNOC
+      - Matao
+      - Masakada
+      - Pacific Games
+      - Micronesian Games
+      - Marianas Games
+      - Olympic*
+      - tournament*
+      - playoff*
+      - championship*
+      - league
+      - coach*
+      - varsity
+
+  - slug: food
+    name: Food
+    description: Restaurants, openings and closures, chefs, food events and food safety.
+    keywords:
+      - restaurant*
+      - cafe*
+      - café*
+      - bakery
+      - bakeries
+      - eatery
+      - eateries
+      - dining
+      - diner*
+      - chef*
+      - cuisine
+      - culinary
+      - food truck*
+      - food festival*
+      - food fair
+      - foodie*
+      - night market
+      - buffet
+      - ramen
+      - sushi
+      - barbecue
+      - BBQ
+      - kelaguen
+      - red rice
+      - recipe*
+      - sanitary permit*
+      - food establishment*
+
+  # Stories from Saipan and the rest of the Commonwealth of the Northern
+  # Mariana Islands (Saipan Tribune, Marianas Variety and the regional outlets).
+  # A single mention is enough, so a Saipan story never lands in Local (Guam).
+  - slug: cnmi
+    name: Saipan & CNMI
+    description: Saipan, Tinian, Rota and the rest of the Northern Mariana Islands.
+    min_score: 1
+    keywords:
+      - Saipan
+      - Tinian
+      - Rota
+      - CNMI
+      - Northern Mariana*
+      - Commonwealth of the Northern Mariana Islands
+      - Garapan
+      - Susupe
+      - Chalan Kanoa
+      - Marianas Visitors Authority
+      - MVA
 
   # Posts from Guam's online community (the r/guam source in sources.yaml
   # puts its posts here). No keywords: news stories are never sorted into it.
