@@ -117,10 +117,10 @@ Its stories stay on your site and in search; it just isn't checked any more.
 The Sources page shows it as **paused**. To turn it back on, delete that line
 or change it to `enabled: true`.
 
-### Turn on the Office of the Governor
+### Pause the Office of the Governor
 
-It's included but paused. Find `slug: governor` and remove its
-`enabled: false` line.
+Its press releases are collected. Many of them are also reported by the news
+sites, so to drop them, find `slug: governor` and add `enabled: false`.
 
 ### Remove a site
 
@@ -336,8 +336,9 @@ entry are required.
 | `autodiscover_feeds` | `true` | Also use any feed that the listing pages advertise. |
 | `exclude_url_patterns` | `- '/opinion/'` | Skip story links whose address matches one of these patterns. Added to the shared list under `defaults:` at the top of the file. |
 | `exclude_sections` | `[Opinion, Sports]` | Skip stories that the site files under these sections or feed categories. Added to the shared list under `defaults:`. |
-| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor` or `community`. |
-| `require_guam` | `true` | Keep only stories that mention Guam. What counts as "mentions Guam" is the `guam_keywords` list near the top of the file. |
+| `allow_sections` | `[Sports, Lifestyle]` | Collect these sections from this site even though the shared `defaults:` skip them. It lifts both the section name and the matching default address pattern (`/sports/`, `/lifestyle/`). Other sites still skip them. |
+| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor`, `tourism`, `sports`, `food`, `cnmi` or `community`. |
+| `require_guam` | `true` | Keep only stories that mention Guam or the CNMI (Saipan, Tinian). What counts is the `guam_keywords` list near the top of the file. |
 | `request_delay` | `5` | Seconds between requests to this site. Use it for sites that answer "too many requests" (HTTP 429). If the site's robots.txt asks for a longer delay, that is used instead. |
 | `max_age_days` | `30` | Links found on *listing pages* that are older than this are skipped. Home pages often link to old "evergreen" pages (station promos, guides); this keeps them out. Feed stories are never skipped for age. |
 | `body_selector` | `'.story-text'` | Where the story text is on the page. Only needed if the intro comes out wrong. To find it, open a story in Chrome or Firefox, right-click its first paragraph and choose **Inspect**. Look a few lines up for the box that holds all the paragraphs, such as `<div class="story-text">`, and write its class with a dot in front: `'.story-text'`. |
@@ -345,6 +346,7 @@ entry are required.
 | `only_in_topic` | `community` | Put this site's stories in that one topic only, whatever they mention, and show them only on that topic's page: not on the front page, the other topics or the archive. Search shows them when you search within that topic. Use a topic *slug* from `categories.yaml`. |
 | `cannot_scrape` | `Its firewall (Cloudflare) turns away automated visitors.` | The site can't be collected. GU Headlines never reads it, and lists it separately on the Sources page and in the sidebar, with this reason and a link. See [Sites that can't be collected](#sites-that-cant-be-collected). |
 | `feed_only` | `true` | Build stories from the feed alone: the headline, text, photo and date the feed gives, without opening each story's page. For sites whose pages turn robots away but whose feed works, such as Reddit. Needs `feeds`. |
+| `undated` | `true` | The site's pages show no date (such as the Guam Visitors Bureau). Pages that match `article_pattern` are accepted without one and dated when first found, so the first run dates everything on the listing page that day. Needs `article_pattern`. |
 | `sitemaps` | *(a list of addresses)* | Sitemap files for [importing older stories](#importing-older-stories). Usually found automatically. |
 
 ### Settings shared by all sites
@@ -358,9 +360,10 @@ At the top of `sources.yaml`:
   site, such as `/sports/` and `/opinion/`.
 - **`defaults: max_age_days`** *(optional)*: changes the default of 30 days
   for all sites.
-- **`guam_keywords`**: the words that mean "this story is about Guam", for
-  sites with `require_guam: true`. Add a village or place name here if Guam
-  stories are being skipped. Accents and capital letters don't matter.
+- **`guam_keywords`**: the words that mean "this story is about Guam or the
+  CNMI", for sites with `require_guam: true`. Add a village or place name
+  here if stories are being skipped. Accents and capital letters don't
+  matter. Remove the Saipan lines to go back to Guam-only stories.
 
 ### robots.txt
 

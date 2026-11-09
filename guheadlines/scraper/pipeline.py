@@ -566,8 +566,10 @@ class Scraper:
                 # Pages without article metadata are still accepted when the
                 # source's article_pattern vouches for the URL and the page has
                 # a date and a story paragraph (section pages rarely have both).
+                # Sites that never show dates (undated) need only the paragraph.
                 vouched = source.article_patterns and source.matches_article_pattern(cand.url)
-                if not (vouched and data.published_at and data.intro):
+                dated = data.published_at or source.undated
+                if not (vouched and dated and data.intro):
                     raise Skip("rejected", "not an article page")
 
         final_url = normalize_url(page.url) if page else cand.key

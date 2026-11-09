@@ -229,6 +229,40 @@ def test_generic_images_are_not_reused(clean_db, scraper, config):
         assert session.get(IgnoredImage, IMAGE) is not None
 
 
+UNDATED = "https://www.pncguam.com/tumon-night-market-brings-holiday-cheer/"
+UNDATED_HTML = b"""<html><head><title>Tumon Night Market Brings Holiday Cheer</title></head>
+<body><h1>Tumon Night Market Brings Holiday Cheer</h1>
+<div class="entry-content"><p>The Guam Visitors Bureau announces the November and December
+lineup of the Tumon Night Market, with local vendors, live entertainment and the island's
+official holiday kickoff party for residents and visitors alike.</p></div>
+</body></html>"""
+
+
+def test_undated_sites(clean_db, scraper, site, config):
+    from guheadlines.scraper.discover import Candidate
+    from guheadlines.scraper.pipeline import Skip
+
+    original = site.__call__
+
+    def serve(request):
+        if str(request.url) == UNDATED:
+            return httpx.Response(200, content=UNDATED_HTML, headers={"content-type": "text/html"})
+        return original(request)
+
+    scraper.client._client._transport = httpx.MockTransport(serve)
+    source = config.source("pnc")
+    cand = Candidate(url=UNDATED, key=UNDATED, via="listing")
+    # A page with no date is not taken for a story...
+    with pytest.raises(Skip):
+        scraper.build_draft(source, None, cand)
+    # ...unless the site never shows dates; it is then dated when found.
+    source.undated = True
+    before = datetime.now(timezone.utc)
+    draft = scraper.build_draft(source, None, cand)
+    assert draft.title == "Tumon Night Market Brings Holiday Cheer"
+    assert draft.published_at >= before
+
+
 def test_listing_pages_without_metadata(clean_db, scraper, config):
     from guheadlines.scraper.discover import Candidate
     from guheadlines.scraper.pipeline import Skip

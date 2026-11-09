@@ -92,3 +92,31 @@ def test_only_in_topic_and_cannot_scrape_options():
             },
             categories,
         )
+
+
+def test_allow_sections_lifts_default_exclusions():
+    data = {
+        "defaults": {
+            "exclude_sections": ["Opinion", "Sports"],
+            "exclude_url_patterns": ["/sports?/", "/lifestyles?/", "/opinion/"],
+        },
+        "sources": [
+            {"slug": "news", "name": "News", "feeds": ["https://n.example/rss"]},
+            {
+                "slug": "sporty",
+                "name": "Sporty",
+                "feeds": ["https://s.example/rss"],
+                "allow_sections": ["sports", "Lifestyle"],
+            },
+        ],
+    }
+    config = parse_config(data, {})
+    news, sporty = config.source("news"), config.source("sporty")
+    assert news.is_excluded("https://n.example/sports/x/article_1.html")
+    assert news.excluded_section("Sports") == "Sports"
+    assert not sporty.is_excluded("https://s.example/sports/x/article_1.html")
+    assert not sporty.is_excluded("https://s.example/lifestyle/food/article_1.html")
+    assert sporty.excluded_section("Sports") is None
+    # The other defaults still apply.
+    assert sporty.is_excluded("https://s.example/opinion/article_1.html")
+    assert sporty.excluded_section("Opinion") == "Opinion"
