@@ -263,6 +263,9 @@ address such as `https://news.example.com`:
    ```
 
    Within a minute, `https://news.example.com` shows your site.
+5. **Tell the site its address:** add `SITE_URL=https://news.example.com`
+   to `.env` and run `docker compose up -d`. Search engines then see that one
+   address for every page. Next, see [Search engines](#search-engines).
 
 **Can't open ports at home?** A
 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
@@ -270,6 +273,32 @@ publishes the site without port forwarding; point it at
 `http://localhost:8000`.
 
 Before making the site public, read the [note on content](../README.md#a-note-on-content).
+
+### Search engines
+
+The site is ready for Google and Bing: every page has a title, a summary,
+one canonical address and a link preview card, and
+`https://news.example.com/sitemap.xml` lists every page worth finding (the
+home page, each topic and news site, the Jobs page, and the archive down to
+each day). Search engines find it through `robots.txt`.
+
+To get listed sooner and see how people find the site:
+
+1. Set `SITE_URL` (step 5 above).
+2. Add the site to [Google Search Console](https://search.google.com/search-console).
+   The **Domain** option asks you to add a DNS record at your registrar. The
+   **URL prefix** option can instead use the **HTML tag** method: put its
+   `content="..."` value in `.env` as `GOOGLE_SITE_VERIFICATION=...`, run
+   `docker compose up -d`, then press **Verify**.
+3. In Search Console, open **Sitemaps** and submit `sitemap.xml`.
+4. Optionally do the same in [Bing Webmaster Tools](https://www.bing.com/webmasters),
+   which can import the site from Search Console, or use
+   `BING_SITE_VERIFICATION`. Bing also feeds DuckDuckGo and Yahoo.
+
+New sites usually take a few days to a few weeks to appear in results.
+Search results pages and the Sources page are kept out of search engines on
+purpose, and so are the stored copies of the news sites' photos, so image
+searches lead to the publishers' own pages.
 
 ---
 

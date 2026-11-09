@@ -105,6 +105,9 @@ class CategoryConfig:
     slug: str
     name: str
     description: str = ""
+    # The topic page's title in browser tabs and search results
+    # (page_title: in categories.yaml, else "<name> news").
+    page_title: str = ""
     fallback: bool = False
     min_score: int = 3
     keywords: list[tuple[str, re.Pattern[str]]] = field(default_factory=list)
@@ -177,11 +180,13 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         slug = str(raw.get("slug", "")).strip()
         if not _SLUG_RE.match(slug):
             raise ConfigError(f"categories.yaml: invalid category slug {slug!r}")
+        name = str(raw.get("name") or slug.title())
         categories.append(
             CategoryConfig(
                 slug=slug,
-                name=str(raw.get("name") or slug.title()),
+                name=name,
                 description=str(raw.get("description") or ""),
+                page_title=str(raw.get("page_title") or f"{name} news"),
                 fallback=bool(raw.get("fallback", False)),
                 min_score=int(raw.get("min_score", 3)),
                 keywords=compile_keywords([str(k) for k in _as_list(raw.get("keywords"))]),

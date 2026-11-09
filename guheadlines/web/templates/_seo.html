@@ -1,0 +1,23 @@
+{# What search engines and link previews read; built in web/seo.py. #}
+  <title>{% if title %}{{ seo.title }} · {{ settings.site_name }}{% else %}{{ seo.title }}{% endif %}</title>
+  <meta name="description" content="{{ seo.description }}">
+  {% if seo.robots %}<meta name="robots" content="{{ seo.robots }}">{% endif %}
+  {% if seo.canonical %}<link rel="canonical" href="{{ seo.canonical }}">{% endif %}
+  {% if seo.prev %}<link rel="prev" href="{{ seo.prev }}">{% endif %}
+  {% if seo.next %}<link rel="next" href="{{ seo.next }}">{% endif %}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ settings.site_name }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  {% if seo.canonical %}<meta property="og:url" content="{{ seo.canonical }}">{% endif %}
+  <meta property="og:image" content="{{ seo.image }}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{ settings.site_name }}: {{ settings.site_tagline }}">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  {% if settings.google_site_verification %}<meta name="google-site-verification" content="{{ settings.google_site_verification }}">{% endif %}
+  {% if settings.bing_site_verification %}<meta name="msvalidate.01" content="{{ settings.bing_site_verification }}">{% endif %}
+  <link rel="apple-touch-icon" href="{{ static_url('apple-touch-icon.png') }}">
+  {% for data in seo.structured %}<script type="application/ld+json">{{ data }}</script>{% endfor %}

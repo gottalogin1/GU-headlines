@@ -88,6 +88,9 @@ your local changes, see [Updating](docs/maintenance.md#updating).
   posting was last seen. See [Jobs](docs/jobs.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
+- **Ready for search engines**: every page has its own title and summary,
+  a sitemap lists every page worth finding, and links shared on social media
+  show a preview card. See [Search engines](docs/maintenance.md#search-engines).
 - **Built to last**: a proper database (PostgreSQL), automatic database
   upgrades, a backup script, and settings kept in plain text files.
 

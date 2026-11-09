@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import card, pagination %}
 {% block main %}
+{% if not heading %}
+{# The home page's heading, for search engines and screen readers; the top bar already shows the name. #}
+<h1 class="visually-hidden">{{ settings.site_name }}: the latest Guam news</h1>
+{% endif %}
 {% if heading %}
 <header class="page-head">
   {% if archive_day %}<p class="crumbs"><a href="/archive">Archive</a> › <a href="/archive/{{ archive_day.year }}/{{ archive_day.month }}">{{ months[archive_day.month - 1] }} {{ archive_day.year }}</a></p>{% endif %}
@@ -10,9 +14,10 @@
   {% elif subheading %}<p class="muted">{{ subheading }}</p>{% endif %}
   {% if result.total %}<p class="muted small">{{ "{:,}".format(result.total) }} {{ "story" if result.total == 1 else "stories" }}</p>{% endif %}
   {% if archive_day %}
+  {# The nearest days with stories; empty days are skipped. #}
   <p class="month-nav">
-    <a href="/archive/{{ prev_day.year }}/{{ prev_day.month }}/{{ prev_day.day }}">← {{ prev_day|fmt_date_long }}</a>
-    <a href="/archive/{{ next_day.year }}/{{ next_day.month }}/{{ next_day.day }}">{{ next_day|fmt_date_long }} →</a>
+    {% if prev_day %}<a href="/archive/{{ prev_day.year }}/{{ prev_day.month }}/{{ prev_day.day }}">← {{ prev_day|fmt_date_long }}</a>{% else %}<span></span>{% endif %}
+    {% if next_day %}<a href="/archive/{{ next_day.year }}/{{ next_day.month }}/{{ next_day.day }}">{{ next_day|fmt_date_long }} →</a>{% endif %}
   </p>
   {% endif %}
 </header>

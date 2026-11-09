@@ -3,11 +3,10 @@
 <header class="page-head">
   <p class="crumbs"><a href="/archive">Archive</a></p>
   <h1>{{ months[month - 1] }} {{ year }}</h1>
-  {% set prev_m = 12 if month == 1 else month - 1 %}{% set prev_y = year - 1 if month == 1 else year %}
-  {% set next_m = 1 if month == 12 else month + 1 %}{% set next_y = year + 1 if month == 12 else year %}
+  {# The nearest months with stories; empty months are skipped. #}
   <p class="month-nav">
-    <a href="/archive/{{ prev_y }}/{{ prev_m }}">← {{ months[prev_m - 1] }} {{ prev_y }}</a>
-    <a href="/archive/{{ next_y }}/{{ next_m }}">{{ months[next_m - 1] }} {{ next_y }} →</a>
+    {% if prev_month %}{% set y, m = prev_month %}<a href="/archive/{{ y }}/{{ m }}">← {{ months[m - 1] }} {{ y }}</a>{% else %}<span></span>{% endif %}
+    {% if next_month %}{% set y, m = next_month %}<a href="/archive/{{ y }}/{{ m }}">{{ months[m - 1] }} {{ y }} →</a>{% endif %}
   </p>
 </header>
 {% if not days %}
