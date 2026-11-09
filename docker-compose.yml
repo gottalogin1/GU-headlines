@@ -38,6 +38,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # The site and the scraper need no special Linux permissions, so all are refused.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
 
   worker:
     build: .
@@ -57,6 +60,8 @@ services:
         condition: service_started
     healthcheck:
       disable: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
 
 volumes:
   pgdata:

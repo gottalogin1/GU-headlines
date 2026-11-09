@@ -29,6 +29,10 @@ MIN_WIDTH = 200
 IMAGE_ACCEPT = "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5"
 MIN_HEIGHT = 120
 Image.MAX_IMAGE_PIXELS = 60_000_000
+# The formats news sites use for photos. Pillow can also read many rare formats
+# (TIFF, BMP, EPS, PSD...), where most of its security flaws were found. A file
+# in one of those formats is refused, so its decoder never runs.
+WEB_IMAGE_FORMATS = ("JPEG", "PNG", "GIF", "WEBP", "AVIF")
 
 
 @dataclass
@@ -52,7 +56,7 @@ def process_image(data: bytes, max_width: int) -> tuple[bytes, int, int]:
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         try:
-            image = Image.open(io.BytesIO(data))
+            image = Image.open(io.BytesIO(data), formats=WEB_IMAGE_FORMATS)
             image.load()
         except Exception as exc:
             raise ImageRejected(f"unreadable image: {exc}") from exc

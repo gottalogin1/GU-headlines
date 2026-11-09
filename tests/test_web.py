@@ -116,6 +116,16 @@ def test_archive_pages(client):
     assert client.get("/archive/2026/13").status_code == 404
 
 
+def test_odd_addresses_are_refused_without_a_server_error(client):
+    # Days the calendar cannot hold, and page numbers past the limit.
+    for path in ("/archive/1/1/1", "/archive/9999/12/31", "/archive/2026/99999999999999999999/1"):
+        assert client.get(path).status_code == 404
+    assert client.get("/archive/2026/10/1", params={"page": 10**19}).status_code == 422
+    # A NUL character, which the database cannot store or search for.
+    for path in ("/search?q=a%00b", "/search?source=%00", "/jobs?q=%00", "/source/kuam%00"):
+        assert client.get(path).status_code == 400
+
+
 def test_status_and_health(client):
     assert "KUAM News" in client.get("/status").text
     health = client.get("/healthz").json()
@@ -219,6 +229,7 @@ def test_security_and_caching_headers(client):
     assert "frame-ancestors 'none'" in csp
     assert page.headers["x-content-type-options"] == "nosniff"
     assert page.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert page.headers["cross-origin-opener-policy"] == "same-origin"
     # The light/dark script is inlined and matches the hash the policy allows.
     from guheadlines.web.app import THEME_SCRIPT
 
