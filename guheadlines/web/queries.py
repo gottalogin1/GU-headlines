@@ -240,6 +240,54 @@ def archive_days(
     return [{"day": d, "count": c} for d, c in rows]
 
 
+def neighbor_days(
+    session: Session, day: date, hide_sources: list[str] | None = None
+) -> tuple[date | None, date | None]:
+    """The nearest earlier and later Guam days that have stories (None if none),
+    so the archive's day-to-day links never lead to empty pages."""
+    start, end = local_day_bounds(day)
+    hidden = [_hidden(hide_sources)] if hide_sources else []
+    before = session.scalar(
+        select(func.max(Article.published_at)).where(Article.published_at < start, *hidden)
+    )
+    after = session.scalar(
+        select(func.min(Article.published_at)).where(Article.published_at >= end, *hidden)
+    )
+    return (
+        before.astimezone(GUAM_TZ).date() if before else None,
+        after.astimezone(GUAM_TZ).date() if after else None,
+    )
+
+
+def sitemap_data(session: Session, hide_sources: list[str] | None = None) -> dict:
+    """Newest story time overall, per topic, per source and per archive day,
+    for the sitemap's last-modified dates."""
+    hidden = [_hidden(hide_sources)] if hide_sources else []
+    latest = session.scalar(select(func.max(Article.published_at)).where(*hidden))
+    category = func.unnest(Article.categories).label("category")
+    categories = session.execute(
+        select(category, func.max(Article.published_at)).group_by(category)
+    ).all()
+    sources = session.execute(
+        select(Source.slug, func.max(Article.published_at))
+        .join(Article, Article.source_id == Source.id)
+        .group_by(Source.slug)
+    ).all()
+    local_day = func.date(func.timezone("Pacific/Guam", Article.published_at)).label("d")
+    days = session.execute(
+        select(local_day, func.max(Article.published_at))
+        .where(*hidden)
+        .group_by(local_day)
+        .order_by(local_day.desc())
+    ).all()
+    return {
+        "latest": latest,
+        "categories": dict(categories),
+        "sources": dict(sources),
+        "days": [(d, newest) for d, newest in days],
+    }
+
+
 def source_status(session: Session) -> list[dict]:
     day_ago = datetime.now(timezone.utc) - timedelta(days=1)
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)

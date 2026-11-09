@@ -9,6 +9,8 @@
 # a category (see categories: in sources.yaml).
 #
 # The category marked fallback: true is applied when nothing else matched.
+# page_title is the topic page's title in browser tabs and search results
+# (default: "<name> news").
 # After changing this file, re-tag existing articles with:
 #     docker compose exec worker guheadlines reclassify
 
@@ -16,6 +18,7 @@ categories:
   - slug: local
     name: Local
     description: Everyday life on island - community, public safety, schools, health, weather, government.
+    page_title: Guam local news
     fallback: true
     keywords:
       - police
@@ -112,6 +115,7 @@ categories:
   - slug: military
     name: Military
     description: Armed forces on Guam, the buildup, veterans and defense.
+    page_title: Guam military news
     keywords:
       - military
       - buildup
@@ -180,6 +184,7 @@ categories:
   - slug: business
     name: Business
     description: Economy, companies, prices, contracts and development.
+    page_title: Guam business news
     keywords:
       - business*
       - economy
@@ -253,6 +258,7 @@ categories:
   - slug: labor
     name: Labor
     description: Jobs, wages, workforce, unions and foreign-worker programs.
+    page_title: Guam labor and workforce news
     keywords:
       - labor
       - labour
@@ -309,6 +315,7 @@ categories:
   - slug: tourism
     name: Tourism
     description: Visitors, arrivals, hotels, airlines and the Guam Visitors Bureau.
+    page_title: Guam tourism news
     keywords:
       - tourism
       - tourist*
@@ -336,6 +343,7 @@ categories:
   - slug: sports
     name: Sports
     description: Local teams, leagues, school sports and Guam athletes abroad.
+    page_title: Guam sports news
     keywords:
       - sport*
       - athlete*
@@ -382,6 +390,7 @@ categories:
   - slug: food
     name: Food
     description: Restaurants, openings and closures, chefs, food events and food safety.
+    page_title: Guam food and restaurant news
     keywords:
       - restaurant*
       - cafe*
@@ -417,6 +426,7 @@ categories:
   - slug: cnmi
     name: Saipan & CNMI
     description: Saipan, Tinian, Rota and the rest of the Northern Mariana Islands.
+    page_title: Saipan and CNMI news
     min_score: 1
     keywords:
       - Saipan
@@ -436,3 +446,4 @@ categories:
   - slug: community
     name: Community
     description: Questions, tips and discussion from Guam's online community on Reddit (r/guam).
+    page_title: r/guam community posts

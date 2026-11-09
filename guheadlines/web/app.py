@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
@@ -25,7 +25,7 @@ from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
-from . import queries
+from . import queries, seo
 from .queries import MARK_END, MARK_START, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -53,13 +53,21 @@ def static_url(name: str) -> str:
 class CachedStaticFiles(StaticFiles):
     """StaticFiles that also tells browsers how long they may keep each file."""
 
-    def __init__(self, *args, cache_control: Callable[[Scope], str], **kwargs) -> None:
+    def __init__(
+        self,
+        *args,
+        cache_control: Callable[[Scope], str],
+        headers: dict[str, str] | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._cache_control = cache_control
+        self._headers = headers or {}
 
     def file_response(self, full_path, stat_result, scope: Scope, status_code: int = 200):
         response = super().file_response(full_path, stat_result, scope, status_code)
         response.headers["Cache-Control"] = self._cache_control(scope)
+        response.headers.update(self._headers)
         return response
 
 
@@ -157,7 +165,13 @@ app.mount(
 settings.media_dir.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/media",
-    CachedStaticFiles(directory=settings.media_dir, cache_control=_media_cache),
+    CachedStaticFiles(
+        directory=settings.media_dir,
+        cache_control=_media_cache,
+        # The stored photos belong to the news sites; keep these copies out of
+        # image search, so searches lead to the publishers' own pages.
+        headers={"X-Robots-Tag": "noindex"},
+    ),
     name="media",
 )
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -398,6 +412,16 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         }
 
     context.setdefault("title", None)
+    meta = seo.page_meta(
+        request,
+        title=context["title"],
+        description=context.pop("description", None),
+        robots=context.pop("robots", None),
+        canonical=context.pop("canonical", None),
+        breadcrumbs=context.pop("breadcrumbs", None),
+        result=context.get("result"),
+        static_url=static_url,
+    )
     response = templates.TemplateResponse(
         request,
         template,
@@ -406,6 +430,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "category_names": {c.slug: c.name for c in config.categories},
             "sidebar": sidebar_cache.get("sidebar", sidebar),
             "page_url": lambda **kw: page_url(request, **kw),
+            "seo": meta,
             **context,
         },
         status_code=status_code,
@@ -423,6 +448,9 @@ def _listing(request: Request, template: str, filters: Filters, page: int, **con
         result = queries.list_articles(session, filters, page, settings.page_size)
     if page > 1 and not result.items:
         raise HTTPException(404)
+    context.setdefault("canonical", {"page": page})
+    if context.pop("noindex_if_empty", False) and not result.items:
+        context["robots"] = "noindex"
     return render(
         request,
         template,
@@ -459,7 +487,12 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
         active_nav=slug,
         heading=category.name,
         subheading=category.description,
-        title=category.name,
+        title=category.page_title,
+        description=(
+            f"{category.description} The latest headlines on {settings.site_name}, "
+            "each linked to the original."
+        ).strip(),
+        breadcrumbs=[(category.name, None)],
     )
 
 
@@ -478,7 +511,12 @@ def source_page(request: Request, slug: str, page: int = Query(1, ge=1, le=10000
         heading=source.name,
         subheading=source.homepage,
         subheading_link=source.homepage,
-        title=source.name,
+        title=f"{source.name} headlines",
+        description=(
+            f"The latest {source.name} headlines, with photos and intros, on {settings.site_name}."
+            + (f" Every story links to {domain(source.homepage)}." if source.homepage else "")
+        ),
+        breadcrumbs=[(source.name, None)],
     )
 
 
@@ -531,6 +569,9 @@ def search(
         sources=sources,
         title=f"Search: {filters.q}" if filters.q else "Search",
         active_nav="search",
+        # Result pages are endless and change hourly; robots.txt also keeps
+        # crawlers out.
+        robots="noindex, follow",
     )
 
 
@@ -538,7 +579,19 @@ def search(
 def archive(request: Request):
     with session_scope() as session:
         years = queries.archive_months(session, list(_hidden()))
-    return render(request, "archive.html", years=years, title="Archive", active_nav="archive")
+    return render(
+        request,
+        "archive.html",
+        years=years,
+        title="Guam news archive",
+        description=(
+            f"Every Guam news story {settings.site_name} has collected, "
+            "by year, month and day, with links to the original stories."
+        ),
+        active_nav="archive",
+        canonical={},
+        breadcrumbs=[("Archive", None)],
+    )
 
 
 @app.get("/archive/{year}/{month}", response_class=HTMLResponse)
@@ -547,14 +600,30 @@ def archive_month(request: Request, year: int, month: int):
         raise HTTPException(404)
     with session_scope() as session:
         days = queries.archive_days(session, year, month, list(_hidden()))
+        years = queries.archive_months(session, list(_hidden()))
+    # The nearest months with stories, so the month-to-month links never lead
+    # crawlers (or readers) through endless empty months.
+    stored = sorted((y["year"], m["month"]) for y in years for m in y["months"])
+    earlier = [ym for ym in stored if ym < (year, month)]
+    later = [ym for ym in stored if ym > (year, month)]
+    name = f"{MONTHS[month - 1]} {year}"
     return render(
         request,
         "archive_month.html",
         year=year,
         month=month,
         days=days,
-        title=f"{MONTHS[month - 1]} {year}",
+        prev_month=earlier[-1] if earlier else None,
+        next_month=later[0] if later else None,
+        title=f"Guam news archive: {name}",
+        description=(
+            f"Guam news from {name}, day by day: every headline {settings.site_name} "
+            "collected that month, with links to the original stories."
+        ),
         active_nav="archive",
+        canonical={},
+        robots=None if days else "noindex",
+        breadcrumbs=[("Archive", "/archive"), (name, None)],
     )
 
 
@@ -568,18 +637,34 @@ def archive_day(
         the_day = date(year, month, day)
     except (ValueError, OverflowError):
         raise HTTPException(404) from None
-    filters = Filters(date_from=the_day, date_to=the_day, hide_sources=_hidden())
+    hidden = _hidden()
+    with session_scope() as session:
+        # The nearest days with stories, so the day-to-day links never lead
+        # crawlers (or readers) through endless empty days.
+        prev_day, next_day = queries.neighbor_days(session, the_day, list(hidden))
+    long_date = fmt_date_long(the_day)
+    month_name = f"{MONTHS[month - 1]} {year}"
     return _listing(
         request,
         "index.html",
-        filters,
+        Filters(date_from=the_day, date_to=the_day, hide_sources=hidden),
         page,
         active_nav="archive",
-        heading=fmt_date_long(the_day),
-        title=fmt_date_long(the_day),
+        heading=long_date,
+        title=f"Guam news for {long_date}",
+        description=(
+            f"Guam news from {long_date}: every headline {settings.site_name} collected "
+            "that day, with photos and links to the original stories."
+        ),
+        noindex_if_empty=True,
+        breadcrumbs=[
+            ("Archive", "/archive"),
+            (month_name, f"/archive/{year}/{month}"),
+            (long_date, None),
+        ],
         archive_day=the_day,
-        prev_day=the_day - timedelta(days=1),
-        next_day=the_day + timedelta(days=1),
+        prev_day=prev_day,
+        next_day=next_day,
     )
 
 
@@ -601,6 +686,7 @@ def status(request: Request):
         runs=runs,
         title="Sources",
         active_nav="status",
+        robots="noindex",
     )
 
 
@@ -621,16 +707,30 @@ def jobs(
         raise HTTPException(404)
     # Boards that can't be collected are listed apart, with the reason.
     collected = {b.slug for b in boards_config if b.collected}
+    boards = [b for b in boards if b["board"].slug in collected]
     return render(
         request,
         "jobs.html",
         result=result,
         job_filters=job_filters,
-        boards=[b for b in boards if b["board"].slug in collected],
+        boards=boards,
         uncollectable=[b for b in boards_config if b.enabled and b.cannot_scrape],
         title="Jobs on Guam",
+        description=_jobs_description([b["board"].name for b in boards]),
         active_nav="jobs",
+        canonical={"source": job_filters.source, "page": page},
+        # A word search is a search page; a board's own list is worth finding.
+        robots="noindex, follow" if job_filters.q else None,
+        breadcrumbs=[("Jobs", None)],
     )
+
+
+def _jobs_description(boards: list[str]) -> str:
+    text = "Job openings on Guam with pay, location and closing dates"
+    if boards:
+        names = boards[0] if len(boards) == 1 else ", ".join(boards[:-1]) + f" and {boards[-1]}"
+        text += f", from {names}"
+    return text + ". Every posting links to the board that published it."
 
 
 @app.get("/healthz")
@@ -648,10 +748,53 @@ def healthz():
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
-def robots():
-    return "User-agent: *\nDisallow: /search\nDisallow: /status\n"
+def robots(request: Request):
+    return (
+        "User-agent: *\n"
+        "Disallow: /search\n"
+        "Disallow: /status\n"
+        "Disallow: /healthz\n"
+        "\n"
+        f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
+    )
+
+
+# The sitemap's queries group every story; crawlers fetch it now and then, so
+# their results are kept for ten minutes.
+sitemap_cache = _TTLCache(ttl=600)
+
+
+@app.get("/sitemap.xml")
+def sitemap(request: Request):
+    config = config_cache.get()
+    hidden = list(_hidden())
+
+    def data() -> dict:
+        with session_scope() as session:
+            return queries.sitemap_data(session, hidden)
+
+    news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
+    entries = seo.sitemap_entries(
+        request, sitemap_cache.get("sitemap", data), config.categories, news_sources
+    )
+    return Response(
+        seo.sitemap_xml(entries),
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # For browsers and search engines that ask for /favicon.ico rather than
+    # reading the page's icon link.
+    return FileResponse(
+        STATIC_DIR / "favicon.ico",
+        media_type="image/x-icon",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 @app.exception_handler(404)
 async def not_found(request: Request, exc):
-    return render(request, "404.html", status_code=404, title="Not found")
+    return render(request, "404.html", status_code=404, title="Not found", robots="noindex")

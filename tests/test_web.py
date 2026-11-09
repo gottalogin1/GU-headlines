@@ -14,9 +14,10 @@ from guheadlines.scraper.text import GUAM_TZ
 
 @pytest.fixture()
 def client(clean_db):
-    from guheadlines.web.app import app, sidebar_cache
+    from guheadlines.web.app import app, sidebar_cache, sitemap_cache
 
     sidebar_cache._data.clear()
+    sitemap_cache._data.clear()
     now = datetime.now(timezone.utc)
     with session_scope() as session:
         post = Source(
@@ -249,3 +250,185 @@ def test_top_photo_loads_first(client):
     top = html.split('class="story', 2)[1]
     assert top.count('fetchpriority="high"') == 2 and 'loading="lazy"' not in top
     assert html.count('fetchpriority="high"') == 2
+
+
+def _head(html: str) -> str:
+    return html.split("</head>", 1)[0]
+
+
+def _json_ld(html: str) -> list[dict]:
+    import json
+
+    blocks = html.split('<script type="application/ld+json">')[1:]
+    return [json.loads(block.split("</script>", 1)[0]) for block in blocks]
+
+
+def test_pages_describe_themselves_to_search_engines(client):
+    head = _head(client.get("/?utm_source=facebook&page=1").text)
+    assert "<title>GU Headlines · Guam news, updated every hour</title>" in head
+    # One address per page: tracking parameters and ?page=1 are dropped.
+    assert '<link rel="canonical" href="http://testserver/">' in head
+    assert '<meta property="og:url" content="http://testserver/">' in head
+    assert '<meta property="og:image" content="http://testserver/static/social-card.jpg?v=' in head
+    assert '<meta name="twitter:card" content="summary_large_image">' in head
+    assert 'name="robots"' not in head
+    site = _json_ld(head)
+    assert site[0]["@type"] == "WebSite" and site[0]["name"] == "GU Headlines"
+    assert site[0]["url"] == "http://testserver/"
+    # The home page has a heading for search engines and screen readers.
+    heading = '<h1 class="visually-hidden">GU Headlines: the latest Guam news</h1>'
+    assert heading in client.get("/").text
+
+    labor = _head(client.get("/category/labor").text)
+    assert "<title>Guam labor and workforce news · GU Headlines</title>" in labor
+    assert '<meta name="description" content="Jobs, wages, workforce, unions' in labor
+    assert '<link rel="canonical" href="http://testserver/category/labor">' in labor
+    crumbs = _json_ld(labor)[0]["itemListElement"]
+    assert [c["name"] for c in crumbs] == ["Home", "Labor"]
+    assert crumbs[0]["item"] == "http://testserver/"
+
+    # Older pages say where they sit in the series.
+    from guheadlines.web.app import settings as app_settings
+
+    with session_scope() as session:
+        kuam_id = session.query(Source.id).filter_by(slug="kuam").scalar()
+        for n in range(app_settings.page_size * 2):
+            session.add(
+                Article(
+                    source_id=kuam_id,
+                    url=f"https://www.kuam.com/story/filler-{n}",
+                    title=f"Filler story {n}",
+                    published_at=datetime.now(timezone.utc) - timedelta(days=3, minutes=n),
+                )
+            )
+    second = _head(client.get("/?page=2&fbclid=abc").text)
+    assert '<link rel="canonical" href="http://testserver/?page=2">' in second
+    assert '<link rel="prev" href="http://testserver/">' in second
+    assert '<link rel="next" href="http://testserver/?page=3">' in second
+    assert "WebSite" not in second
+
+    kuam = _head(client.get("/source/kuam").text)
+    assert "<title>KUAM News headlines · GU Headlines</title>" in kuam
+    assert "Every story links to kuam.com." in kuam
+
+
+def test_search_and_error_pages_are_kept_out_of_search_results(client):
+    for path in ("/search?q=wage", "/search", "/status", "/jobs?q=nurse", "/nope"):
+        head = _head(client.get(path).text)
+        assert '<meta name="robots" content="noindex' in head, path
+        assert 'rel="canonical"' not in head, path
+    jobs = _head(client.get("/jobs?source=gdoe&utm_medium=x").text)
+    assert '<link rel="canonical" href="http://testserver/jobs?source=gdoe">' in jobs
+
+
+def test_site_url_setting_is_used_for_canonical_links(client, monkeypatch):
+    import dataclasses
+
+    from guheadlines.web import seo
+
+    site = dataclasses.replace(seo.settings, site_url="https://news.example.com")
+    monkeypatch.setattr(seo, "settings", site)
+    head = _head(client.get("/category/military", params={"page": 1}).text)
+    assert '<link rel="canonical" href="https://news.example.com/category/military">' in head
+    assert "Sitemap: https://news.example.com/sitemap.xml" in client.get("/robots.txt").text
+    assert "<loc>https://news.example.com/</loc>" in client.get("/sitemap.xml").text
+
+
+def test_site_url_must_be_a_web_address():
+    from guheadlines.settings import _site_url
+
+    assert _site_url(" https://news.example.com/ ") == "https://news.example.com"
+    for bad in ("", None, "news.example.com", "javascript:alert(1)", "https://"):
+        assert _site_url(bad) == ""
+
+
+def test_structured_data_cannot_end_its_script_block():
+    from guheadlines.web.seo import json_ld
+
+    text = str(json_ld({"name": "</script><script>alert(1)</script> & more"}))
+    assert "<" not in text and ">" not in text and "&" not in text
+    import json
+
+    assert json.loads(text)["name"] == "</script><script>alert(1)</script> & more"
+
+
+def _recent_day():
+    """The Guam day of the fixture's newest story (two hours ago)."""
+    return (datetime.now(timezone.utc) - timedelta(hours=2)).astimezone(GUAM_TZ).date()
+
+
+def test_sitemap_and_robots(client):
+    robots = client.get("/robots.txt").text
+    assert "Disallow: /search" in robots and "Disallow: /status" in robots
+    assert "Sitemap: http://testserver/sitemap.xml" in robots
+
+    page = client.get("/sitemap.xml")
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("application/xml")
+    xml = page.text
+    import xml.etree.ElementTree as ET
+
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    locs = [e.text for e in ET.fromstring(xml).findall("s:url/s:loc", ns)]
+    today = _recent_day()
+    old = (datetime.now(timezone.utc) - timedelta(days=400)).astimezone(GUAM_TZ).date()
+    for path in (
+        "/",
+        "/category/military",
+        "/category/labor",
+        "/source/postguam",
+        "/source/kuam",
+        "/jobs",
+        "/archive",
+        f"/archive/{today.year}/{today.month}",
+        f"/archive/{today.year}/{today.month}/{today.day}",
+        f"/archive/{old.year}/{old.month}/{old.day}",
+    ):
+        assert f"http://testserver{path}" in locs, path
+    # Topics without stories, search and the Sources page are left out.
+    assert "http://testserver/category/sports" not in locs
+    assert not [loc for loc in locs if "/search" in loc or "/status" in loc]
+    assert "<lastmod>" in xml
+
+
+def test_archive_links_skip_empty_days_and_months(client):
+    today = _recent_day()
+    old = (datetime.now(timezone.utc) - timedelta(days=400)).astimezone(GUAM_TZ).date()
+    day = client.get(f"/archive/{today.year}/{today.month}/{today.day}").text
+    nav = day.split('<p class="month-nav">', 1)[1].split("</p>", 1)[0]
+    # The previous day with stories is 400 days back; nothing after the newest.
+    assert f'href="/archive/{old.year}/{old.month}/{old.day}"' in nav
+    assert nav.count("<a ") == 1
+    assert 'name="robots"' not in _head(day)
+
+    empty = old + timedelta(days=1)
+    page = client.get(f"/archive/{empty.year}/{empty.month}/{empty.day}")
+    assert page.status_code == 200
+    assert '<meta name="robots" content="noindex">' in _head(page.text)
+    nav = page.text.split('<p class="month-nav">', 1)[1].split("</p>", 1)[0]
+    assert f'href="/archive/{old.year}/{old.month}/{old.day}"' in nav
+    assert f'href="/archive/{today.year}/{today.month}/{today.day}"' in nav
+
+    month = client.get(f"/archive/{today.year}/{today.month}").text
+    nav = month.split('<p class="month-nav">', 1)[1].split("</p>", 1)[0]
+    assert f'href="/archive/{old.year}/{old.month}"' in nav and nav.count("<a ") == 1
+    assert "<title>Guam news archive: " in month
+    assert "noindex" in _head(client.get("/archive/1995/1").text)
+    # Dates far outside any archive are not pages at all.
+    assert client.get("/archive/1/1/1").status_code == 404
+    assert client.get("/archive/9999/12/31").status_code == 404
+
+
+def test_icons_and_stored_photos(client):
+    from guheadlines.settings import get_settings
+
+    icon = client.get("/favicon.ico")
+    assert icon.status_code == 200 and icon.headers["content-type"] == "image/x-icon"
+    page = client.get("/").text
+    assert 'rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=' in page
+    # Copies of the news sites' photos stay out of image search.
+    photo = get_settings().media_dir / "images" / "test.webp"
+    photo.parent.mkdir(parents=True, exist_ok=True)
+    photo.write_bytes(b"RIFF0000WEBP")
+    response = client.get("/media/images/test.webp")
+    assert response.headers["x-robots-tag"] == "noindex"

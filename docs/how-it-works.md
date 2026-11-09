@@ -196,7 +196,8 @@ database, so point `TEST_DATABASE_URL` at a throwaway database.
 config/                 sources.yaml, categories.yaml
 guheadlines/
   scraper/              HTTP client, discovery, extraction, images, pipeline, probe
-  web/                  FastAPI app, queries, templates, CSS
+  web/                  FastAPI app, queries, templates, CSS; seo.py for
+                        page titles, canonical links, structured data, sitemap
   migrations/           Alembic schema migrations
   cli.py                the `guheadlines` command
   schedule.py           when the worker wakes up next
