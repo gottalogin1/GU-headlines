@@ -556,3 +556,26 @@ def test_stories_stored_before_only_in_topic_move_to_that_topic(clean_db, config
     with session_scope() as session:
         sync_sources(session, config)
     assert [a.categories for a in _articles().values()] == [["community"]]
+
+
+def test_website_builder_credits_are_cleared_from_stored_stories(clean_db, config):
+    with session_scope() as session:
+        ids = sync_sources(session, config)
+        for n, author in enumerate(["GuamWEBZ", "Jane Cruz | GuamWEBZ", "Webster Santos"]):
+            session.add(
+                Article(
+                    source_id=ids["pnc"],
+                    url=f"https://www.pncguam.com/story-number-{n}-about-tourism/",
+                    title=f"Story {n}",
+                    author=author,
+                    categories=["local"],
+                    published_at=datetime.now(timezone.utc),
+                )
+            )
+    with session_scope() as session:
+        sync_sources(session, config)
+    assert sorted(str(a.author) for a in _articles().values()) == [
+        "Jane Cruz",
+        "None",
+        "Webster Santos",
+    ]

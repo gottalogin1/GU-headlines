@@ -92,10 +92,29 @@ def struct_time_to_datetime(value) -> datetime | None:
     return parse_datetime(dt)
 
 
+# Credits for whoever built the website, which some sites put in their author
+# tag ("GuamWEBZ" on the Guam Visitors Bureau's pages): not a writer.
+SITE_CREDIT_RE = re.compile(
+    r"\b(guam\s*webz|web\s*(designer|developer|design|master|admin)|webmaster"
+    r"|site\s*admin(istrator)?)\b",
+    re.I,
+)
+_BYLINE_PARTS_RE = re.compile(r"\s*(?:[,|/;]|\band\b)\s*", re.I)
+
+
+def drop_site_credits(author: str) -> str:
+    """ "GuamWEBZ Web Designer" -> ""; "Jane Cruz | GuamWEBZ" -> "Jane Cruz"."""
+    if not SITE_CREDIT_RE.search(author):
+        return author
+    parts = [p for p in _BYLINE_PARTS_RE.split(author) if p and not SITE_CREDIT_RE.search(p)]
+    return ", ".join(parts)
+
+
 def clean_byline(author: str | None, *outlets: str | None) -> str | None:
     """Drop the outlet's own name from a byline: "Jane Cruz Pacific Daily News"
-    -> "Jane Cruz"; a byline that is only the outlet's name -> None."""
-    author = clean_text(author)
+    -> "Jane Cruz"; a byline that is only the outlet's name -> None. Website
+    builders' credits (GuamWEBZ) are dropped too."""
+    author = drop_site_credits(clean_text(author))
     for outlet in sorted({clean_text(o) for o in outlets if o}, key=len, reverse=True):
         if not outlet:
             continue

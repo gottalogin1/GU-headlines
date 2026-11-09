@@ -167,3 +167,14 @@ def test_outlet_name_removed_from_bylines():
     )
     assert clean_byline("Jolene Toves", "PNC News First") == "Jolene Toves"
     assert clean_byline(None, "KUAM News") is None
+
+
+def test_website_builder_credits_are_not_bylines():
+    from guheadlines.scraper.text import clean_byline
+
+    # The Guam Visitors Bureau's pages name their web designer as the author.
+    assert clean_byline("GuamWEBZ", "Guam Visitors Bureau") is None
+    assert clean_byline("GuamWEBZ Web Designer", "Guam Visitors Bureau") is None
+    # A real writer named alongside the credit is kept.
+    assert clean_byline("Jane Cruz | GuamWEBZ", "Guam Visitors Bureau") == "Jane Cruz"
+    assert clean_byline("Webster Santos", "KUAM News") == "Webster Santos"
