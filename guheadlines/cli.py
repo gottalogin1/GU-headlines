@@ -94,6 +94,7 @@ def cmd_web(args, settings: Settings) -> None:
         proxy_headers=True,
         forwarded_allow_ips="*",
         workers=args.workers,
+        server_header=False,  # do not tell visitors which web server software runs the site
         log_level=settings.log_level.lower(),
     )
 

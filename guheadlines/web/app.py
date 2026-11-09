@@ -103,6 +103,8 @@ SECURITY_HEADERS = [
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
     (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+    # A site this one links to cannot reach back into this page's window.
+    (b"cross-origin-opener-policy", b"same-origin"),
 ]
 
 
@@ -127,7 +129,22 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
+class RejectNulMiddleware:
+    """Answers 400 to an address that contains a NUL character. PostgreSQL does
+    not accept NUL in text, so such a search or name would fail with a server error."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and ("\x00" in scope["path"] or b"%00" in scope["query_string"]):
+            await PlainTextResponse("Bad request", status_code=400)(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(RejectNulMiddleware)
 # Pages are mostly text and shrink to a fraction of their size; photos are
 # already compressed and left alone.
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
@@ -542,10 +559,14 @@ def archive_month(request: Request, year: int, month: int):
 
 
 @app.get("/archive/{year}/{month}/{day}", response_class=HTMLResponse)
-def archive_day(request: Request, year: int, month: int, day: int, page: int = Query(1, ge=1)):
+def archive_day(
+    request: Request, year: int, month: int, day: int, page: int = Query(1, ge=1, le=10000)
+):
+    if not 1990 <= year <= 2200:
+        raise HTTPException(404)
     try:
         the_day = date(year, month, day)
-    except ValueError:
+    except (ValueError, OverflowError):
         raise HTTPException(404) from None
     filters = Filters(date_from=the_day, date_to=the_day, hide_sources=_hidden())
     return _listing(
