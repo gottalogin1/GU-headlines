@@ -3,6 +3,18 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Fixed
+- **DVIDS** stories are collected again. Its search pages started answering
+  automated visitors with a JavaScript challenge page, so DVIDS found no
+  stories; the Joint Region Marianas, Naval Base Guam and Camp Blaz unit pages
+  are read instead. Stories that only showed up in the Andersen Air Force Base
+  search are no longer picked up from DVIDS.
+- A JavaScript challenge page answered with HTTP 202 (as AWS WAF sends) now
+  shows as a bot-check error on the Sources page instead of a run that quietly
+  finds nothing.
+
 ## 1.1.0 (2026-10-13)
 
 ### Added

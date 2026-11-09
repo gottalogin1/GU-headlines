@@ -108,7 +108,7 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Pacific Island Times | Guam and CNMI stories only |
 | Marianas Variety | Guam and CNMI stories, including sports; loads slowly because the site limits how fast it can be read |
 | Stars and Stripes | Guam and CNMI stories only |
-| DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz, Andersen) | Military news releases |
+| DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz) | Military news releases |
 | Guam Department of Labor | Posts rarely |
 | Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
 | r/guam on Reddit | Shown only on the **Community** page, not on the front page; read from the community's feed only |

@@ -40,11 +40,14 @@ env:
   USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
   USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
 
+# Runners are pinned to Ubuntu 24.04: Playwright 1.56.1 (used for the
+# screenshots) can't install its browser dependencies on ubuntu-latest,
+# which became Ubuntu 26.04 in October 2026.
 jobs:
   probe:
     name: Probe source pages
     if: github.event_name != 'push' || contains(github.event.head_commit.message, '[live]')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -83,7 +86,7 @@ jobs:
     if: >-
       (github.event_name != 'push' && inputs.urls == '') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -104,7 +107,7 @@ jobs:
     if: >-
       (github.event_name != 'push' && inputs.urls == '' && !inputs.only_jobs) ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     services:
       postgres:
