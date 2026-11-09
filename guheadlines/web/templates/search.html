@@ -68,7 +68,7 @@
       No stories found{% if filters.q %} for <strong>{{ filters.q }}</strong>{% endif %}. Try fewer words or a wider date range.
     {% endif %}
   </p>
-  {% for item in result.items %}{{ card(item, category_names, show_snippet=true) }}{% endfor %}
+  {% for item in result.items %}{{ card(item, category_names, show_snippet=true, first=loop.first) }}{% endfor %}
   {{ pagination(result, page_url) }}
 {% endif %}
 {% endblock %}

@@ -1,12 +1,16 @@
-{% macro card(item, category_names, show_snippet=false) %}
+{# One story. `first` marks the top story of a page: its photo is the largest
+   thing drawn first, so it is fetched right away instead of lazily. #}
+{% macro card(item, category_names, show_snippet=false, first=false) %}
 {% set a = item.article %}
-{% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url %}
+{% set link = a.url|safe_url %}
+{% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url|safe_url %}
+{% set loading %}{% if first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}{% endset %}
 <article class="story{% if not photo %} no-photo{% endif %}">
   {% if photo %}
-  <a class="thumb" href="{{ a.url }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+  <a class="thumb" href="{{ link }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
     {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest. #}
-    <img class="thumb-fill" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}>
-    <img class="thumb-img" src="{{ photo }}" alt="" loading="lazy" decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}
+    <img class="thumb-fill" src="{{ photo }}" alt="" {{ loading }}>
+    <img class="thumb-img" src="{{ photo }}" alt="" {{ loading }}
          {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
   </a>
   {% endif %}
@@ -16,7 +20,7 @@
       {% for c in a.categories %}<a class="tag tag-{{ c }}" href="/category/{{ c }}">{{ category_names.get(c, c) }}</a>{% endfor %}
     </div>
     {% endif %}
-    <h3 class="headline"><a href="{{ a.url }}" target="_blank" rel="noopener" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
+    <h3 class="headline"><a href="{{ link }}" target="_blank" rel="noopener" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
     {% if show_snippet and item.snippet %}
       {% for p in item.snippet|paragraphs %}<p class="intro">{{ p|highlight }}</p>{% endfor %}
     {% elif a.intro %}
@@ -24,13 +28,13 @@
     {% endif %}
     <p class="meta">
       {% if item.source_homepage %}
-      <a class="source" href="{{ item.source_homepage }}" target="_blank" rel="noopener" title="{{ item.source_homepage|domain }}">{{ item.source_name }}</a>
+      <a class="source" href="{{ item.source_homepage|safe_url }}" target="_blank" rel="noopener" title="{{ item.source_homepage|domain }}">{{ item.source_name }}</a>
       {% else %}<span class="source">{{ item.source_name }}</span>{% endif %}
       <span aria-hidden="true">·</span>
       <time datetime="{{ a.published_at.isoformat() }}" title="{{ a.published_at|fmt_datetime }}">{{ a.published_at|rel_time }}</time>
       {% if a.author %}<span aria-hidden="true">·</span> <span class="author">{{ a.author }}</span>{% endif %}
     </p>
-    <a class="read-link" href="{{ a.url }}" target="_blank" rel="noopener">
+    <a class="read-link" href="{{ link }}" target="_blank" rel="noopener">
       Read the full story at <span class="read-domain">{{ a.url|domain }}</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>

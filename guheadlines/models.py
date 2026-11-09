@@ -78,7 +78,10 @@ class Article(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    search_vector = mapped_column(TSVECTOR, Computed(SEARCH_VECTOR_SQL, persisted=True))
+    # Only used inside search queries; not loaded with each story.
+    search_vector = mapped_column(
+        TSVECTOR, Computed(SEARCH_VECTOR_SQL, persisted=True), deferred=True
+    )
 
     source: Mapped[Source] = relationship(back_populates="articles")
 

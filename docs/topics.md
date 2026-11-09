@@ -1,7 +1,10 @@
 # Topics
 
-Stories are sorted into topics: **Local, Military, Business and Labor** out of
-the box, plus **Community** for posts from Reddit's r/guam. A story can belong
+Stories are sorted into topics: **Local, Military, Business, Labor, Tourism,
+Sports, Food and Saipan & CNMI** out of the box, plus **Community** for posts
+from Reddit's r/guam. **Saipan & CNMI** needs only one mention of Saipan,
+Tinian, Rota or the CNMI (`min_score: 1`), so stories from Saipan never land
+in Local. A story can belong
 to more than one (a contract for the military buildup can be Military *and*
 Business). Topics are defined in
 **`config/categories.yaml`**, which you can edit to add keywords or whole new
@@ -131,6 +134,7 @@ example, Education:
   - slug: education
     name: Education
     description: Schools, the University of Guam, GCC and students.
+    page_title: Guam education news
     keywords:
       - school*
       - students
@@ -146,7 +150,11 @@ example, Education:
 - `slug` is its permanent ID: lowercase letters, numbers or dashes. It is used
   in addresses like `/category/education`.
 - `name` is what appears in the top menu and on story labels.
-- `description` appears at the top of the topic's page.
+- `description` appears at the top of the topic's page, and is the summary
+  search engines show for it.
+- `page_title` (optional) is the topic page's title in browser tabs and
+  search results. Without it, the title is the name plus "news"
+  ("Education news"). Words people search for, like "Guam", help here.
 
 Within a minute, **Education** appears in the top menu and sidebar. Run
 `reclassify` to sort existing stories into it.

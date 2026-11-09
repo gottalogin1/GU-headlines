@@ -2,7 +2,14 @@ import httpx
 import pytest
 from conftest import fixture_bytes
 
-from guheadlines.scraper.http import Blocked, FetchError, FetchResult, HttpClient, is_bot_check
+from guheadlines.scraper.http import (
+    Blocked,
+    FetchError,
+    FetchResult,
+    HttpClient,
+    is_bot_check,
+    is_public_host,
+)
 
 SITEGROUND_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</title>
 <script src="/.well-known/sgcaptcha/?r=%2Ffeed%2F"></script></head>
@@ -70,5 +77,28 @@ def test_javascript_challenge_is_a_bot_check():
         assert is_bot_check(
             FetchResult("https://x.com/", 200, b"<html></html>", {"x-amzn-waf-action": "challenge"})
         )
+    finally:
+        client.close()
+
+
+def test_local_network_addresses_are_refused(monkeypatch):
+    for name in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    for host in ("127.0.0.1", "localhost", "10.0.0.5", "192.168.1.1", "169.254.169.254", "::1"):
+        assert not is_public_host(host)
+    assert is_public_host("8.8.8.8")
+    # A photo or redirect that points into the local network is never fetched.
+    client = HttpClient("test-agent", per_host_delay=0, respect_robots=False, retries=0)
+    try:
+        for url in ("http://127.0.0.1:5432/", "http://192.168.1.1/admin", "http://[::1]/"):
+            with pytest.raises(FetchError, match="not a public internet address"):
+                client.get(url)
     finally:
         client.close()

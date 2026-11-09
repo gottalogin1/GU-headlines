@@ -38,8 +38,8 @@
 {% set j = item.job %}
 <article class="story no-photo job">
   <div class="story-body">
-  <h3 class="headline"><a href="{{ j.url }}" target="_blank" rel="noopener" title="Open on {{ j.url|domain }}">{{ j.title }}</a></h3>
-  <p class="job-employer">{% if j.employer and j.employer != item.source_name %}<strong>{{ j.employer }}</strong> · {% endif %}{% if item.source_homepage %}<a href="{{ item.source_homepage }}" target="_blank" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
+  <h3 class="headline"><a href="{{ j.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ j.url|domain }}">{{ j.title }}</a></h3>
+  <p class="job-employer">{% if j.employer and j.employer != item.source_name %}<strong>{{ j.employer }}</strong> · {% endif %}{% if item.source_homepage %}<a href="{{ item.source_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
   <dl class="job-facts">
     <div><dt>Pay</dt><dd>{{ j.pay or blank }}</dd></div>
     <div><dt>Location</dt><dd>{{ j.location or blank }}</dd></div>
@@ -52,12 +52,12 @@
     {% if j.first_seen_at|to_local and (j.first_seen_at|to_local).date() != (j.last_seen_at|to_local).date() %}<span aria-hidden="true">·</span> <span title="{{ j.first_seen_at|fmt_datetime }}">first seen {{ j.first_seen_at|fmt_day }}</span>{% endif %}
   </p>
   <p class="job-links">
-    <a class="read-link" href="{{ j.url }}" target="_blank" rel="noopener">
+    <a class="read-link" href="{{ j.url|safe_url }}" target="_blank" rel="noopener">
       {% if j.pdf_url == j.url %}Job announcement (PDF) at{% else %}View the posting at{% endif %} <span class="read-domain">{{ j.url|domain }}</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>
     {% if j.pdf_url and j.pdf_url != j.url %}
-    <a class="read-link" href="{{ j.pdf_url }}" target="_blank" rel="noopener">Job announcement (PDF)
+    <a class="read-link" href="{{ j.pdf_url|safe_url }}" target="_blank" rel="noopener">Job announcement (PDF)
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>
     {% endif %}
@@ -79,7 +79,7 @@
     <li>
       <span class="facet-name">
         <a href="/jobs?source={{ s.slug }}">{{ s.name }}</a>
-        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
         {% if s.last_run_at %}<span class="muted small" title="{{ s.last_run_at|fmt_datetime }}">checked {{ s.last_run_at|rel_time }}</span>{% endif %}
         {% if s.last_error %}<span class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(140) }}</span>{% endif %}
       </span>
@@ -98,7 +98,7 @@
     <li>
       <span class="facet-name">
         <span>{{ s.name }}</span>
-        {% if s.homepage %}<a class="site-link" href="{{ s.homepage }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
         <span class="muted small">{{ s.cannot_scrape }}</span>
       </span>
     </li>

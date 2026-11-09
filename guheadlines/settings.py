@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = PACKAGE_DIR.parent
@@ -39,6 +39,14 @@ class Settings:
     media_dir: Path
     site_name: str = "GU Headlines"
     site_tagline: str = "Guam news, updated every hour"
+    # The site's public address (https://news.example.com), used for the links
+    # search engines are given: canonical links, the sitemap, social cards.
+    # Empty: taken from each request's own address.
+    site_url: str = ""
+    # Optional ownership proof for Google Search Console and Bing Webmaster
+    # Tools: the content="..." value of the meta tag each one offers.
+    google_site_verification: str = ""
+    bing_site_verification: str = ""
     user_agent: str = (
         "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)"
     )
@@ -85,6 +93,15 @@ def _normalize_db_url(url: str) -> str:
     return url
 
 
+def _site_url(value: str | None) -> str:
+    """https://news.example.com (no trailing slash), or "" if not a web address."""
+    value = (value or "").strip().rstrip("/")
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return ""
+    return value
+
+
 def load_settings() -> Settings:
     env = os.environ
     db_url = env.get("DATABASE_URL")
@@ -106,6 +123,9 @@ def load_settings() -> Settings:
         media_dir=Path(env.get("MEDIA_DIR", PROJECT_DIR / "data" / "media")),
         site_name=env.get("SITE_NAME", defaults.site_name),
         site_tagline=env.get("SITE_TAGLINE", defaults.site_tagline),
+        site_url=_site_url(env.get("SITE_URL")),
+        google_site_verification=env.get("GOOGLE_SITE_VERIFICATION", "").strip(),
+        bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),

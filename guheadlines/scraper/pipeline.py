@@ -48,7 +48,7 @@ from .discover import (
 from .extract import build_intro, extract_article
 from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
-from .text import clean_byline, clean_text, truncate
+from .text import SITE_CREDIT_RE, clean_byline, clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
 
 log = logging.getLogger(__name__)
@@ -175,6 +175,11 @@ def sync_sources(session: Session, config: AppConfig) -> dict[str, int]:
                 )
                 .values(categories=[cfg.only_in_topic])
             )
+    # Stories stored with a website builder's credit as their byline.
+    credited = or_(*(Article.author.ilike(f"%{word}%") for word in ("webz", "web", "site admin")))
+    for article in session.scalars(select(Article).where(credited)):
+        if SITE_CREDIT_RE.search(article.author):
+            article.author = clean_byline(article.author)
     return {slug: row.id for slug, row in existing.items()}
 
 
@@ -566,8 +571,10 @@ class Scraper:
                 # Pages without article metadata are still accepted when the
                 # source's article_pattern vouches for the URL and the page has
                 # a date and a story paragraph (section pages rarely have both).
+                # Sites that never show dates (undated) need only the paragraph.
                 vouched = source.article_patterns and source.matches_article_pattern(cand.url)
-                if not (vouched and data.published_at and data.intro):
+                dated = data.published_at or source.undated
+                if not (vouched and dated and data.intro):
                     raise Skip("rejected", "not an article page")
 
         final_url = normalize_url(page.url) if page else cand.key

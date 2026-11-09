@@ -3,9 +3,11 @@ retries transient errors and supports conditional GETs."""
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import re
+import socket
 import threading
 import time
 from dataclasses import dataclass, field
@@ -117,6 +119,31 @@ def is_bot_check(result: FetchResult) -> bool:
     return bool(_BOT_CHECK_TITLE_RE.search(result.content[:50_000]))
 
 
+def is_public_host(host: str, port: int | None = None) -> bool:
+    """False if the host name or address leads to a private, loopback, link-local
+    or other non-public address. A name that does not resolve counts as public:
+    the connection then fails as usual."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        return True
+    return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
+
+
+class PublicOnlyTransport(httpx.HTTPTransport):
+    """Connects only to public internet addresses.
+
+    Scraped pages and feeds choose some of the addresses the scraper fetches
+    (photos, redirects). This keeps them from making the scraper call the
+    database container, the home router or other machines on the local network.
+    """
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        if not is_public_host(request.url.host, request.url.port):
+            raise FetchError(f"refused: {request.url.host} is not a public internet address")
+        return super().handle_request(request)
+
+
 def retry_after_seconds(value: str | None) -> float | None:
     """Parse a Retry-After header: either seconds or an HTTP date."""
     if not value:
@@ -162,7 +189,7 @@ class HttpClient:
             timeout=httpx.Timeout(timeout, connect=min(timeout, 15.0)),
             follow_redirects=True,
             max_redirects=8,
-            transport=transport,
+            transport=transport or PublicOnlyTransport(),
         )
         self._host_lock = threading.Lock()
         self._host_next: dict[str, float] = {}

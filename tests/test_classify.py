@@ -47,4 +47,29 @@ def test_single_intro_mention_is_not_enough(app_config):
 def test_mentions_guam(app_config):
     assert mentions_guam(app_config, "Governor visits Hagatna")
     assert mentions_guam(app_config, "Storm nears Guåhan")
-    assert not mentions_guam(app_config, "Saipan council meets")
+    # Saipan-based (CNMI) stories are wanted too.
+    assert mentions_guam(app_config, "Saipan council meets")
+    assert not mentions_guam(app_config, "Palau council meets")
+    # Naval Station Rota in Spain is not the island of Rota.
+    assert not mentions_guam(app_config, "Sailors arrive at Naval Station Rota")
+
+
+def test_cnmi_story_is_not_local(app_config):
+    cats = classify(
+        app_config,
+        title="Lawmakers pass budget",
+        intro="The House in Saipan passed the spending plan on Friday.",
+    )
+    assert cats == ["cnmi"]
+
+
+def test_new_topics(app_config):
+    assert "sports" in classify(app_config, title="Matao fall to Puerto Rico in FIFA Series")
+    assert "sports" in classify(
+        app_config,
+        title="Sharks win in overtime",
+        url="https://www.postguam.com/sports/local/sharks-win/article_1.html",
+    )
+    assert "food" in classify(app_config, title="New ramen restaurant opens in Tamuning")
+    tourism = classify(app_config, title="Visitor arrivals climb as GVB courts Korea")
+    assert "tourism" in tourism and "business" not in tourism

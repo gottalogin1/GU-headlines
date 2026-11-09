@@ -2,35 +2,178 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import logging
 import time
+from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from sqlalchemy import select
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ..config import AppConfig, ConfigError, JobSourceConfig, load_config, load_jobs_config
 from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
-from . import queries
+from . import queries, seo
 from .queries import MARK_END, MARK_START, Filters, JobFilters
 
 log = logging.getLogger(__name__)
 settings = get_settings()
 HERE = Path(__file__).resolve().parent
 
+STATIC_DIR = HERE / "static"
+
+# --------------------------------------------------------- static files
+
+
+def _file_version(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+
+
+# Each static file's address carries a hash of its contents (style.css?v=1a2b3c...),
+# so browsers can keep it for a year and still get a new copy after any edit.
+_static_versions = {p.name: _file_version(p) for p in STATIC_DIR.iterdir() if p.is_file()}
+
+
+def static_url(name: str) -> str:
+    return f"/static/{name}?v={_static_versions[name]}"
+
+
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles that also tells browsers how long they may keep each file."""
+
+    def __init__(
+        self,
+        *args,
+        cache_control: Callable[[Scope], str],
+        headers: dict[str, str] | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._cache_control = cache_control
+        self._headers = headers or {}
+
+    def file_response(self, full_path, stat_result, scope: Scope, status_code: int = 200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = self._cache_control(scope)
+        response.headers.update(self._headers)
+        return response
+
+
+def _static_cache(scope: Scope) -> str:
+    # Addresses made by static_url() change whenever the file does.
+    if b"v=" in scope.get("query_string", b""):
+        return "public, max-age=31536000, immutable"
+    return "public, max-age=3600"
+
+
+def _media_cache(scope: Scope) -> str:
+    # Stored photos are named after a hash of their source address and never
+    # rewritten in place.
+    return "public, max-age=2592000"
+
+
+# ------------------------------------------------------ security headers
+
+# The light/dark script is inlined in every page (see base.html); the policy
+# allows exactly that script and nothing else inline.
+THEME_SCRIPT = (STATIC_DIR / "theme.js").read_text(encoding="utf-8")
+_theme_hash = base64.b64encode(hashlib.sha256(THEME_SCRIPT.encode("utf-8")).digest()).decode()
+
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        f"script-src 'sha256-{_theme_hash}'",
+        "style-src 'self'",
+        # Stories without a stored copy show the photo from the news site itself.
+        "img-src 'self' https: http: data:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+
+SECURITY_HEADERS = [
+    (b"content-security-policy", CONTENT_SECURITY_POLICY.encode()),
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"),
+    # A site this one links to cannot reach back into this page's window.
+    (b"cross-origin-opener-policy", b"same-origin"),
+]
+
+
+class SecurityHeadersMiddleware:
+    """Adds SECURITY_HEADERS to every response (pages, files and errors alike)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                names = {name for name, _ in message.get("headers", [])}
+                extra = [(n, v) for n, v in SECURITY_HEADERS if n not in names]
+                message["headers"] = [*message.get("headers", []), *extra]
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
+class RejectNulMiddleware:
+    """Answers 400 to an address that contains a NUL character. PostgreSQL does
+    not accept NUL in text, so such a search or name would fail with a server error."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and ("\x00" in scope["path"] or b"%00" in scope["query_string"]):
+            await PlainTextResponse("Bad request", status_code=400)(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None)
-app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+app.add_middleware(RejectNulMiddleware)
+# Pages are mostly text and shrink to a fraction of their size; photos are
+# already compressed and left alone.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+app.add_middleware(SecurityHeadersMiddleware)
+app.mount(
+    "/static",
+    CachedStaticFiles(directory=STATIC_DIR, cache_control=_static_cache),
+    name="static",
+)
 settings.media_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")
+app.mount(
+    "/media",
+    CachedStaticFiles(
+        directory=settings.media_dir,
+        cache_control=_media_cache,
+        # The stored photos belong to the news sites; keep these copies out of
+        # image search, so searches lead to the publishers' own pages.
+        headers={"X-Robots-Tag": "noindex"},
+    ),
+    name="media",
+)
 templates = Jinja2Templates(directory=HERE / "templates")
 
 MONTHS = [
@@ -42,6 +185,9 @@ MONTHS = [
 # ------------------------------------------------------------------ config
 
 
+CONFIG_RELOAD_SECONDS = 60
+
+
 class _ConfigCache:
     """Re-reads the YAML config at most once a minute, keeping the last good copy."""
 
@@ -50,13 +196,13 @@ class _ConfigCache:
         self._loaded = 0.0
 
     def get(self) -> AppConfig:
-        if self._config is None or time.monotonic() - self._loaded > 60:
+        if self._config is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
                 self._config = load_config(settings.config_dir)
             except ConfigError as exc:
                 log.error("config error: %s", exc)
                 if self._config is None:
-                    raise
+                    raise  # no good copy to fall back on
             self._loaded = time.monotonic()
         return self._config
 
@@ -65,14 +211,15 @@ config_cache = _ConfigCache()
 
 
 class _JobsConfigCache:
-    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy)."""
+    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy;
+    a broken file at startup means no boards rather than a broken site)."""
 
     def __init__(self) -> None:
         self._boards: list[JobSourceConfig] = []
         self._loaded: float | None = None
 
     def get(self) -> list[JobSourceConfig]:
-        if self._loaded is None or time.monotonic() - self._loaded > 60:
+        if self._loaded is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
                 self._boards = load_jobs_config(settings.config_dir)
             except ConfigError as exc:
@@ -85,11 +232,13 @@ jobs_config_cache = _JobsConfigCache()
 
 
 class _TTLCache:
+    """Keeps computed values for `ttl` seconds (per web worker process)."""
+
     def __init__(self, ttl: float) -> None:
         self.ttl = ttl
         self._data: dict[str, tuple[float, object]] = {}
 
-    def get(self, key: str, compute):
+    def get(self, key: str, compute: Callable[[], object]):
         hit = self._data.get(key)
         if hit and time.monotonic() - hit[0] < self.ttl:
             return hit[1]
@@ -98,6 +247,8 @@ class _TTLCache:
         return value
 
 
+# The sidebar's counts run several queries; every page shows them, so they are
+# shared between requests for two minutes.
 sidebar_cache = _TTLCache(ttl=120)
 
 
@@ -178,6 +329,20 @@ def is_note(message: str | None) -> bool:
     return bool(message) and all(part.startswith(CATCH_UP_NOTE) for part in parts)
 
 
+def safe_url(url: str | None) -> str:
+    """The address itself if it is a web (http/https) link, else "".
+
+    Links and photo addresses come from scraped pages and feeds; this keeps a
+    javascript: or data: address from ever reaching an href or src.
+    """
+    url = (url or "").strip()
+    try:
+        scheme = urlsplit(url).scheme.lower()
+    except ValueError:
+        return ""
+    return url if scheme in ("http", "https") else ""
+
+
 def domain(url: str | None) -> str:
     """https://www.guampdn.com/news/... -> guampdn.com"""
     host = (urlsplit(url or "").hostname or "").lower()
@@ -193,12 +358,19 @@ templates.env.filters.update(
     paragraphs=paragraphs,
     to_local=to_local,
     domain=domain,
+    safe_url=safe_url,
 )
 templates.env.tests.update(note=is_note)
-templates.env.globals.update(settings=settings, months=MONTHS)
+templates.env.globals.update(
+    settings=settings,
+    months=MONTHS,
+    static_url=static_url,
+    theme_script=Markup(THEME_SCRIPT),
+)
 
 
 def group_by_day(items: list[dict]) -> list[tuple[str, list[dict]]]:
+    """[(day label, items)] in the given order; items are sorted newest or oldest first."""
     groups: list[tuple[str, list[dict]]] = []
     current = None
     for item in items:
@@ -220,6 +392,8 @@ def page_url(request: Request, **changes) -> str:
 
 
 def render(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
+    """Render a page with what every page needs: the sections, the sidebar and
+    the pagination helper."""
     config = config_cache.get()
 
     def sidebar():
@@ -238,6 +412,16 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         }
 
     context.setdefault("title", None)
+    meta = seo.page_meta(
+        request,
+        title=context["title"],
+        description=context.pop("description", None),
+        robots=context.pop("robots", None),
+        canonical=context.pop("canonical", None),
+        breadcrumbs=context.pop("breadcrumbs", None),
+        result=context.get("result"),
+        static_url=static_url,
+    )
     response = templates.TemplateResponse(
         request,
         template,
@@ -246,6 +430,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "category_names": {c.slug: c.name for c in config.categories},
             "sidebar": sidebar_cache.get("sidebar", sidebar),
             "page_url": lambda **kw: page_url(request, **kw),
+            "seo": meta,
             **context,
         },
         status_code=status_code,
@@ -258,10 +443,14 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
 
 
 def _listing(request: Request, template: str, filters: Filters, page: int, **context):
+    """A page of stories grouped by day (home, topic, source and archive day pages)."""
     with session_scope() as session:
         result = queries.list_articles(session, filters, page, settings.page_size)
     if page > 1 and not result.items:
         raise HTTPException(404)
+    context.setdefault("canonical", {"page": page})
+    if context.pop("noindex_if_empty", False) and not result.items:
+        context["robots"] = "noindex"
     return render(
         request,
         template,
@@ -298,7 +487,12 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
         active_nav=slug,
         heading=category.name,
         subheading=category.description,
-        title=category.name,
+        title=category.page_title,
+        description=(
+            f"{category.description} The latest headlines on {settings.site_name}, "
+            "each linked to the original."
+        ).strip(),
+        breadcrumbs=[(category.name, None)],
     )
 
 
@@ -317,7 +511,12 @@ def source_page(request: Request, slug: str, page: int = Query(1, ge=1, le=10000
         heading=source.name,
         subheading=source.homepage,
         subheading_link=source.homepage,
-        title=source.name,
+        title=f"{source.name} headlines",
+        description=(
+            f"The latest {source.name} headlines, with photos and intros, on {settings.site_name}."
+            + (f" Every story links to {domain(source.homepage)}." if source.homepage else "")
+        ),
+        breadcrumbs=[(source.name, None)],
     )
 
 
@@ -370,6 +569,9 @@ def search(
         sources=sources,
         title=f"Search: {filters.q}" if filters.q else "Search",
         active_nav="search",
+        # Result pages are endless and change hourly; robots.txt also keeps
+        # crawlers out.
+        robots="noindex, follow",
     )
 
 
@@ -377,7 +579,19 @@ def search(
 def archive(request: Request):
     with session_scope() as session:
         years = queries.archive_months(session, list(_hidden()))
-    return render(request, "archive.html", years=years, title="Archive", active_nav="archive")
+    return render(
+        request,
+        "archive.html",
+        years=years,
+        title="Guam news archive",
+        description=(
+            f"Every Guam news story {settings.site_name} has collected, "
+            "by year, month and day, with links to the original stories."
+        ),
+        active_nav="archive",
+        canonical={},
+        breadcrumbs=[("Archive", None)],
+    )
 
 
 @app.get("/archive/{year}/{month}", response_class=HTMLResponse)
@@ -386,35 +600,71 @@ def archive_month(request: Request, year: int, month: int):
         raise HTTPException(404)
     with session_scope() as session:
         days = queries.archive_days(session, year, month, list(_hidden()))
+        years = queries.archive_months(session, list(_hidden()))
+    # The nearest months with stories, so the month-to-month links never lead
+    # crawlers (or readers) through endless empty months.
+    stored = sorted((y["year"], m["month"]) for y in years for m in y["months"])
+    earlier = [ym for ym in stored if ym < (year, month)]
+    later = [ym for ym in stored if ym > (year, month)]
+    name = f"{MONTHS[month - 1]} {year}"
     return render(
         request,
         "archive_month.html",
         year=year,
         month=month,
         days=days,
-        title=f"{MONTHS[month - 1]} {year}",
+        prev_month=earlier[-1] if earlier else None,
+        next_month=later[0] if later else None,
+        title=f"Guam news archive: {name}",
+        description=(
+            f"Guam news from {name}, day by day: every headline {settings.site_name} "
+            "collected that month, with links to the original stories."
+        ),
         active_nav="archive",
+        canonical={},
+        robots=None if days else "noindex",
+        breadcrumbs=[("Archive", "/archive"), (name, None)],
     )
 
 
 @app.get("/archive/{year}/{month}/{day}", response_class=HTMLResponse)
-def archive_day(request: Request, year: int, month: int, day: int, page: int = Query(1, ge=1)):
+def archive_day(
+    request: Request, year: int, month: int, day: int, page: int = Query(1, ge=1, le=10000)
+):
+    if not 1990 <= year <= 2200:
+        raise HTTPException(404)
     try:
         the_day = date(year, month, day)
-    except ValueError:
+    except (ValueError, OverflowError):
         raise HTTPException(404) from None
-    filters = Filters(date_from=the_day, date_to=the_day, hide_sources=_hidden())
+    hidden = _hidden()
+    with session_scope() as session:
+        # The nearest days with stories, so the day-to-day links never lead
+        # crawlers (or readers) through endless empty days.
+        prev_day, next_day = queries.neighbor_days(session, the_day, list(hidden))
+    long_date = fmt_date_long(the_day)
+    month_name = f"{MONTHS[month - 1]} {year}"
     return _listing(
         request,
         "index.html",
-        filters,
+        Filters(date_from=the_day, date_to=the_day, hide_sources=hidden),
         page,
         active_nav="archive",
-        heading=fmt_date_long(the_day),
-        title=fmt_date_long(the_day),
+        heading=long_date,
+        title=f"Guam news for {long_date}",
+        description=(
+            f"Guam news from {long_date}: every headline {settings.site_name} collected "
+            "that day, with photos and links to the original stories."
+        ),
+        noindex_if_empty=True,
+        breadcrumbs=[
+            ("Archive", "/archive"),
+            (month_name, f"/archive/{year}/{month}"),
+            (long_date, None),
+        ],
         archive_day=the_day,
-        prev_day=the_day - timedelta(days=1),
-        next_day=the_day + timedelta(days=1),
+        prev_day=prev_day,
+        next_day=next_day,
     )
 
 
@@ -436,6 +686,7 @@ def status(request: Request):
         runs=runs,
         title="Sources",
         active_nav="status",
+        robots="noindex",
     )
 
 
@@ -456,16 +707,30 @@ def jobs(
         raise HTTPException(404)
     # Boards that can't be collected are listed apart, with the reason.
     collected = {b.slug for b in boards_config if b.collected}
+    boards = [b for b in boards if b["board"].slug in collected]
     return render(
         request,
         "jobs.html",
         result=result,
         job_filters=job_filters,
-        boards=[b for b in boards if b["board"].slug in collected],
+        boards=boards,
         uncollectable=[b for b in boards_config if b.enabled and b.cannot_scrape],
         title="Jobs on Guam",
+        description=_jobs_description([b["board"].name for b in boards]),
         active_nav="jobs",
+        canonical={"source": job_filters.source, "page": page},
+        # A word search is a search page; a board's own list is worth finding.
+        robots="noindex, follow" if job_filters.q else None,
+        breadcrumbs=[("Jobs", None)],
     )
+
+
+def _jobs_description(boards: list[str]) -> str:
+    text = "Job openings on Guam with pay, location and closing dates"
+    if boards:
+        names = boards[0] if len(boards) == 1 else ", ".join(boards[:-1]) + f" and {boards[-1]}"
+        text += f", from {names}"
+    return text + ". Every posting links to the board that published it."
 
 
 @app.get("/healthz")
@@ -483,10 +748,53 @@ def healthz():
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
-def robots():
-    return "User-agent: *\nDisallow: /search\nDisallow: /status\n"
+def robots(request: Request):
+    return (
+        "User-agent: *\n"
+        "Disallow: /search\n"
+        "Disallow: /status\n"
+        "Disallow: /healthz\n"
+        "\n"
+        f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
+    )
+
+
+# The sitemap's queries group every story; crawlers fetch it now and then, so
+# their results are kept for ten minutes.
+sitemap_cache = _TTLCache(ttl=600)
+
+
+@app.get("/sitemap.xml")
+def sitemap(request: Request):
+    config = config_cache.get()
+    hidden = list(_hidden())
+
+    def data() -> dict:
+        with session_scope() as session:
+            return queries.sitemap_data(session, hidden)
+
+    news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
+    entries = seo.sitemap_entries(
+        request, sitemap_cache.get("sitemap", data), config.categories, news_sources
+    )
+    return Response(
+        seo.sitemap_xml(entries),
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # For browsers and search engines that ask for /favicon.ico rather than
+    # reading the page's icon link.
+    return FileResponse(
+        STATIC_DIR / "favicon.ico",
+        media_type="image/x-icon",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
 
 
 @app.exception_handler(404)
 async def not_found(request: Request, exc):
-    return render(request, "404.html", status_code=404, title="Not found")
+    return render(request, "404.html", status_code=404, title="Not found", robots="noindex")

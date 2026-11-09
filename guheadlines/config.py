@@ -71,6 +71,9 @@ class SourceConfig:
     # Put this source's stories in this one topic only, and show them only on
     # that topic's page (not on the front page, other topics or the archive).
     only_in_topic: str | None = None
+    # The site's pages carry no date: accept pages that match article_pattern
+    # without one, dated when first found.
+    undated: bool = False
     # Why this site can't be collected (e.g. its firewall blocks us). Such a
     # site is never fetched; the website lists it separately with a link.
     cannot_scrape: str | None = None
@@ -102,6 +105,9 @@ class CategoryConfig:
     slug: str
     name: str
     description: str = ""
+    # The topic page's title in browser tabs and search results
+    # (page_title: in categories.yaml, else "<name> news").
+    page_title: str = ""
     fallback: bool = False
     min_score: int = 3
     keywords: list[tuple[str, re.Pattern[str]]] = field(default_factory=list)
@@ -174,11 +180,13 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         slug = str(raw.get("slug", "")).strip()
         if not _SLUG_RE.match(slug):
             raise ConfigError(f"categories.yaml: invalid category slug {slug!r}")
+        name = str(raw.get("name") or slug.title())
         categories.append(
             CategoryConfig(
                 slug=slug,
-                name=str(raw.get("name") or slug.title()),
+                name=name,
                 description=str(raw.get("description") or ""),
+                page_title=str(raw.get("page_title") or f"{name} news"),
                 fallback=bool(raw.get("fallback", False)),
                 min_score=int(raw.get("min_score", 3)),
                 keywords=compile_keywords([str(k) for k in _as_list(raw.get("keywords"))]),
@@ -188,6 +196,7 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
 
     defaults = sources_data.get("defaults") or {}
     default_excludes = [str(p) for p in _as_list(defaults.get("exclude_url_patterns"))]
+    default_sections = [str(x) for x in _as_list(defaults.get("exclude_sections"))]
 
     sources: list[SourceConfig] = []
     seen: set[str] = set()
@@ -205,6 +214,15 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         unknown = [c for c in forced if c not in category_slugs]
         if unknown:
             raise ConfigError(f"{where}: unknown categories {unknown}")
+        # allow_sections: collect sections the defaults skip (e.g. Sports). The
+        # section names and the default URL patterns for /<section>/ are lifted.
+        allowed = {fold(str(x)).strip() for x in _as_list(raw.get("allow_sections"))}
+        url_excludes = [
+            p
+            for p in default_excludes
+            if not any(re.search(p, f"/{a}/", re.IGNORECASE) for a in allowed)
+        ]
+        sections = [x for x in default_sections if fold(x).strip() not in allowed]
         source = SourceConfig(
             slug=slug,
             name=str(raw["name"]),
@@ -218,7 +236,7 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
                 [str(p) for p in _as_list(raw.get("article_pattern"))], where
             ),
             exclude_patterns=_compile(
-                default_excludes + [str(p) for p in _as_list(raw.get("exclude_url_patterns"))],
+                url_excludes + [str(p) for p in _as_list(raw.get("exclude_url_patterns"))],
                 where,
             ),
             categories=forced,
@@ -227,19 +245,18 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),
             feed_only=bool(raw.get("feed_only", False)),
+            undated=bool(raw.get("undated", False)),
             only_in_topic=str(raw["only_in_topic"]) if raw.get("only_in_topic") else None,
             cannot_scrape=_reason(raw.get("cannot_scrape")),
             max_age_days=int(raw.get("max_age_days", defaults.get("max_age_days", 30))),
-            exclude_sections=[
-                str(x)
-                for x in _as_list(defaults.get("exclude_sections"))
-                + _as_list(raw.get("exclude_sections"))
-            ],
+            exclude_sections=sections + [str(x) for x in _as_list(raw.get("exclude_sections"))],
         )
         if source.only_in_topic and source.only_in_topic not in category_slugs:
             raise ConfigError(f"{where}: unknown only_in_topic {source.only_in_topic!r}")
         if source.collected and not (source.feeds or source.listing_pages):
             raise ConfigError(f"{where}: needs at least one feed or listing page")
+        if source.undated and not source.article_patterns:
+            raise ConfigError(f"{where}: undated needs an article_pattern")
         if source.feed_only and not source.feeds:
             raise ConfigError(f"{where}: feed_only needs at least one feed")
         sources.append(source)

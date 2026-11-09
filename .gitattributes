@@ -1,0 +1,3 @@
+# Check files out with Linux line endings on every computer, including
+# Windows, so scripts/backup.sh runs in WSL and Git Bash.
+* text=auto eol=lf

@@ -47,6 +47,9 @@ editor. This guide explains each one.
 |---|---|---|
 | `SITE_NAME` | `GU Headlines` | The name in the top bar, browser tab and footer. |
 | `SITE_TAGLINE` | `Guam news, updated every hour` | The short line in the footer and in the description search engines show. If you change how often the site checks for news, update this too. |
+| `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: the address each visitor used. |
+| `GOOGLE_SITE_VERIFICATION` | *(empty)* | Proves to [Google Search Console](https://search.google.com/search-console) that the site is yours: choose **URL prefix**, then **HTML tag**, and paste only the `content="..."` value here. See [Search engines](maintenance.md#search-engines). |
+| `BING_SITE_VERIFICATION` | *(empty)* | The same for [Bing Webmaster Tools](https://www.bing.com/webmasters) (its **HTML Meta Tag** option). |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
 | `WEB_PORT` | `8000` | The port the website uses: `http://your-server:8000`. Change it if something else already uses 8000, or set it to `80` to leave the port off the address (only if nothing else on the server uses port 80). |
 
@@ -56,6 +59,12 @@ editor. This guide explains each one.
 SITE_NAME=Island Headlines
 SITE_TAGLINE=Every Guam story, every hour
 ```
+
+The picture shown when someone shares a link to the site (on Facebook,
+Messenger, X and in text messages) is
+`guheadlines/web/static/social-card.jpg`, and it says "GU Headlines". After
+renaming the site, replace it with your own 1200 × 630 JPEG of the same name,
+then run `docker compose up -d --build`.
 
 ## Checking for news
 

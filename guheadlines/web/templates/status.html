@@ -16,7 +16,7 @@
     <td>
       <a href="/source/{{ s.slug }}">{{ s.name }}</a>
       {% if not s.enabled %}<span class="badge">paused</span>{% endif %}
-      {% if s.homepage %}<br><a class="site-link" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}
+      {% if s.homepage %}<br><a class="site-link" href="{{ s.homepage|safe_url }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}
       {% if s.last_error is note %}<div class="muted small" title="{{ s.last_error }}">↻ {{ s.last_error|truncate(160) }}</div>
       {% elif s.last_error %}<div class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(160) }}</div>{% endif %}
     </td>
@@ -41,7 +41,7 @@
   <tbody>
   {% for s in uncollectable %}
   <tr>
-    <td>{{ s.name }}{% if s.homepage %}<br><a class="site-link" href="{{ s.homepage }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}</td>
+    <td>{{ s.name }}{% if s.homepage %}<br><a class="site-link" href="{{ s.homepage|safe_url }}" rel="noopener" target="_blank">{{ s.homepage|domain }} ↗</a>{% endif %}</td>
     <td class="small">{{ s.cannot_scrape }}</td>
   </tr>
   {% endfor %}
