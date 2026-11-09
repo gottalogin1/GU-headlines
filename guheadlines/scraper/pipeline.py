@@ -48,7 +48,7 @@ from .discover import (
 from .extract import build_intro, extract_article
 from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
-from .text import clean_byline, clean_text, truncate
+from .text import SITE_CREDIT_RE, clean_byline, clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
 
 log = logging.getLogger(__name__)
@@ -175,6 +175,11 @@ def sync_sources(session: Session, config: AppConfig) -> dict[str, int]:
                 )
                 .values(categories=[cfg.only_in_topic])
             )
+    # Stories stored with a website builder's credit as their byline.
+    credited = or_(*(Article.author.ilike(f"%{word}%") for word in ("webz", "web", "site admin")))
+    for article in session.scalars(select(Article).where(credited)):
+        if SITE_CREDIT_RE.search(article.author):
+            article.author = clean_byline(article.author)
     return {slug: row.id for slug, row in existing.items()}
 
 
