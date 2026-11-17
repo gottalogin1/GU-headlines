@@ -75,6 +75,9 @@ jobs:
           # shellcheck disable=SC2086
           guheadlines probe $URLS
           ua=$(python -c "from guheadlines.settings import load_settings; print(load_settings().user_agent)")
+          pip install -q h2
+          # shellcheck disable=SC2086
+          python .github/diag/http_diag.py $URLS
           for url in $URLS; do
             echo "### raw start of $url"
             curl -sSL -m 20 -A "$ua" -D - "$url" | head -c 3000 || true
