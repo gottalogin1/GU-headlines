@@ -118,6 +118,7 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Guam Visitors Bureau | Tourism news releases |
 | r/guam on Reddit | Shown only on the **Community** page, not on the front page; read through Reddit's API, which needs a free key ([how](docs/news-sources.md#reddit)) |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
+| Guam News Network | Local news, including its National, World and sports stories about Guam; opinion pieces are skipped |
 
 **Listed but not collected.** These sites turn away automated visitors, so
 GU Headlines doesn't try to read them. The Sources page and the sidebar list

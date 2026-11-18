@@ -34,7 +34,10 @@ Three more rules:
   `sources.yaml` (see [News sources](news-sources.md#every-option-explained)).
 - A story that matches no topic goes to **Local**, the "everyday life on
   island" topic, marked `fallback: true`.
-- **Community** has no keywords, so news stories never land in it. It holds
+- **Community** has no keywords, so news stories never land in it, even when
+  a news site files a story under its own "Community" section (as Guam News
+  Network does). A topic without keywords is only given by `categories:` or
+  `only_in_topic:` on a site. Community holds
   the r/guam posts, because that site in `sources.yaml` has
   `only_in_topic: community`: its posts get only that topic, whatever they
   mention, and appear only on the Community page (not on the front page,

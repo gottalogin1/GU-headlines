@@ -6,6 +6,9 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Guam News Network** (guamnewsnetwork.com) is a new news site. Its feed
+  gives the latest 30 stories with photos. Opinion pieces are skipped, and
+  its National, World and sports stories (all about Guam) are kept.
 - The **Sources** page says why the site exists, and has a **Disclaimer**:
   the site writes none of the stories, their content belongs to the
   publishers, the only aim is to send readers to them, and there is no
@@ -26,6 +29,10 @@ release, see [Updating](docs/maintenance.md#updating).
   `Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)`.
 
 ### Fixed
+- **News stories no longer land in Community**, the topic for r/guam posts.
+  A story was put there when its site filed it under a "Community" section
+  or the word "community" was in its address. To take older stories out of
+  Community, run `docker compose exec worker guheadlines reclassify`.
 - **DVIDS** stories are collected again. Its search pages started answering
   automated visitors with a JavaScript challenge page, so DVIDS found no
   stories; the Joint Region Marianas, Naval Base Guam and Camp Blaz unit pages

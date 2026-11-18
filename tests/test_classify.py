@@ -33,6 +33,20 @@ def test_site_section_counts(app_config):
     assert "business" in cats
 
 
+def test_news_never_lands_in_community(app_config):
+    # Community (r/guam posts) has no keywords: a news site's own "Community"
+    # section, or "community" in a story's address, doesn't put news there.
+    cats = classify(
+        app_config,
+        title="Humatak family loses home in fire",
+        section="Community",
+        url="https://guamnewsnetwork.com/news/community-rallies-for-humatak-family",
+    )
+    assert "community" not in cats
+    assert classify(app_config, title="Best kelaguen?", only="community") == ["community"]
+    assert "community" in classify(app_config, title="Ceremony held", forced=["community"])
+
+
 def test_forced_categories(app_config):
     assert classify(app_config, title="Ceremony held", forced=["military"]) == ["military"]
 
