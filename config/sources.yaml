@@ -369,6 +369,17 @@ sources:
 
   # --- General news ---------------------------------------------------------
 
+  # Next.js site. Its feed carries the latest 30 stories from every section,
+  # about a week's worth, each with a photo. Its National and World sections
+  # are Guam's side of bigger stories, so they are kept. Opinion pieces are
+  # skipped (the shared defaults), and sports are collected.
+  - slug: gnn
+    name: Guam News Network
+    homepage: https://guamnewsnetwork.com/
+    feeds:
+      - https://guamnewsnetwork.com/feed.xml
+    allow_sections: [Sports]
+
   # Isla Public Media (KPRG, Guam's NPR station). Grove CMS; its feed is
   # empty, so the news page is scanned. The newsroom's own stories are at
   # /news/<date>/<slug> (NPR's national and world stories, at /<date>/<slug>,

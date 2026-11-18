@@ -442,7 +442,8 @@ categories:
       - MVA
 
   # Posts from Guam's online community (the r/guam source in sources.yaml
-  # puts its posts here). No keywords: news stories are never sorted into it.
+  # puts its posts here). No keywords: news stories are never sorted into it,
+  # not even ones a news site files under its own "Community" section.
   - slug: community
     name: Community
     description: Questions, tips and discussion from Guam's online community on Reddit (r/guam).
