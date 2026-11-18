@@ -4,6 +4,19 @@
   <h1>Sources</h1>
   <p class="muted">Each source is checked every hour. Only pages not already in the database are downloaded.</p>
 </header>
+
+{% set site = settings.site_name %}
+<section class="site-note" id="about">
+  <h2>Why this site exists</h2>
+  <p>Guam's news is spread across many outlets: newspapers, television and radio stations,
+    government agencies, military commands and community groups. {{ site }} brings their
+    headlines together in one place, so that anyone who follows the island can see at a glance
+    what is being reported and choose what to read.</p>
+  <p>Each story appears with its headline, a short excerpt and its photo, and links to the full
+    article on the publisher's own website. When a headline catches your interest, you read the
+    story where it was published. The outlets listed below do the reporting. This site exists to
+    help readers find their work.</p>
+</section>
 <div class="table-wrap">
 <table class="status-table">
   <thead>
@@ -49,6 +62,52 @@
 </table>
 </div>
 {% endif %}
+
+{% if settings.contact_email %}
+{% set contact %}<a href="mailto:{{ settings.contact_email }}">{{ settings.contact_email }}</a>{% endset %}
+{% else %}
+{% set contact %}the project's <a href="https://github.com/gottalogin1/GU-headlines/issues" rel="noopener" target="_blank">GitHub page ↗</a>{% endset %}
+{% endif %}
+<section class="site-note legal" id="disclaimer">
+  <h2>Disclaimer</h2>
+  <p><strong>Content belongs to its publishers.</strong> {{ site }} does not write, edit or
+    publish any of the articles listed on this site. Every headline, excerpt, photograph and logo
+    belongs to its publisher or author, who keeps all rights to it. Outlet names and trademarks
+    belong to their owners.</p>
+  <p><strong>Purpose.</strong> The sole purpose of this site is to help readers discover local
+    news and to send them to the original publishers. Each listing shows only the headline, a short
+    excerpt from the start of the story and the story's photo at a reduced size, with a link to the
+    full article on the publisher's website. Readers are encouraged to read, subscribe to and
+    support the outlets that produce this reporting.</p>
+  <p><strong>No affiliation or endorsement.</strong> {{ site }} is an independent website. It is
+    not affiliated with, sponsored by or endorsed by any of the organizations listed, and the
+    listing of a story does not mean that {{ site }} endorses its content or the views it
+    expresses.</p>
+  <p><strong>No warranty.</strong> Listings are collected automatically and shown as the source
+    published them, so they can be incomplete or out of date. They are provided "as is", without
+    warranty of any kind, express or implied, including as to accuracy, completeness or
+    timeliness. The publisher's own page is the authoritative version of each story. To the
+    fullest extent permitted by law, the operator of this site is not liable for any loss or damage
+    that results from the use of this site or from reliance on its content.</p>
+  <p><strong>Links to other websites.</strong> Links lead to websites that {{ site }} does not
+    control. {{ site }} is not responsible for their content, availability or privacy practices.</p>
+  <p><strong>Removal requests.</strong> A publisher or rights holder who prefers that its content
+    not appear on this site, or who wants a specific headline, excerpt or photo removed, can make a
+    request through {{ contact }}. Please include the address of the page and a description of the
+    material. Requests are reviewed and acted on promptly. Copyright concerns can be sent the same
+    way.</p>
+  {% if settings.adsense_client %}
+  <p><strong>Advertising and cookies.</strong> This site shows ads served by Google AdSense. Ads
+    are marked "Advertisement", are chosen by Google, and do not imply an endorsement by
+    {{ site }} or by the news outlets listed. Third-party vendors, including Google, use cookies to
+    serve ads based on a user's prior visits to this website or other websites. Google's use of
+    advertising cookies enables it and its partners to serve ads based on visits to this site
+    and/or other sites on the Internet. You can opt out of personalized advertising in Google's
+    <a href="https://adssettings.google.com/" rel="noopener" target="_blank">Ads Settings ↗</a>,
+    and out of some other vendors' cookies at
+    <a href="https://www.aboutads.info/choices/" rel="noopener" target="_blank">aboutads.info ↗</a>.</p>
+  {% endif %}
+</section>
 
 <h2 class="section-title">Recent runs</h2>
 <div class="table-wrap">

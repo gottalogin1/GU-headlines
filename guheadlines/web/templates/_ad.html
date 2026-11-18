@@ -1,0 +1,11 @@
+{# The ad block: one Google AdSense ad unit, set by ADSENSE_CLIENT and
+   ADSENSE_SLOT (docs/settings.md#advertising). Both scripts carry the page's
+   nonce, which the page's Content-Security-Policy allows (ad_page_policy). #}
+<section class="panel ad-slot" aria-label="Advertisement">
+  <h2>Advertisement</h2>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ settings.adsense_client }}"
+          crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
+  <ins class="adsbygoogle" data-ad-client="{{ settings.adsense_client }}" data-ad-slot="{{ settings.adsense_slot }}"
+       data-ad-format="auto" data-full-width-responsive="false"></ins>
+  <script nonce="{{ csp_nonce }}">(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</section>

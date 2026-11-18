@@ -5,6 +5,18 @@ release, see [Updating](docs/maintenance.md#updating).
 
 ## Unreleased
 
+### Added
+- The **Sources** page says why the site exists, and has a **Disclaimer**:
+  the site writes none of the stories, their content belongs to the
+  publishers, the only aim is to send readers to them, there is no
+  affiliation or warranty, and publishers can ask for removal. Links at the
+  bottom of every page lead to both. `CONTACT_EMAIL` sets the address for
+  removal requests.
+- **An ad block** for Google AdSense at the top of the right-hand column on
+  the home, Jobs and Sources pages. It stays off until `ADSENSE_CLIENT` and
+  `ADSENSE_SLOT` are set. The site then also serves `ads.txt` and the AdSense
+  verification tag. See [Advertising](docs/settings.md#advertising).
+
 ### Fixed
 - **DVIDS** stories are collected again. Its search pages started answering
   automated visitors with a JavaScript challenge page, so DVIDS found no

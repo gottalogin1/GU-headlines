@@ -432,3 +432,91 @@ def test_icons_and_stored_photos(client):
     photo.write_bytes(b"RIFF0000WEBP")
     response = client.get("/media/images/test.webp")
     assert response.headers["x-robots-tag"] == "noindex"
+
+
+def _set(monkeypatch, **values):
+    """Change website settings for one test."""
+    import dataclasses
+
+    from guheadlines.web import app as web
+
+    site = dataclasses.replace(web.settings, **values)
+    monkeypatch.setattr(web, "settings", site)
+    monkeypatch.setitem(web.templates.env.globals, "settings", site)
+
+
+def test_sources_page_says_why_the_site_exists_and_disclaims(client, monkeypatch):
+    page = client.get("/status").text
+    about = page.split('id="about"', 1)[1].split("</section>", 1)[0]
+    assert "Why this site exists" in about
+    disclaimer = page.split('id="disclaimer"', 1)[1].split("</section>", 1)[0]
+    disclaimer = " ".join(disclaimer.split())  # the template wraps its lines
+    assert "does not write, edit or publish any of the articles" in disclaimer
+    assert "https://github.com/gottalogin1/GU-headlines/issues" in disclaimer
+    assert "Advertising" not in disclaimer  # only while ads are shown
+    # Every page links to both from the footer.
+    footer = client.get("/jobs").text.split('<footer class="footer">', 1)[1]
+    assert 'href="/status#about"' in footer and 'href="/status#disclaimer"' in footer
+
+    _set(monkeypatch, contact_email="news@example.com")
+    disclaimer = client.get("/status").text.split('id="disclaimer"', 1)[1]
+    assert '<a href="mailto:news@example.com">news@example.com</a>' in disclaimer
+
+
+def test_no_ads_until_adsense_is_set_up(client):
+    for path in ("/", "/status", "/jobs"):
+        page = client.get(path)
+        assert "adsbygoogle" not in page.text and "google-adsense-account" not in page.text
+        assert "'nonce-" not in page.headers["content-security-policy"]
+    assert client.get("/ads.txt").status_code == 404
+    assert "Mediapartners-Google" not in client.get("/robots.txt").text
+
+
+def test_ad_block_on_the_home_sources_and_jobs_pages(client, monkeypatch):
+    _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
+    nonces = set()
+    for path in ("/", "/status", "/jobs", "/jobs?q=nurse"):
+        page = client.get(path)
+        csp = page.headers["content-security-policy"]
+        nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0]
+        nonces.add(nonce)
+        assert "'strict-dynamic'" in csp and "frame-src https:" in csp
+        assert "frame-ancestors 'none'" in csp and "object-src 'none'" in csp
+        sidebar = page.text.split('<aside class="sidebar">', 1)[1]
+        assert 'data-ad-client="ca-pub-1234567890123456"' in sidebar
+        assert 'data-ad-slot="9876543210"' in sidebar
+        # The AdSense code and the line that fills the slot both carry the nonce.
+        assert sidebar.count(f'nonce="{nonce}"') == 2
+    assert len(nonces) == 4  # a new nonce for every page
+
+    # Other pages keep the strict policy and show no ad.
+    for path in ("/category/military", "/search?q=wage", "/archive"):
+        page = client.get(path)
+        assert "adsbygoogle" not in page.text
+        assert "'nonce-" not in page.headers["content-security-policy"]
+        # Google reads this tag to confirm the site is the AdSense account's.
+        assert '<meta name="google-adsense-account" content="ca-pub-1234567890123456">' in page.text
+
+    ads_txt = client.get("/ads.txt")
+    assert ads_txt.text == "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n"
+    robots = client.get("/robots.txt").text
+    assert robots.startswith("User-agent: Mediapartners-Google\nDisallow:\n\nUser-agent: *\n")
+    assert "Advertising and cookies" in client.get("/status").text
+
+    # A publisher ID without an ad unit: the site can be verified, but no ad block.
+    _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="")
+    page = client.get("/")
+    assert "adsbygoogle" not in page.text and "google-adsense-account" in page.text
+    assert "'nonce-" not in page.headers["content-security-policy"]
+
+
+def test_adsense_settings_must_be_ids():
+    from guheadlines.settings import _adsense_client, _adsense_slot
+
+    assert _adsense_client(" ca-pub-1234567890123456 ") == "ca-pub-1234567890123456"
+    assert _adsense_client("pub-1234567890123456") == "ca-pub-1234567890123456"
+    for bad in ("", None, "ca-pub-12", '"ca-pub-1234567890123456"', "ca-pub-1234567890123456 x"):
+        assert _adsense_client(bad) == ""
+    assert _adsense_slot(" 9876543210 ") == "9876543210"
+    for bad in ("", None, "slot", "98765 43210", '9876543210"'):
+        assert _adsense_slot(bad) == ""

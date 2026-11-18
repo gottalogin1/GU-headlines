@@ -50,6 +50,7 @@ editor. This guide explains each one.
 | `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: the address each visitor used. |
 | `GOOGLE_SITE_VERIFICATION` | *(empty)* | Proves to [Google Search Console](https://search.google.com/search-console) that the site is yours: choose **URL prefix**, then **HTML tag**, and paste only the `content="..."` value here. See [Search engines](maintenance.md#search-engines). |
 | `BING_SITE_VERIFICATION` | *(empty)* | The same for [Bing Webmaster Tools](https://www.bing.com/webmasters) (its **HTML Meta Tag** option). |
+| `CONTACT_EMAIL` | *(empty)* | The address in the disclaimer on the Sources page, where publishers can ask for their content to be removed. Use an address that you check. Empty: the disclaimer links to the project's GitHub issues. |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
 | `WEB_PORT` | `8000` | The port the website uses: `http://your-server:8000`. Change it if something else already uses 8000, or set it to `80` to leave the port off the address (only if nothing else on the server uses port 80). |
 
@@ -65,6 +66,62 @@ Messenger, X and in text messages) is
 `guheadlines/web/static/social-card.jpg`, and it says "GU Headlines". After
 renaming the site, replace it with your own 1200 × 630 JPEG of the same name,
 then run `docker compose up -d --build`.
+
+## Advertising
+
+The home page, the Jobs page and the Sources page can show one Google AdSense
+ad at the top of the right-hand column. On a phone, the column moves below the
+stories, so the ad comes after them. Until you set it up, the site shows no ad
+and no ad code.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `ADSENSE_CLIENT` | *(empty)* | Your AdSense publisher ID, such as `ca-pub-1234567890123456` (`pub-1234567890123456` also works). With only this setting, the site can be verified, but it shows no ad. |
+| `ADSENSE_SLOT` | *(empty)* | The ad unit's number, such as `9876543210`. With `ADSENSE_CLIENT`, the ad block is shown. |
+
+**How to set it up**
+
+1. In [AdSense](https://adsense.google.com), add the site. When AdSense asks
+   how to verify it, choose the **meta tag**. Put your publisher ID in `.env`
+   as `ADSENSE_CLIENT` and run `docker compose up -d`. The site then has the
+   tag, and it also serves the `ads.txt` file that AdSense checks for.
+2. Wait for AdSense to approve the site.
+3. In AdSense, go to **Ads** › **By ad unit** and make a **Display ads** unit
+   (responsive). AdSense shows its ad code. Copy only two values from it:
+
+   ```html
+   <ins class="adsbygoogle"
+        data-ad-client="ca-pub-1234567890123456"   ← ADSENSE_CLIENT
+        data-ad-slot="9876543210"                  ← ADSENSE_SLOT
+   ```
+
+   Do not paste the whole code anywhere. The site writes the ad code itself,
+   because the security rules block code that is pasted in (see below).
+4. Add the slot to `.env` and run `docker compose up -d`:
+
+   ```
+   ADSENSE_CLIENT=ca-pub-1234567890123456
+   ADSENSE_SLOT=9876543210
+   ```
+
+   A new ad unit can stay empty for up to an hour. When Google has no ad to
+   show, the block folds away.
+
+**What changes when ads are on**
+- The pages with the ad get a less strict Content-Security-Policy, which
+  Google supports for AdSense: the AdSense code is allowed by a random value
+  (a nonce) that changes on every page, and it can then load the other code,
+  frames and requests that ads need. All other pages keep the strict policy.
+- `robots.txt` lets the AdSense crawler (`Mediapartners-Google`) read the
+  Sources page, so that it can choose ads that fit. Search engines still do
+  not list that page.
+- The disclaimer on the Sources page gets a paragraph about Google's
+  advertising cookies and how to opt out. The AdSense program policies require
+  this notice.
+- AdSense requires a consent message for visitors from the European Economic
+  Area, the UK and Switzerland. Turn on **Privacy & messaging** › **European
+  regulations** in AdSense. Google shows the message, and the site needs no
+  change.
 
 ## Checking for news
 
