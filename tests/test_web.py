@@ -445,22 +445,26 @@ def _set(monkeypatch, **values):
     monkeypatch.setitem(web.templates.env.globals, "settings", site)
 
 
-def test_sources_page_says_why_the_site_exists_and_disclaims(client, monkeypatch):
+def test_sources_page_says_why_the_site_exists_and_disclaims(client):
     page = client.get("/status").text
     about = page.split('id="about"', 1)[1].split("</section>", 1)[0]
     assert "Why this site exists" in about
     disclaimer = page.split('id="disclaimer"', 1)[1].split("</section>", 1)[0]
     disclaimer = " ".join(disclaimer.split())  # the template wraps its lines
     assert "does not write, edit or publish any of the articles" in disclaimer
-    assert "https://github.com/gottalogin1/GU-headlines/issues" in disclaimer
     assert "Advertising" not in disclaimer  # only while ads are shown
     # Every page links to both from the footer.
     footer = client.get("/jobs").text.split('<footer class="footer">', 1)[1]
     assert 'href="/status#about"' in footer and 'href="/status#disclaimer"' in footer
 
-    _set(monkeypatch, contact_email="news@example.com")
-    disclaimer = client.get("/status").text.split('id="disclaimer"', 1)[1]
-    assert '<a href="mailto:news@example.com">news@example.com</a>' in disclaimer
+
+def test_site_and_scraper_do_not_mention_github(client, monkeypatch):
+    from guheadlines.settings import load_settings
+
+    _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
+    for path in ("/", "/status", "/jobs", "/robots.txt", "/sitemap.xml", "/nope"):
+        assert "github" not in client.get(path).text.lower(), path
+    assert "github" not in load_settings().user_agent.lower()
 
 
 def test_no_ads_until_adsense_is_set_up(client):

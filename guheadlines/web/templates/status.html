@@ -63,11 +63,6 @@
 </div>
 {% endif %}
 
-{% if settings.contact_email %}
-{% set contact %}<a href="mailto:{{ settings.contact_email }}">{{ settings.contact_email }}</a>{% endset %}
-{% else %}
-{% set contact %}the project's <a href="https://github.com/gottalogin1/GU-headlines/issues" rel="noopener" target="_blank">GitHub page ↗</a>{% endset %}
-{% endif %}
 <section class="site-note legal" id="disclaimer">
   <h2>Disclaimer</h2>
   <p><strong>Content belongs to its publishers.</strong> {{ site }} does not write, edit or
@@ -91,11 +86,6 @@
     that results from the use of this site or from reliance on its content.</p>
   <p><strong>Links to other websites.</strong> Links lead to websites that {{ site }} does not
     control. {{ site }} is not responsible for their content, availability or privacy practices.</p>
-  <p><strong>Removal requests.</strong> A publisher or rights holder who prefers that its content
-    not appear on this site, or who wants a specific headline, excerpt or photo removed, can make a
-    request through {{ contact }}. Please include the address of the page and a description of the
-    material. Requests are reviewed and acted on promptly. Copyright concerns can be sent the same
-    way.</p>
   {% if settings.adsense_client %}
   <p><strong>Advertising and cookies.</strong> This site shows ads served by Google AdSense. Ads
     are marked "Advertisement", are chosen by Google, and do not imply an endorsement by

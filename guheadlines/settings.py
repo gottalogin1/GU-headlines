@@ -53,12 +53,7 @@ class Settings:
     # shown beside the stories on the home, Sources and Jobs pages.
     adsense_client: str = ""
     adsense_slot: str = ""
-    # Where publishers can ask for their content to be taken down (shown in
-    # the disclaimer on the Sources page). Empty: the project's GitHub issues.
-    contact_email: str = ""
-    user_agent: str = (
-        "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)"
-    )
+    user_agent: str = "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"
     scrape_interval_minutes: int = 60
     # When a run leaves pages behind (site rate-limited us, or the per-run cap
     # was reached), come back for just those sources after this many seconds.
@@ -151,7 +146,6 @@ def load_settings() -> Settings:
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
         adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),
         adsense_slot=_adsense_slot(env.get("ADSENSE_SLOT")),
-        contact_email=env.get("CONTACT_EMAIL", "").strip(),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),

@@ -118,10 +118,9 @@ GU Headlines doesn't try to read them. The sidebar lists them too, under the
 other sources.
 
 The **Disclaimer** says that the site writes none of the stories, that the
-headlines, excerpts and photos belong to their publishers, and how a publisher
-can ask for its content to be removed (see `CONTACT_EMAIL` in
-[Changing settings](settings.md#website)). The links at the bottom of every
-page lead to these two parts.
+headlines, excerpts and photos belong to their publishers, and that the only
+aim is to send readers to them. The links at the bottom of every page lead to
+these two parts.
 
 **Recent runs** lists the latest checks. For each check it shows how many
 links were found (**Links**), how many new stories were saved (**New**), and

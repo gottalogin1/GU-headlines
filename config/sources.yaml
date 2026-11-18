@@ -44,7 +44,7 @@
 #                         Delete the line to collect it again.
 #   enabled               false to pause a source without deleting its articles
 #
-# Tested from GitHub's servers on 2026-09-29 (see .github/workflows/live-check.yml).
+# Tested from a US data center on 2026-09-29 (the live check in docs/how-it-works.md).
 # Sites marked cannot_scrape refuse automated visitors (their firewall answers
 # 403). To see whether one works again from your server, run
 # `guheadlines check --source <slug>`; if it does, delete its cannot_scrape line.

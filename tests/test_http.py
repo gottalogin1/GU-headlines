@@ -15,8 +15,8 @@ SITEGROUND_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</
 <script src="/.well-known/sgcaptcha/?r=%2Ffeed%2F"></script></head>
 <body><h1>Please wait while your request is being verified...</h1></body></html>"""
 
-# Like the untitled 202 page DVIDS's search pages answered from GitHub's
-# network in October 2026 (1,983 bytes, server CloudFront).
+# Like the untitled 202 page DVIDS's search pages answered to a US data
+# center in October 2026 (1,983 bytes, server CloudFront).
 JS_CHALLENGE = b"""<!DOCTYPE html><html lang="en"><head><title></title>
 <script src="/challenge.js"></script></head>
 <body><noscript><h1>JavaScript is disabled</h1></noscript></body></html>"""

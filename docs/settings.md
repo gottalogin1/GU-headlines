@@ -50,7 +50,6 @@ editor. This guide explains each one.
 | `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: the address each visitor used. |
 | `GOOGLE_SITE_VERIFICATION` | *(empty)* | Proves to [Google Search Console](https://search.google.com/search-console) that the site is yours: choose **URL prefix**, then **HTML tag**, and paste only the `content="..."` value here. See [Search engines](maintenance.md#search-engines). |
 | `BING_SITE_VERIFICATION` | *(empty)* | The same for [Bing Webmaster Tools](https://www.bing.com/webmasters) (its **HTML Meta Tag** option). |
-| `CONTACT_EMAIL` | *(empty)* | The address in the disclaimer on the Sources page, where publishers can ask for their content to be removed. Use an address that you check. Empty: the disclaimer links to the project's GitHub issues. |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
 | `WEB_PORT` | `8000` | The port the website uses: `http://your-server:8000`. Change it if something else already uses 8000, or set it to `80` to leave the port off the address (only if nothing else on the server uses port 80). |
 
@@ -149,7 +148,7 @@ SITE_TAGLINE=Guam news, updated every 30 minutes
 | Setting | Default | What it does |
 |---|---|---|
 | `RESPECT_ROBOTS_TXT` | `true` | Obey each site's `robots.txt` file, where sites say which pages robots may read. Keep this on. To make an exception for one site, use `ignore_robots: true` on that site in `sources.yaml` instead (see [News sources](news-sources.md#robotstxt)). |
-| `SCRAPER_USER_AGENT` | `Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)` | How GU Headlines introduces itself to news sites. It's good manners to include a way to reach you, so a site owner can ask you something instead of blocking you. |
+| `SCRAPER_USER_AGENT` | `Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)` | How GU Headlines introduces itself to news sites. It's good manners to include a way to reach you, so a site owner can ask you something instead of blocking you. |
 
 **Example: add your contact details**
 
