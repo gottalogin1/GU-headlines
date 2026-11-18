@@ -68,7 +68,7 @@ def migrate() -> None:
 
 def _config(settings: Settings) -> AppConfig:
     try:
-        return load_config(settings.config_dir)
+        return load_config(settings.config_dir, settings)
     except ConfigError as exc:
         raise SystemExit(f"config error: {exc}") from None
 
@@ -230,7 +230,7 @@ def cmd_worker(args, settings: Settings) -> None:
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
         try:
-            config = load_config(settings.config_dir)  # pick up YAML edits
+            config = load_config(settings.config_dir, settings)  # pick up YAML edits
         except ConfigError as exc:
             log.error("config error, using previous config: %s", exc)
         try:

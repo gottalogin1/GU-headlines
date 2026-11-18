@@ -55,10 +55,20 @@ def test_invalid_config_is_reported():
 
 def test_shipped_sources(app_config):
     assert app_config.source("pnc") is None  # PNC News First has closed
-    assert [s.slug for s in app_config.uncollectable_sources] == ["mbj", "andersen", "gbm"]
+    assert [s.slug for s in app_config.uncollectable_sources] == [
+        "mbj",
+        "andersen",
+        "gbm",
+        "reddit-guam",
+        "rnz",
+    ]
     assert all(not s.collected for s in app_config.uncollectable_sources)
+    # r/guam is read through Reddit's API, so without a key (as in the
+    # tests) it is listed as waiting for one; its posts still belong on the
+    # Community page only.
     reddit = app_config.source("reddit-guam")
-    assert reddit.only_in_topic == "community" and reddit.collected
+    assert reddit.only_in_topic == "community" and reddit.reddit == "guam"
+    assert reddit.cannot_scrape == "Waiting for a Reddit API key." and not reddit.collected
     assert app_config.hidden_sources() == ["reddit-guam"]  # front page, archive
     assert app_config.hidden_sources("community") == []
 

@@ -198,7 +198,7 @@ class _ConfigCache:
     def get(self) -> AppConfig:
         if self._config is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
-                self._config = load_config(settings.config_dir)
+                self._config = load_config(settings.config_dir, settings)
             except ConfigError as exc:
                 log.error("config error: %s", exc)
                 if self._config is None:
@@ -402,13 +402,15 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             facets = queries.facet_counts(session, week_ago)
             last_updated = queries.last_updated(session)
         # News sources only: sites that can't be collected are listed apart, and
-        # only_in_topic sources (r/guam) are reached through their topic.
-        left_out = {s.slug for s in config.uncollectable_sources} | set(config.hidden_sources())
+        # only_in_topic sources (r/guam) are reached through their topic, even
+        # when they can't be collected (the Sources page still lists them).
+        hidden = set(config.hidden_sources())
+        left_out = {s.slug for s in config.uncollectable_sources} | hidden
         facets["sources"] = [s for s in facets["sources"] if s["slug"] not in left_out]
         return {
             "facets_week": facets,
             "last_updated": last_updated,
-            "uncollectable": config.uncollectable_sources,
+            "uncollectable": [s for s in config.uncollectable_sources if s.slug not in hidden],
         }
 
     context.setdefault("title", None)

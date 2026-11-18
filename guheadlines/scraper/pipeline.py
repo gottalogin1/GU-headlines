@@ -48,6 +48,7 @@ from .discover import (
 from .extract import build_intro, extract_article
 from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
+from .reddit import RedditApi
 from .text import SITE_CREDIT_RE, clean_byline, clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
 
@@ -193,6 +194,12 @@ class Scraper:
             timeout=settings.request_timeout,
             per_host_delay=settings.per_host_delay,
             respect_robots=settings.respect_robots,
+        )
+        self.reddit = RedditApi(
+            self.client,
+            settings.reddit_client_id,
+            settings.reddit_client_secret,
+            settings.reddit_username,
         )
 
     def close(self) -> None:
@@ -419,6 +426,16 @@ class Scraper:
                 if existing and existing.title and not candidate.title:
                     candidate.title = existing.title
                 found[candidate.key] = candidate
+
+        if source.reddit and only is None:
+            try:
+                posts = self.reddit.new_posts(source.reddit)
+            except FetchError as exc:
+                result.errors.append(f"Reddit r/{source.reddit}: {exc}")
+            else:
+                result.reachable += 1
+                for candidate in posts:
+                    add(candidate)
 
         for page_url in listing_pages:
             try:
