@@ -129,6 +129,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .search-form,
 .tips,
 .empty,
+.site-note,
 .table-wrap,
 .month-grid a,
 .day-list,
@@ -143,7 +144,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 var(--glass-edge);
 }
-.story, .search-form, .tips, .empty, .table-wrap, .day-list { background-color: var(--glass-strong); }
+.story, .search-form, .tips, .empty, .site-note, .table-wrap, .day-list { background-color: var(--glass-strong); }
 
 /* ---------- header ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
@@ -261,6 +262,12 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .crumbs { font-size: .85rem; color: var(--muted); }
 .section-title { font-size: 1.25rem; font-weight: 750; letter-spacing: -.02em; margin: 34px 4px 12px; }
 .section-note { margin: -4px 4px 14px; max-width: 70ch; }
+/* The Sources page's "Why this site exists" and "Disclaimer". */
+.site-note { padding: 20px 24px; margin: 0 0 22px; border-radius: var(--r-xl); }
+.site-note h2 { margin: 0 0 4px; font-size: 1.15rem; font-weight: 750; letter-spacing: -.02em; }
+.site-note p { margin: 10px 0 0; max-width: 75ch; color: var(--text-soft); }
+.site-note.legal { margin-top: 34px; }
+.site-note.legal p { font-size: .9rem; }
 
 /* ---------- story cards ---------- */
 .day { margin-bottom: 10px; }
@@ -371,6 +378,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .sidebar h2 { margin: 0 0 8px; font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .sidebar .panel-sub { margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .sidebar p { margin: 4px 0; }
+/* The ad block (_ad.html). It folds away when Google has no ad to show. */
+.ad-slot ins.adsbygoogle { display: block; }
+.ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }
 .facets { list-style: none; margin: 0; padding: 0; }
 .facets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }
 .facet-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }

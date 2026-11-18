@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -47,9 +48,12 @@ class Settings:
     # Tools: the content="..." value of the meta tag each one offers.
     google_site_verification: str = ""
     bing_site_verification: str = ""
-    user_agent: str = (
-        "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +https://github.com/gottalogin1/GU-headlines)"
-    )
+    # Google AdSense: the publisher ID (ca-pub-...) and the ad unit's slot
+    # number, both from the ad code AdSense gives. With both, an ad block is
+    # shown beside the stories on the home, Sources and Jobs pages.
+    adsense_client: str = ""
+    adsense_slot: str = ""
+    user_agent: str = "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"
     scrape_interval_minutes: int = 60
     # When a run leaves pages behind (site rate-limited us, or the per-run cap
     # was reached), come back for just those sources after this many seconds.
@@ -113,6 +117,20 @@ def _site_url(value: str | None) -> str:
     return value
 
 
+def _adsense_client(value: str | None) -> str:
+    """ca-pub-1234567890123456, or "" if not a publisher ID. AdSense shows the
+    ID without "ca-" on its account page; both forms are accepted."""
+    value = (value or "").strip()
+    if re.fullmatch(r"pub-\d{10,20}", value):
+        value = "ca-" + value
+    return value if re.fullmatch(r"ca-pub-\d{10,20}", value) else ""
+
+
+def _adsense_slot(value: str | None) -> str:
+    value = (value or "").strip()
+    return value if re.fullmatch(r"\d{5,20}", value) else ""
+
+
 def load_settings() -> Settings:
     env = os.environ
     db_url = env.get("DATABASE_URL")
@@ -137,6 +155,8 @@ def load_settings() -> Settings:
         site_url=_site_url(env.get("SITE_URL")),
         google_site_verification=env.get("GOOGLE_SITE_VERIFICATION", "").strip(),
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
+        adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),
+        adsense_slot=_adsense_slot(env.get("ADSENSE_SLOT")),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),

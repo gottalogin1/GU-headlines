@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import secrets
 import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
@@ -104,6 +105,34 @@ CONTENT_SECURITY_POLICY = "; ".join(
         "frame-ancestors 'none'",
     ]
 )
+
+
+def ad_page_policy(nonce: str) -> str:
+    """The policy for a page that shows the ad block (_ad.html).
+
+    Google AdSense loads scripts, frames and requests from many addresses that
+    Google does not list, so AdSense supports only a nonce-based policy: the
+    AdSense code carries this page's nonce and may then load what it needs
+    ('strict-dynamic'). Google's supported policy also allows 'unsafe-eval',
+    and limits nothing else, so ads (and Google's consent message for European
+    visitors) can use frames, styles, fonts and requests from any https address.
+    """
+    return "; ".join(
+        [
+            "default-src 'self'",
+            f"script-src 'nonce-{nonce}' 'sha256-{_theme_hash}' 'strict-dynamic' 'unsafe-eval'",
+            "style-src 'self' 'unsafe-inline' https:",
+            "img-src 'self' https: http: data:",
+            "font-src 'self' https: data:",
+            "connect-src 'self' https:",
+            "frame-src https:",
+            "object-src 'none'",
+            "base-uri 'none'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        ]
+    )
+
 
 SECURITY_HEADERS = [
     (b"content-security-policy", CONTENT_SECURITY_POLICY.encode()),
@@ -414,6 +443,11 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         }
 
     context.setdefault("title", None)
+    # The ad block, on the pages that ask for it, once AdSense is set up.
+    show_ad = context.pop("show_ad", False) and bool(
+        settings.adsense_client and settings.adsense_slot
+    )
+    nonce = secrets.token_urlsafe(18) if show_ad else None
     meta = seo.page_meta(
         request,
         title=context["title"],
@@ -433,11 +467,16 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "sidebar": sidebar_cache.get("sidebar", sidebar),
             "page_url": lambda **kw: page_url(request, **kw),
             "seo": meta,
+            "show_ad": show_ad,
+            "csp_nonce": nonce,
             **context,
         },
         status_code=status_code,
     )
     response.headers["Cache-Control"] = "public, max-age=120"
+    if nonce:
+        # SecurityHeadersMiddleware keeps a policy that is already set.
+        response.headers["Content-Security-Policy"] = ad_page_policy(nonce)
     return response
 
 
@@ -472,7 +511,12 @@ def _hidden(topic: str | None = None) -> tuple[str, ...]:
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, page: int = Query(1, ge=1, le=10000)):
     return _listing(
-        request, "index.html", Filters(hide_sources=_hidden()), page, active_nav="latest"
+        request,
+        "index.html",
+        Filters(hide_sources=_hidden()),
+        page,
+        active_nav="latest",
+        show_ad=True,
     )
 
 
@@ -689,6 +733,7 @@ def status(request: Request):
         title="Sources",
         active_nav="status",
         robots="noindex",
+        show_ad=True,
     )
 
 
@@ -724,6 +769,7 @@ def jobs(
         # A word search is a search page; a board's own list is worth finding.
         robots="noindex, follow" if job_filters.q else None,
         breadcrumbs=[("Jobs", None)],
+        show_ad=True,
     )
 
 
@@ -751,7 +797,11 @@ def healthz():
 
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots(request: Request):
+    # The AdSense crawler reads the pages that show ads, to choose ads that fit
+    # them; the Sources page is one of them. It does not list pages in search.
+    adsense = "User-agent: Mediapartners-Google\nDisallow:\n\n" if settings.adsense_client else ""
     return (
+        f"{adsense}"
         "User-agent: *\n"
         "Disallow: /search\n"
         "Disallow: /status\n"
@@ -759,6 +809,17 @@ def robots(request: Request):
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
     )
+
+
+@app.get("/ads.txt", response_class=PlainTextResponse)
+def ads_txt():
+    # Tells ad buyers that Google may sell this site's ad space; AdSense warns
+    # of lost earnings without it. f08c47fec0942fa0 is Google's ID, the same
+    # for every publisher.
+    if not settings.adsense_client:
+        raise HTTPException(404)
+    publisher = settings.adsense_client.removeprefix("ca-")
+    return f"google.com, {publisher}, DIRECT, f08c47fec0942fa0\n"
 
 
 # The sitemap's queries group every story; crawlers fetch it now and then, so

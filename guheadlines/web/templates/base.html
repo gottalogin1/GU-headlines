@@ -52,14 +52,18 @@
 
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
-    <aside class="sidebar">{% block sidebar %}{% include "_sidebar.html" %}{% endblock %}</aside>
+    <aside class="sidebar">
+      {% if show_ad %}{% include "_ad.html" %}{% endif %}
+      {% block sidebar %}{% include "_sidebar.html" %}{% endblock %}
+    </aside>
   </div>
 
   <footer class="footer">
     <div class="wrap footer-inner">
       <strong>{{ settings.site_name }}</strong> · {{ settings.site_tagline }}.<br>
       Headlines, intros and images belong to their publishers; every story links to the original.
-      Checked for new stories every hour. Times are Chamorro Standard Time (ChST).
+      Checked for new stories every hour. Times are Chamorro Standard Time (ChST).<br>
+      <a href="/status#about">About this site</a> · <a href="/status#disclaimer">Disclaimer</a>
     </div>
   </footer>
 </body>

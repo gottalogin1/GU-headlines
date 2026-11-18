@@ -19,5 +19,6 @@
   <meta name="twitter:card" content="summary_large_image">
   {% if settings.google_site_verification %}<meta name="google-site-verification" content="{{ settings.google_site_verification }}">{% endif %}
   {% if settings.bing_site_verification %}<meta name="msvalidate.01" content="{{ settings.bing_site_verification }}">{% endif %}
+  {% if settings.adsense_client %}<meta name="google-adsense-account" content="{{ settings.adsense_client }}">{% endif %}
   <link rel="apple-touch-icon" href="{{ static_url('apple-touch-icon.png') }}">
   {% for data in seo.structured %}<script type="application/ld+json">{{ data }}</script>{% endfor %}

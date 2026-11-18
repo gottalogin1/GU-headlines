@@ -100,7 +100,9 @@ its last check failed, and the boards that can't be collected. More in
 
 ## The Sources page
 
-The **Sources** link at the top opens a table with one row per news site:
+The **Sources** link at the top opens a page that starts with **Why this site
+exists**: a short note on what the site is for. Below it is a table with one
+row per news site:
 
 | Column | Meaning |
 |---|---|
@@ -114,6 +116,11 @@ Below the table, **Can't be collected** lists the news sites that turn away
 automated visitors, with the reason and a link to visit each one directly.
 GU Headlines doesn't try to read them. The sidebar lists them too, under the
 other sources.
+
+The **Disclaimer** says that the site writes none of the stories, that the
+headlines, excerpts and photos belong to their publishers, and that the only
+aim is to send readers to them. The links at the bottom of every page lead to
+these two parts.
 
 **Recent runs** lists the latest checks. For each check it shows how many
 links were found (**Links**), how many new stories were saved (**New**), and

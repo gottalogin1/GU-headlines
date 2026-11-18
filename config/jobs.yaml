@@ -28,7 +28,7 @@
 # Pay, open date and close date are left empty when a posting doesn't give
 # them; the Jobs page always shows when each posting was last seen.
 #
-# Tested from GitHub's servers on 2026-10-13 (see .github/workflows/live-check.yml).
+# Tested from a US data center on 2026-10-13 (the live check in docs/how-it-works.md).
 
 sources:
   - slug: govguam
