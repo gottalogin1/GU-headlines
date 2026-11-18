@@ -16,6 +16,11 @@ release, see [Updating](docs/maintenance.md#updating).
   verification tag. See [Advertising](docs/settings.md#advertising).
 
 ### Changed
+- **The settings template (`.env.example`) explains each setting** for a
+  person who is new to this work. Each note tells what the setting does, if
+  it is required, its default, an example, where to get a key, and if it is
+  secret. To copy the new notes into your own `.env` and keep your values,
+  see [Changing settings](docs/settings.md#getting-the-newest-notes-in-env).
 - The scraper's default name for itself (`SCRAPER_USER_AGENT`) no longer
   includes a link to the project's code: it is now
   `Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)`.

@@ -36,8 +36,77 @@ editor. This guide explains each one.
 - No quotes needed, even for values with spaces: `SITE_NAME=Guam News Now`.
 - Lines starting with `#` are notes and are ignored. To switch a setting off
   and use its default, put `#` in front of it.
+- Write notes on their own line. In a value, a space followed by `#` starts a
+  note, and Docker ignores the rest of the line.
+- Do not use `$` in a value. Docker reads `$name` as the name of a different
+  variable and replaces it, so `ab$cd` becomes `ab`. If a value must contain
+  `$`, put the value in single quotes: `POSTGRES_PASSWORD='ab$cd'`.
 - For yes/no settings use `true` or `false`.
 - If a line is missing, the default in the tables below is used.
+
+## Getting the newest notes in `.env`
+
+`.env.example` has a note for each setting: what it does, if it is required,
+its default, an example, and which values to keep secret. `git pull` never
+changes your own `.env`, so your file keeps the notes of the version that you
+first copied. To get the newest notes and keep all your values, run these
+commands in the `GU-headlines` folder (on Windows, in WSL):
+
+**Step 1.** Get the newest version, and keep a copy of your settings:
+
+```sh
+git pull
+mkdir -p backups && cp .env backups/env-before-update
+```
+
+**Step 2.** Make a new `.env` from the template, with your values in it:
+
+```sh
+python3 - <<'EOF'
+import re
+from pathlib import Path
+
+old = {}
+for line in Path("backups/env-before-update").read_text(encoding="utf-8").splitlines():
+    m = re.match(r"\s*([A-Z][A-Z0-9_]*)\s*=(.*)$", line)
+    if m:
+        old[m.group(1)] = m.group(2).strip()
+
+lines, copied = [], []
+for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
+    m = re.match(r"(# )?([A-Z][A-Z0-9_]*)=", line)
+    if m and m.group(2) in old:
+        line = m.group(2) + "=" + old[m.group(2)]
+        copied.append(m.group(2))
+    lines.append(line)
+
+extra = [name for name in old if name not in copied]
+if extra:
+    lines += ["", "# From the old .env. The template does not list these names."]
+    lines += [name + "=" + old[name] for name in extra]
+
+Path(".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+print("Copied your values for:", ", ".join(copied))
+print("Not in the template (kept at the end):", ", ".join(extra) or "none")
+EOF
+```
+
+**Step 3.** Make sure that each of your values is still there:
+
+```sh
+diff <(tr -d '\r' < backups/env-before-update | grep -E '^[A-Z]' | sort) <(grep -E '^[A-Z]' .env | sort)
+```
+
+A line that starts with `>` is a setting that your old file did not have.
+It has the default value, so nothing changes. A line that starts with `<`
+is a value from your old file that is now different. You must see no `<`
+lines. If you see one, put your old file back with
+`cp backups/env-before-update .env`, and copy the notes by hand.
+
+**Step 4.** Apply it with `docker compose up -d`. The site works as before.
+
+Git ignores the `backups` folder, so the copy of your password stays on this
+computer. Keep the copy with your other backups, or delete it.
 
 ---
 
