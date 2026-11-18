@@ -198,7 +198,7 @@ class _ConfigCache:
     def get(self) -> AppConfig:
         if self._config is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
-                self._config = load_config(settings.config_dir)
+                self._config = load_config(settings.config_dir, settings)
             except ConfigError as exc:
                 log.error("config error: %s", exc)
                 if self._config is None:

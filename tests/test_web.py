@@ -203,7 +203,7 @@ def test_sources_page_lists_sites_that_cannot_be_collected(client):
     ):
         assert name in blocked
     assert "Its firewall (Akamai) turns away automated visitors." in blocked
-    assert "Reddit&#39;s feeds answer &#34;Not Found&#34;" in blocked
+    assert "Waiting for a Reddit API key." in blocked  # no key in the tests
     sidebar = client.get("/").text.split("Can't be collected", 1)[1]
     assert "Guam Business Magazine" in sidebar and "guambusinessmagazine.com ↗" in sidebar
     # r/guam is reached through the Community page, not the news sidebar.

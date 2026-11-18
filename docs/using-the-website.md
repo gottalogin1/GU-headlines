@@ -8,7 +8,7 @@ A tour of every page, and how to find older stories.
 |---|---|
 | **Latest** | Every news story, newest first (the front page). r/guam posts are not here; they have their own Community page. |
 | **Local, Military, Business, Labor** | Only stories in that topic. A story can be in more than one topic. |
-| **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. They appear only here, and in search when you choose the Community topic. No new posts have been added since November 2026, when Reddit stopped serving its feed. |
+| **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. They appear only here, and in search when you choose the Community topic. New posts need the site's Reddit key; see [News sources](news-sources.md#reddit). |
 | **Archive** | Every story collected, organized by year, month and day |
 | **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |

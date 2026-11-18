@@ -63,10 +63,12 @@ def test_shipped_sources(app_config):
         "rnz",
     ]
     assert all(not s.collected for s in app_config.uncollectable_sources)
-    # Reddit's feeds stopped answering in November 2026; the stored posts
-    # still belong on the Community page only.
+    # r/guam is read through Reddit's API, so without a key (as in the
+    # tests) it is listed as waiting for one; its posts still belong on the
+    # Community page only.
     reddit = app_config.source("reddit-guam")
-    assert reddit.only_in_topic == "community" and not reddit.collected
+    assert reddit.only_in_topic == "community" and reddit.reddit == "guam"
+    assert reddit.cannot_scrape == "Waiting for a Reddit API key." and not reddit.collected
     assert app_config.hidden_sources() == ["reddit-guam"]  # front page, archive
     assert app_config.hidden_sources("community") == []
 

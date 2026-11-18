@@ -55,8 +55,9 @@ For each news site that is switched on (and not marked `cannot_scrape`):
      `__PAGE_MODEL__`, Next.js `__NEXT_DATA__`),
    - [trafilatura](https://trafilatura.readthedocs.io) as a general fallback.
 
-   Sites marked `feed_only` (Reddit) are not opened: the story is built from
-   the feed entry's headline, text, picture and date.
+   Sites marked `feed_only` are not opened: the story is built from the feed
+   entry's headline, text, picture and date. Reddit communities (r/guam) work
+   the same way, with the posts listed by Reddit's API instead of a feed.
 
    The intro is the story's opening paragraphs: it adds paragraphs until it has
    about 280 characters (at most three paragraphs, cut at 700 characters),

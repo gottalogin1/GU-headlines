@@ -36,6 +36,9 @@
 #                         article_pattern without one, dated when first found
 #   feed_only             build stories from the feed entries alone, without
 #                         opening the article pages (for sites that refuse bots)
+#   reddit                a subreddit (e.g. guam) read through Reddit's API
+#                         instead of feeds; needs REDDIT_CLIENT_ID and
+#                         REDDIT_CLIENT_SECRET (docs/news-sources.md#reddit)
 #   only_in_topic         put this site's stories in that one topic only, and
 #                         show them only on that topic's page (not on the
 #                         front page, other topics or the archive)
@@ -297,25 +300,21 @@ sources:
       - 'guambusinessmagazine\.com/(archives|digital-magazines|departments|advertise|subscribe)'
     categories: [business]
 
-  # Reddit's Guam community. Reddit's robots.txt turns all bots away and its
-  # post pages refuse them, but its public feed used to work (as it does for
-  # feed reader apps). So posts are built from the feed alone (feed_only),
-  # without opening them, and robots.txt is ignored for this one feed request
-  # an hour. Posts appear only on the Community page (only_in_topic), not on
-  # the front page or the other topics. Picture posts show the picture.
-  # Since mid-November 2026 every Reddit feed (r/guam, r/news, /new.rss,
-  # old.reddit.com) answers logged-out readers with HTTP 404 and an empty
-  # "Not Found" feed, from GitHub's network and from home connections alike,
-  # so it isn't collected. Posts already stored stay on the Community page.
-  # To see whether the feed is back, run `guheadlines check --source
-  # reddit-guam`; if it is, delete the cannot_scrape line.
+  # Reddit's Guam community, read through Reddit's API. Until November 2026
+  # it was read from the community's public feed, but since then every Reddit
+  # feed answers readers who aren't logged in with HTTP 404 and an empty
+  # "Not Found" feed (from GitHub's network and home connections alike). The
+  # API needs a free Reddit app key in REDDIT_CLIENT_ID and
+  # REDDIT_CLIENT_SECRET (see docs/news-sources.md#reddit); until it is set,
+  # r/guam is listed as waiting for a key. Posts are built from what the API
+  # gives, without opening them. ignore_robots lets the post pictures
+  # (i.redd.it) be downloaded: Reddit's robots.txt turns all robots away.
+  # Posts appear only on the Community page (only_in_topic), not on the front
+  # page or the other topics. Picture posts show the picture.
   - slug: reddit-guam
     name: r/guam (Reddit)
     homepage: https://www.reddit.com/r/guam/
-    cannot_scrape: Since November 2026, Reddit's feeds answer "Not Found" to readers who aren't logged in.
-    feeds:
-      - https://www.reddit.com/r/guam/new/.rss?limit=50
-    feed_only: true
+    reddit: guam
     ignore_robots: true
     only_in_topic: community
 

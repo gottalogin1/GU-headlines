@@ -76,6 +76,7 @@ then run `docker compose up -d --build`.
 | `CATCH_UP_SECONDS` | `60` | When a site isn't fully loaded (it had more stories than one round takes, or it said "too many requests"), come back for that site after this many seconds, and keep coming back until it's done. Then it returns to the regular schedule. The minimum is 30. If a site asks for a longer pause, that is honored (up to 10 minutes). |
 | `JOBS_INTERVAL_HOURS` | `6` | How often to read the job boards for the [Jobs page](jobs.md), in hours. They are also read when GU Headlines starts. |
 | `USAJOBS_API_KEY`, `USAJOBS_EMAIL` | (empty) | A free key for the USAJOBS job board and the email address it was sent to. Without them that board is skipped. See [Jobs](jobs.md#usajobs). |
+| `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME` | (empty) | A free Reddit app key and the Reddit account that made it, for r/guam. Without them r/guam is listed as waiting for a key. See [News sources](news-sources.md#reddit). |
 | `PER_HOST_DELAY` | `1.5` | Seconds to wait between two requests to the same news site. Higher is gentler. Individual sites can be slowed down further in `sources.yaml` (`request_delay`). |
 | `SCRAPER_WORKERS` | `4` | How many news sites are checked at the same time. |
 | `REQUEST_TIMEOUT` | `25` | Seconds to wait for a news site to answer before giving up (it will try again later). |

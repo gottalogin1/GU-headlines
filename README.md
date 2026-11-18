@@ -10,8 +10,8 @@ to the news site that published it.
 Stories are sorted into four topics, **Local, Military, Business and Labor**,
 and everything is kept, so you can search for a story from last week or from
 three years ago. Posts from Reddit's r/guam have their own **Community** page,
-away from the news (Reddit stopped serving its feed in November 2026, so no
-new posts are added for now).
+away from the news. They are read through Reddit's API, which needs a free
+Reddit key ([how to get one](docs/news-sources.md#reddit)).
 
 ![The front page (sample stories)](docs/screenshot.jpg)
 
@@ -116,6 +116,7 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Guam Sports Network (GSPN) | Sports |
 | Guam Football Association | Soccer: the Matao and local leagues |
 | Guam Visitors Bureau | Tourism news releases |
+| r/guam on Reddit | Shown only on the **Community** page, not on the front page; read through Reddit's API, which needs a free key ([how](docs/news-sources.md#reddit)) |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
 
 **Listed but not collected.** These sites turn away automated visitors, so
@@ -125,8 +126,6 @@ them separately, with links to visit them directly:
 - Guam Business Magazine
 - Andersen Air Force Base
 - RNZ Pacific
-- r/guam on Reddit, whose feed answers "Not Found" since November 2026. The
-  posts collected before then stay on the **Community** page.
 
 To see whether one has started working, and how to switch it back on, see
 [News sources](docs/news-sources.md#sites-that-cant-be-collected).

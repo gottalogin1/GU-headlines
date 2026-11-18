@@ -500,6 +500,89 @@ def test_feed_only_source_never_opens_the_posts(clean_db):
     assert picture.image_path and picture.intro is None
 
 
+def test_reddit_source_reads_the_api(clean_db):
+    requests: Counter[str] = Counter()
+
+    def reddit(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        requests[url.split("?")[0]] += 1
+        if url == "https://www.reddit.com/api/v1/access_token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 86400})
+        if url.startswith("https://oauth.reddit.com/r/guam/new?"):
+            return httpx.Response(
+                200,
+                content=fixture_bytes("reddit_new.json"),
+                headers={"content-type": "application/json"},
+            )
+        if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
+            return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+        return httpx.Response(403, text="Blocked")
+
+    sources = {
+        "sources": [
+            {
+                "slug": "reddit-guam",
+                "name": "r/guam (Reddit)",
+                "homepage": "https://www.reddit.com/r/guam/",
+                "reddit": "guam",
+                "ignore_robots": True,
+                "only_in_topic": "community",
+            }
+        ]
+    }
+    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
+    settings = replace(get_settings(), reddit_client_id="id", reddit_client_secret="secret")
+    client = HttpClient(
+        "test-agent", per_host_delay=0, transport=httpx.MockTransport(reddit), sleep=lambda s: None
+    )
+    try:
+        scraper = Scraper(settings, parse_config(sources, categories), client=client)
+        assert scraper.run()[0].new_articles == 3
+        # The next hour: one more look at the newest posts, nothing new stored.
+        assert scraper.run()[0].new_articles == 0
+    finally:
+        client.close()
+
+    assert requests["https://www.reddit.com/api/v1/access_token"] == 1
+    assert requests["https://oauth.reddit.com/r/guam/new"] == 2
+    assert not any("/comments/" in url for url in requests)  # posts never opened
+    articles = _articles()
+    post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
+    assert post.intro.startswith("My appointment at the Department of Revenue")
+    assert post.author == "u/islandcommuter"
+    assert {tuple(a.categories) for a in articles.values()} == {("community",)}
+    picture = articles[
+        "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
+    ]
+    assert picture.image_path and picture.intro is None
+
+
+def test_reddit_source_without_a_key_explains(clean_db):
+    sources = {
+        "sources": [
+            {"slug": "reddit-guam", "name": "r/guam (Reddit)", "reddit": "guam"},
+        ]
+    }
+    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
+    settings = replace(get_settings(), reddit_client_id="", reddit_client_secret="")
+    client = HttpClient(
+        "test-agent",
+        per_host_delay=0,
+        transport=httpx.MockTransport(lambda r: httpx.Response(500)),
+        sleep=lambda s: None,
+    )
+    try:
+        result = Scraper(settings, parse_config(sources, categories), client=client).run()[0]
+    finally:
+        client.close()
+    assert result.errors == [
+        "Reddit r/guam: needs a Reddit API key: set REDDIT_CLIENT_ID and "
+        "REDDIT_CLIENT_SECRET (see docs/news-sources.md#reddit)"
+    ]
+
+
 BOT_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</title>
 <script src="/.well-known/sgcaptcha/?r=%2F"></script></head>
 <body><h1>Please wait while your request is being verified...</h1></body></html>"""

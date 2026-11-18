@@ -77,6 +77,10 @@ class SourceConfig:
     # Why this site can't be collected (e.g. its firewall blocks us). Such a
     # site is never fetched; the website lists it separately with a link.
     cannot_scrape: str | None = None
+    # A subreddit (e.g. "guam") whose newest posts are read through Reddit's
+    # API, with the app key in REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET. Posts
+    # are built from what the API gives (like feed_only).
+    reddit: str | None = None
 
     @property
     def collected(self) -> bool:
@@ -169,6 +173,9 @@ def _compile(patterns: list[str], where: str) -> list[re.Pattern[str]]:
 
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+_SUBREDDIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]{1,20}$")
+# The reason a Reddit source is listed as not collected while no key is set.
+REDDIT_KEY_MISSING = "Waiting for a Reddit API key."
 
 
 def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
@@ -223,6 +230,9 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             if not any(re.search(p, f"/{a}/", re.IGNORECASE) for a in allowed)
         ]
         sections = [x for x in default_sections if fold(x).strip() not in allowed]
+        subreddit = str(raw["reddit"]).strip().removeprefix("r/") if raw.get("reddit") else None
+        if subreddit is not None and not _SUBREDDIT_RE.match(subreddit):
+            raise ConfigError(f"{where}: invalid subreddit name {subreddit!r}")
         source = SourceConfig(
             slug=slug,
             name=str(raw["name"]),
@@ -244,7 +254,8 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
             body_selector=raw.get("body_selector"),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),
-            feed_only=bool(raw.get("feed_only", False)),
+            feed_only=bool(raw.get("feed_only", False)) or subreddit is not None,
+            reddit=subreddit,
             undated=bool(raw.get("undated", False)),
             only_in_topic=str(raw["only_in_topic"]) if raw.get("only_in_topic") else None,
             cannot_scrape=_reason(raw.get("cannot_scrape")),
@@ -253,11 +264,11 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         )
         if source.only_in_topic and source.only_in_topic not in category_slugs:
             raise ConfigError(f"{where}: unknown only_in_topic {source.only_in_topic!r}")
-        if source.collected and not (source.feeds or source.listing_pages):
+        if source.collected and not (source.feeds or source.listing_pages or source.reddit):
             raise ConfigError(f"{where}: needs at least one feed or listing page")
         if source.undated and not source.article_patterns:
             raise ConfigError(f"{where}: undated needs an article_pattern")
-        if source.feed_only and not source.feeds:
+        if source.feed_only and not (source.feeds or source.reddit):
             raise ConfigError(f"{where}: feed_only needs at least one feed")
         sources.append(source)
 
@@ -265,7 +276,9 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
     return AppConfig(sources=sources, categories=categories, guam_keywords=guam_keywords)
 
 
-def load_config(config_dir: Path) -> AppConfig:
+def load_config(config_dir: Path, settings=None) -> AppConfig:
+    """The sources and topics. Reddit sources are listed as waiting for a key
+    (cannot_scrape) while `settings` (default: the environment) has none."""
     sources_file = config_dir / "sources.yaml"
     categories_file = config_dir / "categories.yaml"
     try:
@@ -275,7 +288,16 @@ def load_config(config_dir: Path) -> AppConfig:
         raise ConfigError(f"missing config file: {exc.filename}") from exc
     except yaml.YAMLError as exc:
         raise ConfigError(f"invalid YAML: {exc}") from exc
-    return parse_config(sources_data, categories_data)
+    config = parse_config(sources_data, categories_data)
+    if settings is None:
+        from .settings import load_settings
+
+        settings = load_settings()
+    if not settings.has_reddit_key:
+        for source in config.sources:
+            if source.reddit and not source.cannot_scrape:
+                source.cannot_scrape = REDDIT_KEY_MISSING
+    return config
 
 
 # ------------------------------------------------------------------- jobs

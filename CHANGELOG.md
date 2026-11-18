@@ -16,10 +16,14 @@ release, see [Updating](docs/maintenance.md#updating).
   finds nothing.
 
 ### Changed
-- **r/guam** is listed under **Can't be collected**. Since mid-November 2026
-  every Reddit feed answers "Not Found" to readers who aren't logged in, so
-  the Sources page showed an HTTP 404 error every hour. The posts collected
-  before then stay on the Community page.
+- **r/guam is read through Reddit's API.** Since mid-November 2026 every
+  Reddit feed answers "Not Found" to readers who aren't logged in, so the
+  Sources page showed an HTTP 404 error every hour. The API needs a free
+  Reddit app key in the new `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` and
+  `REDDIT_USERNAME` settings ([how to get one](docs/news-sources.md#reddit)).
+  Until it is set, r/guam is listed under **Can't be collected** as waiting
+  for a key, and the posts collected before stay on the Community page.
+  Removed and adult posts are left out.
 - **RNZ Pacific** is listed under **Can't be collected**. Its firewall
   answers HTTP 403 to GU Headlines on every request, so it never gave a story.
 

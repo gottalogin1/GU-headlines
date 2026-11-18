@@ -70,6 +70,17 @@ class Settings:
     # for the USAJOBS board; without them that board is skipped.
     usajobs_api_key: str = ""
     usajobs_email: str = ""
+    # A Reddit app's id and secret (reddit.com/prefs/apps), for Reddit sources
+    # (r/guam), which are read through Reddit's API; without them those
+    # sources are listed as waiting for a key. The username of the account
+    # that made the app goes in the User-Agent, as Reddit's API rules ask.
+    reddit_client_id: str = ""
+    reddit_client_secret: str = ""
+    reddit_username: str = ""
+
+    @property
+    def has_reddit_key(self) -> bool:
+        return bool(self.reddit_client_id and self.reddit_client_secret)
 
     @property
     def sources_file(self) -> Path:
@@ -142,6 +153,9 @@ def load_settings() -> Settings:
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
         usajobs_api_key=env.get("USAJOBS_API_KEY", "").strip(),
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
+        reddit_client_id=env.get("REDDIT_CLIENT_ID", "").strip(),
+        reddit_client_secret=env.get("REDDIT_CLIENT_SECRET", "").strip(),
+        reddit_username=env.get("REDDIT_USERNAME", "").strip().removeprefix("/").removeprefix("u/"),
     )
 
 
