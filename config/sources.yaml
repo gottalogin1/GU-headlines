@@ -298,14 +298,21 @@ sources:
     categories: [business]
 
   # Reddit's Guam community. Reddit's robots.txt turns all bots away and its
-  # post pages refuse them, but its public feed works (as it does for feed
-  # reader apps). So posts are built from the feed alone (feed_only), without
-  # opening them, and robots.txt is ignored for this one feed request an hour.
-  # Posts appear only on the Community page (only_in_topic), not on the front
-  # page or the other topics. Picture posts show the picture.
+  # post pages refuse them, but its public feed used to work (as it does for
+  # feed reader apps). So posts are built from the feed alone (feed_only),
+  # without opening them, and robots.txt is ignored for this one feed request
+  # an hour. Posts appear only on the Community page (only_in_topic), not on
+  # the front page or the other topics. Picture posts show the picture.
+  # Since mid-November 2026 every Reddit feed (r/guam, r/news, /new.rss,
+  # old.reddit.com) answers logged-out readers with HTTP 404 and an empty
+  # "Not Found" feed, from GitHub's network and from home connections alike,
+  # so it isn't collected. Posts already stored stay on the Community page.
+  # To see whether the feed is back, run `guheadlines check --source
+  # reddit-guam`; if it is, delete the cannot_scrape line.
   - slug: reddit-guam
     name: r/guam (Reddit)
     homepage: https://www.reddit.com/r/guam/
+    cannot_scrape: Since November 2026, Reddit's feeds answer "Not Found" to readers who aren't logged in.
     feeds:
       - https://www.reddit.com/r/guam/new/.rss?limit=50
     feed_only: true
@@ -376,10 +383,15 @@ sources:
     require_guam: true
 
   # RNZ Pacific (Radio New Zealand): the whole Pacific, so Guam and CNMI
-  # stories only.
+  # stories only. Its firewall (Fastly) answers HTTP 403 to every request
+  # from GU Headlines, even for robots.txt, from GitHub's network and from
+  # home connections. The same request sent with curl gets through, so the
+  # firewall turns away Python programs on purpose, and GU Headlines doesn't
+  # try to get around that. Its robots.txt allows other robots.
   - slug: rnz
     name: RNZ Pacific
     homepage: https://www.rnz.co.nz/international/pacific-news
+    cannot_scrape: Its firewall (Fastly) turns away automated visitors.
     feeds:
       - https://www.rnz.co.nz/rss/pacific.xml
     require_guam: true

@@ -147,8 +147,8 @@ hour, mark them with `cannot_scrape` and a short reason:
 GU Headlines then never reads the site. The Sources page lists it under
 **Can't be collected**, with your reason and a link to the site, and the
 sidebar lists it below the other sources. Marianas Business Journal, Guam
-Business Magazine and Andersen Air Force Base are set up this way. Their
-feeds and pages are kept in the file for when they work again.
+Business Magazine, Andersen Air Force Base, RNZ Pacific and r/guam are set up
+this way. Their feeds and pages are kept in the file for when they work again.
 
 **To see whether one works again** (for example from a different internet
 connection), run a dry run. It tries the site even though it's marked, and
@@ -298,10 +298,12 @@ site's own address (for example `/business/local/` becomes
 `require_guam: true` to keep only stories that mention Guam.
 
 **A Reddit community** (subreddit): Reddit's pages turn robots away, but each
-community's feed works. Use `feed_only: true` so posts are built from the
-feed without opening them, and `ignore_robots: true` because Reddit's
-robots.txt turns all robots away. This is how r/guam is set up; for another
-community, change `guam` in both addresses:
+community's feed used to work. Since November 2026 every Reddit feed answers
+"Not Found" to readers who aren't logged in, so r/guam is marked
+`cannot_scrape` for now. If the feeds come back, this is the setup: use
+`feed_only: true` so posts are built from the feed without opening them, and
+`ignore_robots: true` because Reddit's robots.txt turns all robots away. For
+another community, change `guam` in both addresses:
 
 ```yaml
   - slug: reddit-guam
@@ -375,7 +377,8 @@ pages they may read. GU Headlines obeys it. Two sites are set to
   engines to stay out.
 - **r/guam**, because Reddit's robots.txt turns all robots away. Only the
   community's public feed is read, once an hour, as feed reader apps do; the
-  posts themselves are never opened (`feed_only`).
+  posts themselves are never opened (`feed_only`). (Not collected since
+  November 2026, when Reddit's feeds stopped answering.)
 
 If you use `ignore_robots` on a site, know that the site owner has asked not
 to be read this way and may block your server. To turn the exception off,

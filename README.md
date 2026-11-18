@@ -10,7 +10,8 @@ to the news site that published it.
 Stories are sorted into four topics, **Local, Military, Business and Labor**,
 and everything is kept, so you can search for a story from last week or from
 three years ago. Posts from Reddit's r/guam have their own **Community** page,
-away from the news.
+away from the news (Reddit stopped serving its feed in November 2026, so no
+new posts are added for now).
 
 ![The front page (sample stories)](docs/screenshot.jpg)
 
@@ -111,13 +112,11 @@ These are set up out of the box. You can add, pause or remove sites; see
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz) | Military news releases |
 | Guam Department of Labor | Posts rarely |
 | Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
-| r/guam on Reddit | Shown only on the **Community** page, not on the front page; read from the community's feed only |
 | Office of the Governor | Press releases |
 | Guam Sports Network (GSPN) | Sports |
 | Guam Football Association | Soccer: the Matao and local leagues |
 | Guam Visitors Bureau | Tourism news releases |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
-| RNZ Pacific | Guam and CNMI stories only |
 
 **Listed but not collected.** These sites turn away automated visitors, so
 GU Headlines doesn't try to read them. The Sources page and the sidebar list
@@ -125,6 +124,9 @@ them separately, with links to visit them directly:
 - Marianas Business Journal
 - Guam Business Magazine
 - Andersen Air Force Base
+- RNZ Pacific
+- r/guam on Reddit, whose feed answers "Not Found" since November 2026. The
+  posts collected before then stay on the **Community** page.
 
 To see whether one has started working, and how to switch it back on, see
 [News sources](docs/news-sources.md#sites-that-cant-be-collected).

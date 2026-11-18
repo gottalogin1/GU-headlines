@@ -15,6 +15,14 @@ release, see [Updating](docs/maintenance.md#updating).
   shows as a bot-check error on the Sources page instead of a run that quietly
   finds nothing.
 
+### Changed
+- **r/guam** is listed under **Can't be collected**. Since mid-November 2026
+  every Reddit feed answers "Not Found" to readers who aren't logged in, so
+  the Sources page showed an HTTP 404 error every hour. The posts collected
+  before then stay on the Community page.
+- **RNZ Pacific** is listed under **Can't be collected**. Its firewall
+  answers HTTP 403 to GU Headlines on every request, so it never gave a story.
+
 ## 1.1.0 (2026-10-13)
 
 ### Added

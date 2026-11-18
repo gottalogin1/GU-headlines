@@ -194,11 +194,20 @@ def test_sources_page_lists_sites_that_cannot_be_collected(client):
     page = client.get("/status").text
     assert "PNC News First" not in page
     blocked = page.split("Can't be collected", 1)[1].split("Recent runs", 1)[0]
-    for name in ("Marianas Business Journal", "Andersen Air Force Base", "Guam Business Magazine"):
+    for name in (
+        "Marianas Business Journal",
+        "Andersen Air Force Base",
+        "Guam Business Magazine",
+        "RNZ Pacific",
+        "r/guam (Reddit)",
+    ):
         assert name in blocked
     assert "Its firewall (Akamai) turns away automated visitors." in blocked
+    assert "Reddit&#39;s feeds answer &#34;Not Found&#34;" in blocked
     sidebar = client.get("/").text.split("Can't be collected", 1)[1]
     assert "Guam Business Magazine" in sidebar and "guambusinessmagazine.com ↗" in sidebar
+    # r/guam is reached through the Community page, not the news sidebar.
+    assert "RNZ Pacific" in sidebar and "r/guam" not in sidebar
 
 
 def test_light_dark_switch(client):
