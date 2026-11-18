@@ -57,9 +57,17 @@ VARIANTS = [
     ("curl h2 (scraper headers)", lambda u: via_curl(u, ["-H", "Accept: " + OURS["Accept"], "-H", "Accept-Language: en-US,en;q=0.9"])),
 ]
 
+import os
+
+if os.environ.get("DIAG_ONE"):
+    # One request per address, a minute apart (Reddit allows about one a minute).
+    VARIANTS = VARIANTS[:1]
+
 for url in sys.argv[1:]:
     print(f"### {url}")
     pause = 10 if "reddit" in urlsplit(url).netloc else 2
+    if os.environ.get("DIAG_ONE") and "reddit" in urlsplit(url).netloc:
+        time.sleep(65)
     for label, fn in VARIANTS:
         try:
             res = fn(url)
