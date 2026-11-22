@@ -52,6 +52,8 @@
 # 403). To see whether one works again from your server, run
 # `guheadlines check --source <slug>`; if it does, delete its cannot_scrape line.
 
+# Obituaries are not skipped: they go to the Obituaries topic, which shows them
+# only on its own page (see separate: in categories.yaml).
 defaults:
   exclude_sections:
     - Opinion
@@ -61,9 +63,6 @@ defaults:
     - Letters to the Editor
     - Letters
     - Columnists
-    - Obituaries
-    - Rosaries and Funerals
-    - Today's Memorials
     - Public Notices
     - Legal Notices
     - Classifieds
@@ -73,7 +72,6 @@ defaults:
     - '/opinion/'
     - '/editorials?/'
     - '/letters?-to-the-editor'
-    - '/obituar'
     - '/classifieds?/'
     - '/entertainment/'
     - '/lifestyles?/'
@@ -177,7 +175,6 @@ sources:
     feeds:
       - https://kanditnews.com/feed/
     exclude_url_patterns:
-      - 'obituar'
       - '/notice-of-'
 
   # Drupal. Its firewall refuses automated visitors, so it isn't collected.

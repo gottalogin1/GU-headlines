@@ -68,6 +68,11 @@ def classify(
                 matched.add(category.slug)
                 break
 
+    # A story in a separate topic (Obituaries) gets only that topic, so it
+    # shows only on that topic's page.
+    for category in config.categories:
+        if category.separate and category.slug in matched:
+            return [category.slug]
     if not matched:
         matched.update(c.slug for c in config.categories if c.fallback)
     return [c.slug for c in config.categories if c.slug in matched]

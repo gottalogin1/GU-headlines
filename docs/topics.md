@@ -2,7 +2,7 @@
 
 Stories are sorted into topics: **Local, Military, Business, Labor, Tourism,
 Sports, Food and Saipan & CNMI** out of the box, plus **Community** for posts
-from Reddit's r/guam. **Saipan & CNMI** needs only one mention of Saipan,
+from Reddit's r/guam and **Obituaries** for obituaries and death notices. **Saipan & CNMI** needs only one mention of Saipan,
 Tinian, Rota or the CNMI (`min_score: 1`), so stories from Saipan never land
 in Local. A story can belong
 to more than one (a contract for the military buildup can be Military *and*
@@ -42,6 +42,36 @@ Three more rules:
   `only_in_topic: community`: its posts get only that topic, whatever they
   mention, and appear only on the Community page (not on the front page,
   the other topics or the archive).
+
+## Separate topics (Obituaries)
+
+**Obituaries** is a *separate* topic (`separate: true` in
+`categories.yaml`). A story in it gets only that topic, and it is shown only
+on the Obituaries page: not under **Latest**, not on the other topics' pages
+and not in the archive. Search still finds it, so readers can look up a name,
+and the news site's own page (**Sources** › its name) still lists it.
+
+A story is an obituary when:
+- the news site files it under an obituaries section or tag (Obituaries,
+  Rosaries and Funerals, Today's Memorials), or its address has
+  `/obituaries/` or `obituary` in it;
+- its headline says so: "Obituary: …", "… passes away at 86", "… laid to
+  rest", "In memoriam";
+- its first paragraph has two phrases that only death notices use, such as
+  "survived by", "last respects", "Mass of Christian Burial" or "rosary is
+  being said". One "passed away" in a crash story is not enough, so that
+  story stays news.
+
+Obituaries has `min_score: 2`, so the site's own section or tag (2 points)
+counts on its own.
+
+The Obituaries page also has `show_ad: true`: once Google AdSense is set up,
+it shows the ad block (see [Advertising](settings.md#advertising)). Add
+`show_ad: true` to another topic to show the ad on its page too.
+
+If a news story lands in Obituaries by mistake, remove or change the keyword
+that matched (see [Stop a wrong match](#stop-a-wrong-match)), then run
+`reclassify`.
 
 ## How keywords match
 

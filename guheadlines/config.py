@@ -115,6 +115,11 @@ class CategoryConfig:
     fallback: bool = False
     min_score: int = 3
     keywords: list[tuple[str, re.Pattern[str]]] = field(default_factory=list)
+    # A story in this topic gets only this topic, and is shown only on the
+    # topic's page (not under Latest, the other topics or the archive).
+    separate: bool = False
+    # The topic's page shows the ad block, once AdSense is set up.
+    show_ad: bool = False
 
 
 @dataclass
@@ -137,6 +142,11 @@ class AppConfig:
         (only_in_topic), so a listing for `topic` (None: front page, archive,
         search without a topic) should leave them out."""
         return [s.slug for s in self.sources if s.only_in_topic and s.only_in_topic != topic]
+
+    def separate_topics(self, topic: str | None = None) -> list[str]:
+        """Slugs of separate topics (Obituaries), whose stories a listing for
+        `topic` (None: front page, archive) should leave out."""
+        return [c.slug for c in self.categories if c.separate and c.slug != topic]
 
     def source(self, slug: str) -> SourceConfig | None:
         return next((s for s in self.sources if s.slug == slug), None)
@@ -197,6 +207,8 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
                 fallback=bool(raw.get("fallback", False)),
                 min_score=int(raw.get("min_score", 3)),
                 keywords=compile_keywords([str(k) for k in _as_list(raw.get("keywords"))]),
+                separate=bool(raw.get("separate", False)),
+                show_ad=bool(raw.get("show_ad", False)),
             )
         )
     category_slugs = {c.slug for c in categories}

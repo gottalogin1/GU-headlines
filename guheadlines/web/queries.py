@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import Select, Text, and_, func, literal, literal_column, select, text, true
+from sqlalchemy import Select, Text, and_, func, literal, literal_column, not_, select, text, true
 from sqlalchemy.orm import Session
 
 from ..models import SEARCH_CONFIG, Article, Job, JobSource, ScrapeRun, Source
@@ -61,6 +61,9 @@ class Filters:
     # Sources left out unless asked for by name (only_in_topic sources whose
     # stories belong on another topic's page).
     hide_sources: tuple[str, ...] = ()
+    # Topics left out (separate topics, such as Obituaries, whose stories
+    # belong only on their own page).
+    hide_topics: tuple[str, ...] = ()
 
     @property
     def active(self) -> bool:
@@ -87,6 +90,16 @@ def _hidden(slugs: tuple[str, ...] | list[str]):
     return Article.source_id.not_in(select(Source.id).where(Source.slug.in_(slugs)))
 
 
+def _left_out(hide_sources: list[str] | None, hide_topics: list[str] | None) -> list:
+    """Conditions leaving out the articles of these sources and these topics."""
+    conditions = []
+    if hide_sources:
+        conditions.append(_hidden(hide_sources))
+    if hide_topics:
+        conditions.append(not_(Article.categories.overlap(list(hide_topics))))
+    return conditions
+
+
 def _apply_filters(stmt: Select, f: Filters) -> Select:
     if f.source:
         stmt = stmt.where(Source.slug == f.source)
@@ -94,6 +107,8 @@ def _apply_filters(stmt: Select, f: Filters) -> Select:
         stmt = stmt.where(_hidden(f.hide_sources))
     if f.category:
         stmt = stmt.where(Article.categories.contains([f.category]))
+    if f.hide_topics:
+        stmt = stmt.where(*_left_out(None, f.hide_topics))
     if f.date_from:
         stmt = stmt.where(Article.published_at >= local_day_bounds(f.date_from)[0])
     if f.date_to:
@@ -209,14 +224,15 @@ def last_updated(session: Session) -> datetime | None:
     return session.scalar(select(func.max(Source.last_run_at)))
 
 
-def archive_months(session: Session, hide_sources: list[str] | None = None) -> list[dict]:
+def archive_months(
+    session: Session, hide_sources: list[str] | None = None, hide_topics: list[str] | None = None
+) -> list[dict]:
     """[{year, months: [{month, count}]}] in Guam local time, newest first."""
     local = func.timezone("Pacific/Guam", Article.published_at)
     year = func.extract("year", local).label("y")
     month = func.extract("month", local).label("m")
-    stmt = select(year, month, func.count()).group_by(year, month)
-    if hide_sources:
-        stmt = stmt.where(_hidden(hide_sources))
+    stmt = select(year, month, func.count()).where(*_left_out(hide_sources, hide_topics))
+    stmt = stmt.group_by(year, month)
     rows = session.execute(stmt.order_by(year.desc(), month.desc())).all()
     years: dict[int, list[dict]] = {}
     for y, m, count in rows:
@@ -225,7 +241,11 @@ def archive_months(session: Session, hide_sources: list[str] | None = None) -> l
 
 
 def archive_days(
-    session: Session, year: int, month: int, hide_sources: list[str] | None = None
+    session: Session,
+    year: int,
+    month: int,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
 ) -> list[dict]:
     start = date(year, month, 1)
     end = date(year + (month == 12), (month % 12) + 1, 1)
@@ -233,20 +253,22 @@ def archive_days(
     stmt = select(local_day, func.count()).where(
         Article.published_at >= local_day_bounds(start)[0],
         Article.published_at < local_day_bounds(end)[0],
+        *_left_out(hide_sources, hide_topics),
     )
-    if hide_sources:
-        stmt = stmt.where(_hidden(hide_sources))
     rows = session.execute(stmt.group_by(local_day).order_by(local_day.desc())).all()
     return [{"day": d, "count": c} for d, c in rows]
 
 
 def neighbor_days(
-    session: Session, day: date, hide_sources: list[str] | None = None
+    session: Session,
+    day: date,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
 ) -> tuple[date | None, date | None]:
     """The nearest earlier and later Guam days that have stories (None if none),
     so the archive's day-to-day links never lead to empty pages."""
     start, end = local_day_bounds(day)
-    hidden = [_hidden(hide_sources)] if hide_sources else []
+    hidden = _left_out(hide_sources, hide_topics)
     before = session.scalar(
         select(func.max(Article.published_at)).where(Article.published_at < start, *hidden)
     )
@@ -259,10 +281,12 @@ def neighbor_days(
     )
 
 
-def sitemap_data(session: Session, hide_sources: list[str] | None = None) -> dict:
+def sitemap_data(
+    session: Session, hide_sources: list[str] | None = None, hide_topics: list[str] | None = None
+) -> dict:
     """Newest story time overall, per topic, per source and per archive day,
     for the sitemap's last-modified dates."""
-    hidden = [_hidden(hide_sources)] if hide_sources else []
+    hidden = _left_out(hide_sources, hide_topics)
     latest = session.scalar(select(func.max(Article.published_at)).where(*hidden))
     category = func.unnest(Article.categories).label("category")
     categories = session.execute(
