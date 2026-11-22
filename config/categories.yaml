@@ -457,12 +457,13 @@ categories:
   # Obituaries, death notices, rosaries and funerals. separate: true keeps
   # them off the front page (Latest), the other topics and the archive: they
   # are shown only on the Obituaries page, which also has the ad block
-  # (show_ad). A story gets this topic when the news site files it under an
-  # obituaries section or address (/obituaries/), or when its headline says
-  # so ("Obituary: ...", "Former senator passes away at 86"). min_score: 2
-  # lets the site's own section or tag count on its own, and needs two
-  # phrases that only death notices use ("survived by", "last respects") in
-  # the first paragraph. A crash story that says "passed away" once stays news.
+  # (show_ad). A story gets this topic only when the news site itself calls
+  # it an obituary: it files it under an obituaries section or tag, or its
+  # address (/obituaries/) or headline ("Obituary: ...") says so. News
+  # stories about a death ("Former senator passes away at 86", "... laid to
+  # rest") stay in the news, so the keywords have no words like "passed
+  # away" or "last respects". min_score: 2 lets the site's own section, tag
+  # or address count on its own.
   - slug: obituaries
     name: Obituaries
     description: Obituaries, death notices, rosaries and funerals from Guam's news sites.
@@ -479,21 +480,3 @@ categories:
       - rosaries and funerals
       - today's memorials
       - in memoriam
-      - in loving memory
-      - passes away
-      - passed away
-      - laid to rest
-      - mourns the passing
-      - mourn the passing
-      - grieves passing
-      - grieves the passing
-      - survived by
-      - predeceased
-      - last respects
-      - mass of christian burial
-      - interment
-      - rosary is being said
-      - rosary will be said
-      - rosaries are being said
-      - nightly rosary
-      - celebration of life

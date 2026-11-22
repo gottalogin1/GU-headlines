@@ -51,19 +51,19 @@ on the Obituaries page: not under **Latest**, not on the other topics' pages
 and not in the archive. Search still finds it, so readers can look up a name,
 and the news site's own page (**Sources** › its name) still lists it.
 
-A story is an obituary when:
-- the news site files it under an obituaries section or tag (Obituaries,
+A story is an obituary only when the news site itself calls it one:
+- the site files it under an obituaries section or tag (Obituaries,
   Rosaries and Funerals, Today's Memorials), or its address has
   `/obituaries/` or `obituary` in it;
-- its headline says so: "Obituary: …", "… passes away at 86", "… laid to
-  rest", "In memoriam";
-- its first paragraph has two phrases that only death notices use, such as
-  "survived by", "last respects", "Mass of Christian Burial" or "rosary is
-  being said". One "passed away" in a crash story is not enough, so that
-  story stays news.
+- or its headline says so: "Obituary: …", "In memoriam: …".
 
-Obituaries has `min_score: 2`, so the site's own section or tag (2 points)
-counts on its own.
+News stories about a death stay in the news, under **Latest** and their
+topics: "Former senator passes away at 86", "… laid to rest", "Guam mourns
+the passing of …". This is why the Obituaries keywords have no words like
+"passed away", "laid to rest" or "last respects".
+
+Obituaries has `min_score: 2`, so the site's own section, tag or address
+(2 points) counts on its own.
 
 The Obituaries page also has `show_ad: true`: once Google AdSense is set up,
 it shows the ad block (see [Advertising](settings.md#advertising)). Add

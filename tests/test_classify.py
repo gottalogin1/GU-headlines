@@ -102,15 +102,7 @@ def test_obituaries_get_only_their_own_topic(app_config):
     # So is a headline that says so. The story gets no other topic, so it
     # stays off the other topics' pages.
     assert classify(app_config, title="Obituary: Navy veteran Jose Taitano") == ["obituaries"]
-    assert classify(app_config, title="Former senator Bob Klitzkie passes away at 86") == [
-        "obituaries"
-    ]
-    # A death notice: two phrases that only death notices use.
-    notice = (
-        "Maria Cruz, 85, of Dededo, passed away on Nov. 1. Rosary is being said nightly at "
-        "7 p.m. at Santa Barbara Church. Last respects will be held on Nov. 12."
-    )
-    assert classify(app_config, title="Maria Cruz", intro=notice) == ["obituaries"]
+    assert classify(app_config, title="In Memoriam: Maria Cruz") == ["obituaries"]
 
 
 def test_news_about_a_death_stays_news(app_config):
@@ -120,3 +112,16 @@ def test_news_about_a_death_stays_news(app_config):
         intro="Police said the driver passed away at the scene on Tuesday.",
     )
     assert "obituaries" not in cats and "local" in cats
+    # Sanjay's rule: news stories about a politician's death stay in the news,
+    # even when they give the funeral details.
+    for title, intro in (
+        ("Former senator Bob Klitzkie passes away at 86", "He served six terms."),
+        (
+            "Veteran, educator, former senator Robert Klitzkie laid to rest",
+            "Last respects were held at the cathedral, followed by a Mass of Christian Burial "
+            "and interment at Guam Veterans Cemetery. He is survived by his wife.",
+        ),
+        ("Guam mourns the passing of former senator Carmen A. Kasperbauer", None),
+    ):
+        cats = classify(app_config, title=title, intro=intro)
+        assert "obituaries" not in cats and "local" in cats, title
