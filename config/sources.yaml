@@ -131,6 +131,10 @@ sources:
       - https://www.postguam.com/search/?f=rss&t=article&c=news/local&l=50&s=start_time&sd=desc
       - https://www.postguam.com/search/?f=rss&t=article&c=business/local&l=50&s=start_time&sd=desc
       - https://www.postguam.com/search/?f=rss&t=article&c=lifestyle&l=50&s=start_time&sd=desc
+      # Obituaries (they go to the Obituaries page). The * also reads the
+      # free and paid notices under /obituaries/free/ and /obituaries/paid/;
+      # without it the feed only has notices from 2021.
+      - https://www.postguam.com/search/?f=rss&t=article&c=obituaries*&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.postguam.com/news/local/
     article_pattern: '/article_[0-9a-f-]+\.html'
@@ -215,6 +219,9 @@ sources:
       - https://www.mvariety.com/search/?f=rss&t=article&c=news/regional&l=50&s=start_time&sd=desc
       - https://www.mvariety.com/search/?f=rss&t=article&c=business/business_news&l=50&s=start_time&sd=desc
       - https://www.mvariety.com/search/?f=rss&t=article&c=sports&l=50&s=start_time&sd=desc
+      # Obituaries (they go to the Obituaries page). Like its other stories,
+      # only those that mention Guam, Saipan, Tinian or the CNMI are kept.
+      - https://www.mvariety.com/search/?f=rss&t=article&c=obituaries*&l=50&s=start_time&sd=desc
     listing_pages:
       - https://www.mvariety.com/news/local/
     article_pattern: '/article_[0-9a-f-]+\.html'
