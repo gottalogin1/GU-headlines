@@ -11,7 +11,9 @@ Stories are sorted into four topics, **Local, Military, Business and Labor**,
 and everything is kept, so you can search for a story from last week or from
 three years ago. Posts from Reddit's r/guam have their own **Community** page,
 away from the news. They are read through Reddit's API, which needs a free
-Reddit key ([how to get one](docs/news-sources.md#reddit)).
+Reddit key ([how to get one](docs/news-sources.md#reddit)). Obituaries and
+death notices have their own **Obituaries** page too, and stay off the front
+page.
 
 ![The front page (sample stories)](docs/screenshot.jpg)
 
@@ -81,6 +83,8 @@ your local changes, see [Updating](docs/maintenance.md#updating).
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
 - **Community page** for posts from Reddit's r/guam, kept apart from the news.
+- **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
+  from the news. It can show an ad.
 - **Light and dark mode**: follows your device's setting, with a switch in the
   top bar. Light mode is a plain white page.
 - **Jobs page** lists openings on Guam from eight job boards (GuamJobsOnline,
@@ -102,12 +106,12 @@ These are set up out of the box. You can add, pause or remove sites; see
 
 | News site | Notes |
 |---|---|
-| The Guam Daily Post | Local news, business and lifestyle |
+| The Guam Daily Post | Local news, business, lifestyle and obituaries |
 | Pacific Daily News | Local news, sports and lifestyle |
 | KUAM News | |
-| KANDIT News Group | Opinion pieces, obituaries and public notices are skipped |
+| KANDIT News Group | Opinion pieces and public notices are skipped; its daily list of rosaries and funerals goes to Obituaries |
 | Pacific Island Times | Guam and CNMI stories only |
-| Marianas Variety | Guam and CNMI stories, including sports; loads slowly because the site limits how fast it can be read |
+| Marianas Variety | Guam and CNMI stories, including sports and obituaries; loads slowly because the site limits how fast it can be read |
 | Stars and Stripes | Guam and CNMI stories only |
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz) | Military news releases |
 | Guam Department of Labor | Posts rarely |

@@ -6,6 +6,15 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **An Obituaries page** (in the top menu) for obituaries, death notices,
+  rosaries and funerals. They no longer appear under Latest, on the other
+  topics' pages or in the archive, but search still finds them. Obituaries
+  were skipped before; now they are collected from the Guam Daily Post's and
+  Marianas Variety's obituary sections, KANDIT's daily list of rosaries and
+  funerals, and any site that files a story as an obituary. Once AdSense is
+  set up, the Obituaries page shows the ad block too. Two new topic options
+  in `config/categories.yaml` do this: `separate: true` and `show_ad: true`
+  (see [Topics](docs/topics.md#separate-topics-obituaries)).
 - **Guam News Network** (guamnewsnetwork.com) is a new news site. Its feed
   gives the latest 30 stories with photos. Opinion pieces are skipped, and
   its National, World and sports stories (all about Guam) are kept.

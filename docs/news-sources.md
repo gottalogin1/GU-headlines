@@ -418,8 +418,10 @@ entry are required.
 At the top of `sources.yaml`:
 
 - **`defaults: exclude_sections`**: sections skipped on every site
-  (Opinion, Obituaries, Public Notices, Sports, and more). Remove a line to
-  start collecting that kind of story, or add one.
+  (Opinion, Public Notices, Sports, and more). Remove a line to
+  start collecting that kind of story, or add one. Obituaries are not
+  skipped: they go to the Obituaries page
+  ([Topics](topics.md#separate-topics-obituaries)).
 - **`defaults: exclude_url_patterns`**: story addresses skipped on every
   site, such as `/sports/` and `/opinion/`.
 - **`defaults: max_age_days`** *(optional)*: changes the default of 30 days

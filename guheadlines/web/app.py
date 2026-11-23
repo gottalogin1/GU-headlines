@@ -508,12 +508,18 @@ def _hidden(topic: str | None = None) -> tuple[str, ...]:
     return tuple(config_cache.get().hidden_sources(topic))
 
 
+def _separate(topic: str | None = None) -> tuple[str, ...]:
+    """Topics to leave out of a listing for `topic` (separate topics, such as
+    Obituaries, whose stories belong only on their own page)."""
+    return tuple(config_cache.get().separate_topics(topic))
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, page: int = Query(1, ge=1, le=10000)):
     return _listing(
         request,
         "index.html",
-        Filters(hide_sources=_hidden()),
+        Filters(hide_sources=_hidden(), hide_topics=_separate()),
         page,
         active_nav="latest",
         show_ad=True,
@@ -528,7 +534,7 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
     return _listing(
         request,
         "index.html",
-        Filters(category=slug, hide_sources=_hidden(slug)),
+        Filters(category=slug, hide_sources=_hidden(slug), hide_topics=_separate(slug)),
         page,
         active_nav=slug,
         heading=category.name,
@@ -539,6 +545,7 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
             "each linked to the original."
         ).strip(),
         breadcrumbs=[(category.name, None)],
+        show_ad=category.show_ad,
     )
 
 
@@ -624,7 +631,7 @@ def search(
 @app.get("/archive", response_class=HTMLResponse)
 def archive(request: Request):
     with session_scope() as session:
-        years = queries.archive_months(session, list(_hidden()))
+        years = queries.archive_months(session, list(_hidden()), list(_separate()))
     return render(
         request,
         "archive.html",
@@ -645,8 +652,8 @@ def archive_month(request: Request, year: int, month: int):
     if not (1990 <= year <= 2200 and 1 <= month <= 12):
         raise HTTPException(404)
     with session_scope() as session:
-        days = queries.archive_days(session, year, month, list(_hidden()))
-        years = queries.archive_months(session, list(_hidden()))
+        days = queries.archive_days(session, year, month, list(_hidden()), list(_separate()))
+        years = queries.archive_months(session, list(_hidden()), list(_separate()))
     # The nearest months with stories, so the month-to-month links never lead
     # crawlers (or readers) through endless empty months.
     stored = sorted((y["year"], m["month"]) for y in years for m in y["months"])
@@ -684,16 +691,17 @@ def archive_day(
     except (ValueError, OverflowError):
         raise HTTPException(404) from None
     hidden = _hidden()
+    separate = _separate()
     with session_scope() as session:
         # The nearest days with stories, so the day-to-day links never lead
         # crawlers (or readers) through endless empty days.
-        prev_day, next_day = queries.neighbor_days(session, the_day, list(hidden))
+        prev_day, next_day = queries.neighbor_days(session, the_day, list(hidden), list(separate))
     long_date = fmt_date_long(the_day)
     month_name = f"{MONTHS[month - 1]} {year}"
     return _listing(
         request,
         "index.html",
-        Filters(date_from=the_day, date_to=the_day, hide_sources=hidden),
+        Filters(date_from=the_day, date_to=the_day, hide_sources=hidden, hide_topics=separate),
         page,
         active_nav="archive",
         heading=long_date,
@@ -831,10 +839,11 @@ sitemap_cache = _TTLCache(ttl=600)
 def sitemap(request: Request):
     config = config_cache.get()
     hidden = list(_hidden())
+    separate = list(_separate())
 
     def data() -> dict:
         with session_scope() as session:
-            return queries.sitemap_data(session, hidden)
+            return queries.sitemap_data(session, hidden, separate)
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
     entries = seo.sitemap_entries(

@@ -87,3 +87,41 @@ def test_new_topics(app_config):
     assert "food" in classify(app_config, title="New ramen restaurant opens in Tamuning")
     tourism = classify(app_config, title="Visitor arrivals climb as GVB courts Korea")
     assert "tourism" in tourism and "business" not in tourism
+
+
+def test_obituaries_get_only_their_own_topic(app_config):
+    # The site's own obituaries section, tag or address is enough.
+    for found in (
+        {"section": "Obituaries"},
+        {"section": "Rosaries and Funerals"},
+        {"keywords": ["Obituary"]},
+        {"url": "https://www.guampdn.com/obituaries/juan-cruz/article_1.html"},
+        {"url": "https://kanditnews.com/obituary-juan-cruz-santos/"},
+    ):
+        assert classify(app_config, title="Juan Cruz Santos", **found) == ["obituaries"], found
+    # So is a headline that says so. The story gets no other topic, so it
+    # stays off the other topics' pages.
+    assert classify(app_config, title="Obituary: Navy veteran Jose Taitano") == ["obituaries"]
+    assert classify(app_config, title="In Memoriam: Maria Cruz") == ["obituaries"]
+
+
+def test_news_about_a_death_stays_news(app_config):
+    cats = classify(
+        app_config,
+        title="Driver dies in Route 1 crash",
+        intro="Police said the driver passed away at the scene on Tuesday.",
+    )
+    assert "obituaries" not in cats and "local" in cats
+    # Sanjay's rule: news stories about a politician's death stay in the news,
+    # even when they give the funeral details.
+    for title, intro in (
+        ("Former senator Bob Klitzkie passes away at 86", "He served six terms."),
+        (
+            "Veteran, educator, former senator Robert Klitzkie laid to rest",
+            "Last respects were held at the cathedral, followed by a Mass of Christian Burial "
+            "and interment at Guam Veterans Cemetery. He is survived by his wife.",
+        ),
+        ("Guam mourns the passing of former senator Carmen A. Kasperbauer", None),
+    ):
+        cats = classify(app_config, title=title, intro=intro)
+        assert "obituaries" not in cats and "local" in cats, title

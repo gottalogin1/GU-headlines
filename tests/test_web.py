@@ -188,6 +188,43 @@ def test_community_only_source_stays_on_the_community_page(client):
     assert "Andersen to host Cope North" in client.get("/").text  # news is unaffected
 
 
+def test_obituaries_stay_on_the_obituaries_page(client):
+    now = datetime.now(timezone.utc)
+    published = now - timedelta(days=3)  # alone on its Guam day
+    with session_scope() as session:
+        post = session.query(Source).filter_by(slug="postguam").one()
+        session.add(
+            Article(
+                source_id=post.id,
+                url="https://www.postguam.com/obituaries/maria-cruz/article_9.html",
+                title="Maria Taitano Cruz",
+                intro="Maria Taitano Cruz, 85, of Dededo, passed away on Nov. 1.",
+                section="Obituaries",
+                categories=["obituaries"],
+                published_at=published,
+            )
+        )
+    name = "Maria Taitano Cruz"
+    home = client.get("/")
+    assert name not in home.text
+    assert '<a href="/category/obituaries" >Obituaries</a>' in home.text  # in the top menu
+    assert name not in client.get("/category/local").text
+    page = client.get("/category/obituaries")
+    assert page.status_code == 200 and name in page.text
+    assert "<title>Guam obituaries" in page.text
+    # Search still finds it (people look up a name).
+    assert "maria-cruz/article_9" in client.get("/search?q=Taitano").text
+    # The archive leaves it out: its day has no other story, so it is empty.
+    day = published.astimezone(GUAM_TZ).date()
+    assert name not in client.get(f"/archive/{day.year}/{day.month}/{day.day}").text
+    month = client.get(f"/archive/{day.year}/{day.month}").text
+    assert f'href="/archive/{day.year}/{day.month}/{day.day}"' not in month
+    locs = client.get("/sitemap.xml").text
+    assert f"/archive/{day.year}/{day.month}/{day.day}<" not in locs
+    assert "/category/obituaries<" in locs
+    assert "Andersen to host Cope North" in client.get("/").text  # news is unaffected
+
+
 def test_sources_page_lists_sites_that_cannot_be_collected(client):
     with session_scope() as session:
         session.add(Source(slug="pnc", name="PNC News First", enabled=False))  # removed site
@@ -471,13 +508,14 @@ def test_site_and_scraper_do_not_mention_github(client, monkeypatch):
     from guheadlines.settings import load_settings
 
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
-    for path in ("/", "/status", "/jobs", "/robots.txt", "/sitemap.xml", "/nope"):
+    pages = ("/", "/status", "/jobs", "/category/obituaries")
+    for path in (*pages, "/robots.txt", "/sitemap.xml", "/nope"):
         assert "github" not in client.get(path).text.lower(), path
     assert "github" not in load_settings().user_agent.lower()
 
 
 def test_no_ads_until_adsense_is_set_up(client):
-    for path in ("/", "/status", "/jobs"):
+    for path in ("/", "/status", "/jobs", "/category/obituaries"):
         page = client.get(path)
         assert "adsbygoogle" not in page.text and "google-adsense-account" not in page.text
         assert "'nonce-" not in page.headers["content-security-policy"]
@@ -485,10 +523,10 @@ def test_no_ads_until_adsense_is_set_up(client):
     assert "Mediapartners-Google" not in client.get("/robots.txt").text
 
 
-def test_ad_block_on_the_home_sources_and_jobs_pages(client, monkeypatch):
+def test_ad_block_on_the_home_sources_jobs_and_obituaries_pages(client, monkeypatch):
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
     nonces = set()
-    for path in ("/", "/status", "/jobs", "/jobs?q=nurse"):
+    for path in ("/", "/status", "/jobs", "/jobs?q=nurse", "/category/obituaries"):
         page = client.get(path)
         csp = page.headers["content-security-policy"]
         nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0]
@@ -500,7 +538,7 @@ def test_ad_block_on_the_home_sources_and_jobs_pages(client, monkeypatch):
         assert 'data-ad-slot="9876543210"' in sidebar
         # The AdSense code and the line that fills the slot both carry the nonce.
         assert sidebar.count(f'nonce="{nonce}"') == 2
-    assert len(nonces) == 4  # a new nonce for every page
+    assert len(nonces) == 5  # a new nonce for every page
 
     # Other pages keep the strict policy and show no ad.
     for path in ("/category/military", "/search?q=wage", "/archive"):

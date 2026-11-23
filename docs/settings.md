@@ -137,8 +137,11 @@ then run `docker compose up -d --build`.
 
 ## Advertising
 
-The home page, the Jobs page and the Sources page can show one Google AdSense
-ad at the top of the right-hand column. On a phone, the column moves below the
+The home page, the Jobs page, the Sources page and the Obituaries page can show
+one Google AdSense ad at the top of the right-hand column. To show it on
+another topic's page too, add `show_ad: true` to that topic in
+`config/categories.yaml` ([Topics](topics.md#separate-topics-obituaries)).
+All these pages use the same ad unit. On a phone, the column moves below the
 stories, so the ad comes after them. Until you set it up, the site shows no ad
 and no ad code.
 

@@ -11,6 +11,11 @@
 # The category marked fallback: true is applied when nothing else matched.
 # page_title is the topic page's title in browser tabs and search results
 # (default: "<name> news").
+# separate: true keeps a topic's stories apart: a story in it gets only that
+# topic, and is shown only on the topic's own page (not under Latest, the
+# other topics or the archive). Search still finds it. Obituaries uses this.
+# show_ad: true shows the ad block on the topic's page, once AdSense is set up
+# (ADSENSE_CLIENT and ADSENSE_SLOT in .env).
 # After changing this file, re-tag existing articles with:
 #     docker compose exec worker guheadlines reclassify
 
@@ -448,3 +453,30 @@ categories:
     name: Community
     description: Questions, tips and discussion from Guam's online community on Reddit (r/guam).
     page_title: r/guam community posts
+
+  # Obituaries, death notices, rosaries and funerals. separate: true keeps
+  # them off the front page (Latest), the other topics and the archive: they
+  # are shown only on the Obituaries page, which also has the ad block
+  # (show_ad). A story gets this topic only when the news site itself calls
+  # it an obituary: it files it under an obituaries section or tag, or its
+  # address (/obituaries/) or headline ("Obituary: ...") says so. News
+  # stories about a death ("Former senator passes away at 86", "... laid to
+  # rest") stay in the news, so the keywords have no words like "passed
+  # away" or "last respects". min_score: 2 lets the site's own section, tag
+  # or address count on its own.
+  - slug: obituaries
+    name: Obituaries
+    description: Obituaries, death notices, rosaries and funerals from Guam's news sites.
+    page_title: Guam obituaries
+    separate: true
+    show_ad: true
+    min_score: 2
+    keywords:
+      - obituar*
+      - obit
+      - obits
+      - death notice*
+      - funeral notice*
+      - rosaries and funerals
+      - today's memorials
+      - in memoriam

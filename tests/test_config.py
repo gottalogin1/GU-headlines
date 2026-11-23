@@ -26,6 +26,21 @@ def test_default_excludes_apply(app_config):
     assert post.is_excluded("https://www.postguam.com/sports/football/article_1.html")
     assert post.is_excluded("https://www.postguam.com/news/world/article_1.html")
     assert not post.is_excluded("https://www.postguam.com/news/local/x/article_1.html")
+    # Obituaries are collected for their own page, not skipped.
+    assert not post.is_excluded("https://www.postguam.com/obituaries/x/article_1.html")
+    assert post.excluded_section("Obituaries") is None
+    assert not app_config.source("kandit").is_excluded("https://kanditnews.com/obituary-juan/")
+
+
+def test_obituaries_are_a_separate_topic_with_an_ad(app_config):
+    obituaries = app_config.category("obituaries")
+    assert obituaries.separate and obituaries.show_ad
+    assert app_config.separate_topics() == ["obituaries"]
+    assert app_config.separate_topics("obituaries") == []
+    others = [c for c in app_config.categories if c.slug != "obituaries"]
+    assert not any(c.separate or c.show_ad for c in others)
+    parsed = parse_config({}, {"categories": [{"slug": "a"}, {"slug": "b", "separate": True}]})
+    assert parsed.separate_topics() == ["b"] and not parsed.category("b").show_ad
 
 
 def test_invalid_config_is_reported():

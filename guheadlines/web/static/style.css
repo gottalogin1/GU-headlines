@@ -39,6 +39,7 @@
   --tag-sports: #fca5a5;    --tag-sports-bg: rgba(248, 113, 113, .14);
   --tag-food: #fdba74;      --tag-food-bg: rgba(251, 146, 60, .14);
   --tag-cnmi: #f9a8d4;      --tag-cnmi-bg: rgba(244, 114, 182, .14);
+  --tag-obituaries: #cbd5e1; --tag-obituaries-bg: rgba(148, 163, 184, .16);
 
   --r-xl: 28px;
   --r-lg: 22px;
@@ -81,6 +82,7 @@
   --tag-sports: #b91c1c;    --tag-sports-bg: rgba(239, 68, 68, .12);
   --tag-food: #c2410c;      --tag-food-bg: rgba(249, 115, 22, .14);
   --tag-cnmi: #be185d;      --tag-cnmi-bg: rgba(236, 72, 153, .12);
+  --tag-obituaries: #475569; --tag-obituaries-bg: rgba(100, 116, 139, .14);
 }
 
 * { box-sizing: border-box; }
@@ -173,11 +175,11 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 
 .nav {
   order: 3; flex: 1 1 100%; min-width: 0;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 2px;
   padding-top: 8px; border-top: 1px solid var(--line);
 }
 .nav a {
-  padding: 7px 11px; border-radius: 999px; white-space: nowrap;
+  padding: 7px 10px; border-radius: 999px; white-space: nowrap;
   color: var(--text-soft); font-weight: 600; font-size: .9rem;
   transition: background-color .15s ease, color .15s ease;
 }
@@ -322,6 +324,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tag-sports { color: var(--tag-sports); background: var(--tag-sports-bg); }
 .tag-food { color: var(--tag-food); background: var(--tag-food-bg); }
 .tag-cnmi { color: var(--tag-cnmi); background: var(--tag-cnmi-bg); }
+.tag-obituaries { color: var(--tag-obituaries); background: var(--tag-obituaries-bg); }
 .headline { font-size: 1.2rem; line-height: 1.3; font-weight: 720; letter-spacing: -.015em; margin: 0 0 6px; }
 .headline a { color: var(--text); }
 .headline a:hover { color: var(--link); }
@@ -400,6 +403,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .dot.tag-sports { background: var(--tag-sports); }
 .dot.tag-food { background: var(--tag-food); }
 .dot.tag-cnmi { background: var(--tag-cnmi); }
+.dot.tag-obituaries { background: var(--tag-obituaries); }
 
 /* ---------- search ---------- */
 .search-form {
