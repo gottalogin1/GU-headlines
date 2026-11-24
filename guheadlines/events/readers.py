@@ -343,9 +343,28 @@ def tidy_name(name: str | None) -> str | None:
     return " ".join(words)
 
 
+# Parts of a notice's title split by " | ", " - " or "- " ("Meeting- Wednesday").
+_TITLE_PARTS_RE = re.compile(r"\s*\|\s*|\s+[-–—]\s+|(?<=\w)[-–—]\s+")
+_LEADING_DATE_RE = re.compile(
+    rf"^(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day,?\s+)?(?:{_DATE})[,\s]*", re.IGNORECASE
+)
+
+
+def _has_date(text: str) -> bool:
+    return any(m.group("date") for m in _TOKEN_RE.finditer(text))
+
+
 def _notice_title(title: str) -> str:
-    """'SECOND NOTICE OF REGULAR BOARD MEETING' -> 'Regular Board Meeting'."""
+    """The meeting's name from a notice's title, without the notice wording and
+    the date (shown apart): 'SECOND NOTICE OF PUC REGULAR BUSINESS MEETING' ->
+    'PUC Regular Business Meeting'; 'CCU Regular Meeting | November 24, 2026,
+    5:30 PM | Second Notice & Amended Agenda' -> 'CCU Regular Meeting'."""
     title = _NOTICE_PREFIX_RE.sub("", clean_text(title)).strip(" -–—:")
+    parts = [p for p in _TITLE_PARTS_RE.split(title) if p.strip()]
+    kept = [p for p in parts if not _has_date(p) and not re.search(r"notice|agenda", p, re.I)]
+    if kept and len(kept) < len(parts):
+        title = " – ".join(kept)
+    title = _LEADING_DATE_RE.sub("", title).strip(" .-–—:") or title
     title = tidy_name(title) or ""
     return title[:1].upper() + title[1:]
 
@@ -374,7 +393,8 @@ def parse_notices(result: FetchResult) -> list[CalendarEvent]:
         heading = article.select_one(".post-title a[href]")
         if heading is None:
             continue
-        when = parse_when(_meeting_date(article))
+        # Some notices leave the Meeting Date out and put it in the title.
+        when = parse_when(_meeting_date(article)) or parse_when(heading.get_text(" "))
         if when is None:
             continue
         department = article.select_one('a[href*="department_id="]')

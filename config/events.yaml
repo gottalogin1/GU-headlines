@@ -63,9 +63,11 @@ calendars:
     homepage: https://notices.guam.gov/notices?type_id=5&view=list
     # The government's official meeting notices (boards, commissions, agencies).
     notices: https://notices.guam.gov/notices?type_id=5&view=list
-    # The Legislature's own calendar (above) already lists its hearings.
+    # The Legislature's own calendar (above) already lists its sessions and
+    # hearings.
     exclude:
       - "^(guam legislature|i liheslaturan gu[aå]han)"
+      - "call to session"
 
   - slug: gcc
     name: Guam Community College

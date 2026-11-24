@@ -15,6 +15,7 @@ from guheadlines.events.ical import CalendarError, CalendarEvent, read_calendar,
 from guheadlines.events.pipeline import EventChecker
 from guheadlines.events.readers import (
     _next_page,
+    _notice_title,
     google_event,
     merge_agendas,
     parse_agendas,
@@ -337,6 +338,57 @@ def test_parse_notices():
     assert _next_page(page(NOTICES_URL, NOTICES)) == (
         "https://notices.guam.gov/notices?type_id=5&view=list&page=2"
     )
+
+
+DECOLONIZATION = (
+    "Commission on Decolonization - Regular Monthly Board Meeting - December 1, 2026 @ 3:00 p.m."
+)
+
+
+@pytest.mark.parametrize(
+    "title, expected",
+    [
+        ("SECOND NOTICE OF PUC REGULAR BUSINESS MEETING", "PUC Regular Business Meeting"),
+        (
+            "CCU Regular Meeting | November 24, 2026, 5:30 PM | Second Notice & Amended Agenda",
+            "CCU Regular Meeting",
+        ),
+        (
+            "Second Notice of the November 25, 2026 Judicial Council Regular Meeting",
+            "Judicial Council Regular Meeting",
+        ),
+        (
+            "SECOND NOTICE- Cannabis Control Board (CCB) Meeting- Wednesday, November 25, 2026",
+            "Cannabis Control Board (CCB) Meeting",
+        ),
+        (
+            DECOLONIZATION,
+            "Commission on Decolonization – Regular Monthly Board Meeting",
+        ),
+        (
+            "Notice of Meeting of the Guam Criminal Law and Procedure Review Commission.",
+            "Meeting of the Guam Criminal Law and Procedure Review Commission",
+        ),
+        (
+            "Huntan Manggé'helo'/Kumisión i Fino CHamoru Board Meeting",
+            "Huntan Manggé'helo'/Kumisión i Fino CHamoru Board Meeting",
+        ),
+    ],
+)
+def test_notice_titles(title, expected):
+    assert _notice_title(title) == expected
+
+
+def test_notice_without_a_meeting_date_takes_the_date_in_its_title():
+    html = notice(
+        905,
+        DECOLONIZATION,
+        "COMMISSION ON DECOLONIZATION",
+        "",
+    ).replace("<strong>Meeting Date:</strong> </li>", "</li>")
+    (event,) = parse_notices(page(NOTICES_URL, f"<main>{html}</main>"))
+    assert event.starts_at == guam(2026, 12, 1, 15)
+    assert event.organizer == "Commission on Decolonization"
 
 
 def test_notices_page_that_changed_is_an_error():

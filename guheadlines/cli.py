@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text, update
 
@@ -554,8 +554,14 @@ def cmd_events(args, settings: Settings) -> None:
             for e in events[: args.limit]:
                 local = e.starts_at.astimezone(GUAM_TZ)
                 when = f"{local:%a %Y-%m-%d}" + ("" if e.all_day else f" {local:%H:%M}")
-                if e.ends_at and not e.all_day:
-                    when += f" to {e.ends_at.astimezone(GUAM_TZ):%H:%M}"
+                if e.ends_at:
+                    ends = e.ends_at.astimezone(GUAM_TZ)
+                    if e.all_day:
+                        ends -= timedelta(days=1)  # the end of an all-day event is the next day
+                    if ends.date() != local.date():
+                        when += f" to {ends:%a %Y-%m-%d}"
+                    if not e.all_day:
+                        when += f"{' ' if ends.date() != local.date() else ' to '}{ends:%H:%M}"
                 print(f"  - {when}  {e.title}")
                 for name in ("location", "organizer", "url", "agenda_url"):
                     if getattr(e, name):

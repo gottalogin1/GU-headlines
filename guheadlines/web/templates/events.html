@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pagination %}
 {% block main %}
+{% set blank %}<span class="not-given" title="Not given by the calendar">—</span>{% endset %}
 <header class="page-head">
   <h1>Events</h1>
   <p class="muted">What's coming up on Guam over the next 90 days, from {{ calendars|length }} {{ "calendar" if calendars|length == 1 else "calendars" }}, checked every {{ settings.events_interval_hours }} hours. Every event links to the calendar that published it.</p>
@@ -45,7 +46,7 @@
       <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
       <dl class="job-facts event-facts">
         <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
-        <div><dt>Where</dt><dd>{{ e.location or "Not given" }}</dd></div>
+        <div><dt>Where</dt><dd>{{ e.location or blank }}</dd></div>
       </dl>
       {% if e.description %}<p class="intro job-description">{{ e.description|truncate(420) }}</p>{% endif %}
       {% if e.url or e.agenda_url %}
