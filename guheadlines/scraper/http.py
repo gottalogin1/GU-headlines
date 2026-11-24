@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib import robotparser
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -303,19 +303,6 @@ class HttpClient:
                 **(headers or {}),
             },
             content=json.dumps(payload).encode(),
-        )
-
-    def post_form(
-        self, url: str, data: dict[str, str], *, headers: dict[str, str] | None = None
-    ) -> FetchResult:
-        """POST a form (for API sign-ins such as Reddit's OAuth token). APIs are
-        used under their own terms, so robots.txt is not consulted."""
-        return self._request(
-            "POST",
-            url,
-            headers={"Content-Type": "application/x-www-form-urlencoded", **(headers or {})},
-            content=urlencode(data).encode(),
-            check_robots=False,
         )
 
     def _request(

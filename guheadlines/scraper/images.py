@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 MIN_WIDTH = 200
-# What browsers ask for when loading a picture. Some image hosts (Reddit's
-# i.redd.it) answer a request for a web page with their photo viewer instead.
+# What browsers ask for when loading a picture. Some image hosts answer a
+# request for a web page with their photo viewer instead.
 IMAGE_ACCEPT = "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5"
 MIN_HEIGHT = 120
 Image.MAX_IMAGE_PIXELS = 60_000_000

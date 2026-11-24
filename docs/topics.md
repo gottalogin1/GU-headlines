@@ -1,8 +1,8 @@
 # Topics
 
 Stories are sorted into topics: **Local, Military, Business, Labor, Tourism,
-Sports, Food and Saipan & CNMI** out of the box, plus **Community** for posts
-from Reddit's r/guam and **Obituaries** for obituaries and death notices. **Saipan & CNMI** needs only one mention of Saipan,
+Sports, Food and Saipan & CNMI** out of the box, plus **Obituaries** for
+obituaries and death notices. **Saipan & CNMI** needs only one mention of Saipan,
 Tinian, Rota or the CNMI (`min_score: 1`), so stories from Saipan never land
 in Local. A story can belong
 to more than one (a contract for the military buildup can be Military *and*
@@ -34,14 +34,12 @@ Three more rules:
   `sources.yaml` (see [News sources](news-sources.md#every-option-explained)).
 - A story that matches no topic goes to **Local**, the "everyday life on
   island" topic, marked `fallback: true`.
-- **Community** has no keywords, so news stories never land in it, even when
-  a news site files a story under its own "Community" section (as Guam News
-  Network does). A topic without keywords is only given by `categories:` or
-  `only_in_topic:` on a site. Community holds
-  the r/guam posts, because that site in `sources.yaml` has
-  `only_in_topic: community`: its posts get only that topic, whatever they
-  mention, and appear only on the Community page (not on the front page,
-  the other topics or the archive).
+- A topic without keywords is only given by `categories:` or
+  `only_in_topic:` on a site, never by the automatic sorting, even when a
+  news site files a story under a section with the topic's name. A site with
+  `only_in_topic:` gets only that topic, whatever its stories mention, and
+  they appear only on that topic's page (not on the front page, the other
+  topics or the archive).
 
 ## Separate topics (Obituaries)
 

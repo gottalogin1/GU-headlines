@@ -39,11 +39,6 @@ env:
   # that it needs a key.
   USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
   USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
-  # r/guam is read through Reddit's API with these; without them it is
-  # listed as waiting for a key and skipped.
-  REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
-  REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
-  REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
 
 # Runners are pinned to Ubuntu 24.04: Playwright 1.56.1 (used for the
 # screenshots) can't install its browser dependencies on ubuntu-latest,

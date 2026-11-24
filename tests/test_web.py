@@ -153,36 +153,39 @@ def test_status_shows_catch_up_pauses_as_notes(client):
     assert '<div class="error small" title="feed https://www.postguam.com/rss: HTTP 404">' in page
 
 
-def test_community_only_source_stays_on_the_community_page(client):
+def test_only_in_topic_source_stays_on_its_topic_page(client, monkeypatch):
+    from guheadlines.web.app import config_cache
+
+    governor = config_cache.get().source("governor")
+    monkeypatch.setattr(governor, "only_in_topic", "sports")
+    slug, name = governor.slug, governor.name
     now = datetime.now(timezone.utc)
     with session_scope() as session:
-        reddit = Source(
-            slug="reddit-guam", name="r/guam (Reddit)", homepage="https://www.reddit.com/r/guam/"
-        )
-        session.add(reddit)
+        source = Source(slug=slug, name=name, homepage="https://www.example.com/")
+        session.add(source)
         session.flush()
         session.add(
             Article(
-                source_id=reddit.id,
-                url="https://www.reddit.com/r/guam/comments/1abc/best_kelaguen_on_island/",
+                source_id=source.id,
+                url="https://www.example.com/posts/best-kelaguen-on-island/",
                 title="Best kelaguen on island?",
                 intro="Looking for recommendations near Tumon.",
-                categories=["community", "local"],  # as if tagged before only_in_topic
+                categories=["sports", "local"],  # as if tagged before only_in_topic
                 published_at=now - timedelta(hours=1),
             )
         )
     post = "Best kelaguen on island?"
     home = client.get("/").text
     assert post not in home
-    assert "r/guam (Reddit)" not in home  # nor in the sidebar's list of news sources
+    assert f'href="/source/{slug}"' not in home  # nor in the sidebar's list of news sources
     assert post not in client.get("/category/local").text
-    assert post in client.get("/category/community").text
-    assert post in client.get("/source/reddit-guam").text
+    assert post in client.get("/category/sports").text
+    assert post in client.get(f"/source/{slug}").text
     # Search results mark the matched word, so look for the post's link.
-    link = "comments/1abc/best_kelaguen_on_island"
+    link = "posts/best-kelaguen-on-island"
     assert link not in client.get("/search?q=kelaguen").text
-    assert link in client.get("/search?q=kelaguen&category=community").text
-    assert post in client.get("/search?source=reddit-guam").text
+    assert link in client.get("/search?q=kelaguen&category=sports").text
+    assert post in client.get(f"/search?source={slug}").text
     day = (now - timedelta(hours=1)).astimezone(GUAM_TZ).date()
     assert post not in client.get(f"/archive/{day.year}/{day.month}/{day.day}").text
     assert "Andersen to host Cope North" in client.get("/").text  # news is unaffected
@@ -236,15 +239,20 @@ def test_sources_page_lists_sites_that_cannot_be_collected(client):
         "Andersen Air Force Base",
         "Guam Business Magazine",
         "RNZ Pacific",
-        "r/guam (Reddit)",
     ):
         assert name in blocked
     assert "Its firewall (Akamai) turns away automated visitors." in blocked
-    assert "Waiting for a Reddit API key." in blocked  # no key in the tests
     sidebar = client.get("/").text.split("Can't be collected", 1)[1]
     assert "Guam Business Magazine" in sidebar and "guambusinessmagazine.com ↗" in sidebar
-    # r/guam is reached through the Community page, not the news sidebar.
-    assert "RNZ Pacific" in sidebar and "r/guam" not in sidebar
+    assert "RNZ Pacific" in sidebar
+
+
+def test_r_guam_and_the_community_page_are_gone(client):
+    # Removed when Reddit closed its feeds and API (Nov 2026).
+    assert client.get("/category/community").status_code == 404
+    for page in ("/", "/status", "/search?q=guam", "/sitemap.xml"):
+        text = client.get(page).text
+        assert "r/guam" not in text and "/category/community" not in text
 
 
 def test_light_dark_switch(client):
