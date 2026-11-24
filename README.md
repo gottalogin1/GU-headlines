@@ -110,12 +110,12 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Marianas Variety | Guam and CNMI stories, including sports and obituaries; loads slowly because the site limits how fast it can be read |
 | Stars and Stripes | Guam and CNMI stories only |
 | DVIDS (Joint Region Marianas, Naval Base Guam, Camp Blaz) | Military news releases |
+| Andersen Air Force Base | The 36th Wing's news releases, read from its DVIDS page because the base's own site turns automated visitors away |
 | Guam Department of Labor | Posts rarely |
 | Guam Federation of Teachers | The union for GDOE, GMH, UOG, GCC and other public workers; posts rarely |
 | Office of the Governor | Press releases |
 | Guam Sports Network (GSPN) | Sports |
 | Guam Football Association | Soccer: the Matao and local leagues |
-| Guam Visitors Bureau | Tourism news releases |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
 | Guam News Network | Local news, including its National, World and sports stories about Guam; opinion pieces are skipped |
 
@@ -124,8 +124,8 @@ GU Headlines doesn't try to read them. The Sources page and the sidebar list
 them separately, with links to visit them directly:
 - Marianas Business Journal
 - Guam Business Magazine
-- Andersen Air Force Base
-- RNZ Pacific
+- Guam Visitors Bureau
+- RNZ Pacific (its terms also don't let other websites use its feeds)
 
 To see whether one has started working, and how to switch it back on, see
 [News sources](docs/news-sources.md#sites-that-cant-be-collected).

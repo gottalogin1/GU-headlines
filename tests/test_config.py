@@ -70,13 +70,16 @@ def test_invalid_config_is_reported():
 
 def test_shipped_sources(app_config):
     assert app_config.source("pnc") is None  # PNC News First has closed
-    assert [s.slug for s in app_config.uncollectable_sources] == [
-        "mbj",
-        "andersen",
-        "gbm",
-        "rnz",
-    ]
+    assert [s.slug for s in app_config.uncollectable_sources] == ["mbj", "gbm", "gvb", "rnz"]
     assert all(not s.collected for s in app_config.uncollectable_sources)
+    # Andersen's own site turns robots away; its 36th Wing posts the same
+    # stories to DVIDS, which is read instead.
+    andersen = app_config.source("andersen")
+    assert andersen.collected and andersen.listing_pages == ["https://www.dvidshub.net/unit/36WPA"]
+    assert andersen.matches_article_pattern(
+        "https://www.dvidshub.net/news/576201/rider-mentor-program-expands-motorcycle-safety-training-guam"
+    )
+    assert andersen.require_guam and andersen.categories == ["military"]
     # r/guam was removed when Reddit closed its feeds and API (Nov 2026),
     # and the Community topic with it.
     assert app_config.source("reddit-guam") is None
