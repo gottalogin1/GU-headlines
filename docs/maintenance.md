@@ -35,15 +35,16 @@ that shows **0** new stories for days deserves a look; see
 docker compose ps
 ```
 
-All three (`db`, `web`, `worker`) should say **Up**. To see what the news
-collector has been doing:
+All four (`db`, `web`, `worker`, `caddy`) should say **Up**. To see what the
+news collector has been doing:
 
 ```sh
 docker compose logs --tail 50 worker
 ```
 
 **Automatic monitoring (optional).** The address `/healthz` (for example
-`http://your-server:8000/healthz`) answers like this:
+`https://guamheadlines.com/healthz`, or `http://your-server/healthz` without
+a domain) answers like this:
 
 ```json
 {"status": "ok", "last_scrape": "2026-09-27T19:00:41+00:00"}
@@ -231,46 +232,110 @@ can set `STORE_IMAGES=false` in `.env`; see [Changing settings](settings.md#phot
 
 ## Putting it on the internet
 
-By default the site is reachable only on your own network. To give it a real
-address such as `https://news.example.com`:
+The site always answers on port 80 with plain `http://`: at
+`http://localhost` on the server itself, and at the server's address from
+other devices (for example `http://192.168.1.50` at home, or
+`http://203.0.113.5` on a rented server).
 
-1. **Get a domain name** from any domain registrar.
-2. **Point it at your server:** in the registrar's DNS settings, add an
-   **A record** for `news` (or `@` for the bare domain) with your server's
-   public IP address.
-   - On a cloud server, that's the IP address your provider shows.
-   - At home, it's your internet connection's address (search "what is my IP"
-     from the server's network). If your provider changes it now and then, use
-     a "dynamic DNS" service.
-3. **Open the doors:** allow ports **80** and **443**. On a cloud server, do
-   this in the provider's firewall settings. At home, set your router to
-   "port forward" 80 and 443 to the server.
-4. **Add HTTPS with Caddy.** [Caddy](https://caddyserver.com/docs/install) is
-   a free web server that gets and renews the security certificate
-   (the padlock) for you. Install it, then replace the contents of
-   `/etc/caddy/Caddyfile` with (your own domain):
+For a real address with https, such as `https://guamheadlines.com`, you need
+a domain name and a server that the internet can reach: a rented server (a
+"VPS", such as a RackNerd KVM server), or a home server with port forwarding.
+**Caddy**, the `caddy` part of GU Headlines, gets the certificate for https
+(the padlock) from Let's Encrypt and renews it by itself. A certificate is
+given only for a domain name, never for a bare IP address.
 
-   ```
-   news.example.com {
-       reverse_proxy 127.0.0.1:8000
-   }
-   ```
+1. **Get a domain name** from a domain registrar, such as Cloudflare,
+   Porkbun or Namecheap. A `.com` name costs about 10 to 15 US dollars a
+   year.
+2. **Point it at your server.** In the registrar's DNS settings for the
+   domain, add an **A record**:
 
-   and reload it:
+   | Type | Name | Value |
+   |---|---|---|
+   | `A` | `@` (the domain itself) | your server's public IP address |
+   | `A` | `www` (optional, for `www.guamheadlines.com`) | the same IP address |
+
+   - On a rented server, the IP address is in the provider's control panel
+     and in its welcome email. On a Linux server, `curl -4 ifconfig.me`
+     prints it too.
+   - At home, it's your internet connection's address (search "what is my
+     IP" from the server's network). If your provider changes it now and
+     then, use a "dynamic DNS" service.
+   - On Cloudflare, set **Proxy status** to **DNS only** (grey cloud) for
+     both records. Cloudflare's proxy gets in the way of the certificate.
+   - Don't add an `AAAA` (IPv6) record unless you know IPv6 works on your
+     server. Let's Encrypt and many visitors try IPv6 first, and a broken
+     IPv6 address makes the site slow or unreachable for them.
+
+   The change takes from a few minutes to a few hours to reach everyone. To
+   check, run this on the server (with your own domain). It must print your
+   server's IP address:
 
    ```sh
-   sudo systemctl reload caddy
+   getent hosts guamheadlines.com
    ```
 
-   Within a minute, `https://news.example.com` shows your site.
-5. **Tell the site its address:** add `SITE_URL=https://news.example.com`
-   to `.env` and run `docker compose up -d`. Search engines then see that one
-   address for every page. Next, see [Search engines](#search-engines).
+3. **Make sure ports 80 and 443 are open.** Let's Encrypt checks the domain
+   through one of them, and visitors use both.
+   - **On a rented server:** some providers have a firewall in their control
+     panel; if yours does, allow TCP 80, TCP 443 and UDP 443 there. On the
+     server itself, Docker opens the ports it uses by itself, even when the
+     `ufw` firewall is on. If you use `ufw`, add the rules anyway so they show
+     what's open:
+
+     ```sh
+     sudo ufw allow 80/tcp
+     sudo ufw allow 443/tcp
+     sudo ufw allow 443/udp
+     ```
+
+     (`ufw allow OpenSSH` too, before you ever run `sudo ufw enable`, or you
+     lock yourself out.)
+   - **At home:** set your router to "port forward" 80 and 443 to the server.
+   - **Is another program already using them?** Some servers come with a
+     web server such as Apache or nginx running. Docker then stops with
+     "address already in use". See what's there with
+     `sudo ss -ltnp | grep -E ':(80|443) '`, and switch it off with
+     `sudo systemctl disable --now apache2` (or `nginx`, `httpd`). If you
+     installed Caddy on the server itself with an earlier version of this
+     guide, switch that one off too: `sudo systemctl disable --now caddy`.
+4. **Tell GU Headlines the domain.** In `.env`, set `SITE_DOMAIN` to your
+   domain (no `https://`), with `www.` too if you added that record:
+
+   ```
+   SITE_DOMAIN=guamheadlines.com, www.guamheadlines.com
+   ```
+
+   then apply it:
+
+   ```sh
+   docker compose up -d
+   ```
+
+5. **Check it.** Within a minute, `https://guamheadlines.com` shows your
+   site with a padlock, and `http://` addresses lead there. If it doesn't,
+   look at what Caddy says:
+
+   ```sh
+   docker compose logs --tail 30 caddy
+   ```
+
+   | Caddy's log mentions | What it means |
+   |---|---|
+   | `NXDOMAIN`, `no valid A records` or `DNS problem` | The domain doesn't point at the server yet (step 2). Wait, then run `docker compose restart caddy`. |
+   | `Timeout during connect`, `connection refused` or `firewall` | Let's Encrypt can't reach port 80 or 443 (step 3). |
+   | `rateLimited` or `too many` | Let's Encrypt's limit on new certificates. Caddy tries again later by itself. Don't remove the `caddy_data` volume: it holds the certificates. |
+
+Search engines are given `https://guamheadlines.com` (the first name in
+`SITE_DOMAIN`) as the address of every page, so `www.` and the IP address
+never count as a second copy of the site. Next, see
+[Search engines](#search-engines).
 
 **Can't open ports at home?** A
 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
-publishes the site without port forwarding; point it at
-`http://localhost:8000`.
+publishes the site without port forwarding, and Cloudflare provides the
+https. Point it at `http://localhost:80`, leave `SITE_DOMAIN` empty, and set
+`SITE_URL=https://guamheadlines.com` (your domain) instead.
 
 Before making the site public, read the [note on content](../README.md#a-note-on-content).
 
@@ -284,7 +349,7 @@ each day). Search engines find it through `robots.txt`.
 
 To get listed sooner and see how people find the site:
 
-1. Set `SITE_URL` (step 5 above).
+1. Set `SITE_DOMAIN` (step 4 above).
 2. Add the site to [Google Search Console](https://search.google.com/search-console).
    The **Domain** option asks you to add a DNS record at your registrar. The
    **URL prefix** option can instead use the **HTML tag** method: put its

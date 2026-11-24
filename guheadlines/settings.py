@@ -42,7 +42,8 @@ class Settings:
     site_tagline: str = "Guam news, updated every hour"
     # The site's public address (https://news.example.com), used for the links
     # search engines are given: canonical links, the sitemap, social cards.
-    # Empty: taken from each request's own address.
+    # Empty: https://<first SITE_DOMAIN name> when SITE_DOMAIN is set (the
+    # domain Caddy gets a certificate for), else each request's own address.
     site_url: str = ""
     # Optional ownership proof for Google Search Console and Bing Webmaster
     # Tools: the content="..." value of the meta tag each one offers.
@@ -117,6 +118,18 @@ def _site_url(value: str | None) -> str:
     return value
 
 
+def _domain_site_url(value: str | None) -> str:
+    """SITE_DOMAIN "guamheadlines.com, www.guamheadlines.com" ->
+    https://guamheadlines.com (the first name), or "" if empty or not a name."""
+    names = (value or "").replace(",", " ").split()
+    if not names:
+        return ""
+    name = names[0].removeprefix("https://").removeprefix("http://").rstrip("/")
+    if not re.fullmatch(r"[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+", name):
+        return ""
+    return "https://" + name.lower()
+
+
 def _adsense_client(value: str | None) -> str:
     """ca-pub-1234567890123456, or "" if not a publisher ID. AdSense shows the
     ID without "ca-" on its account page; both forms are accepted."""
@@ -152,7 +165,7 @@ def load_settings() -> Settings:
         media_dir=Path(env.get("MEDIA_DIR", PROJECT_DIR / "data" / "media")),
         site_name=env.get("SITE_NAME", defaults.site_name),
         site_tagline=env.get("SITE_TAGLINE", defaults.site_tagline),
-        site_url=_site_url(env.get("SITE_URL")),
+        site_url=_site_url(env.get("SITE_URL")) or _domain_site_url(env.get("SITE_DOMAIN")),
         google_site_verification=env.get("GOOGLE_SITE_VERIFICATION", "").strip(),
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
         adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),

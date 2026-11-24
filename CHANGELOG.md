@@ -6,6 +6,21 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Port 80 and https, with Caddy.** A fourth part, `caddy`, is now the
+  front door of the site. The site opens at `http://your-server` (port 80)
+  instead of `http://your-server:8000`. Put your domain name in the new
+  `SITE_DOMAIN` setting, and the site is served at `https://` your domain,
+  with a free certificate that Caddy gets from Let's Encrypt and renews by
+  itself; `http://` visits are sent on to `https://`, and browsers are told
+  to keep using https. Search engines are given that https address, so
+  `SITE_URL` is now needed only to pick a different one. The website is no
+  longer reachable on port 8000 from outside Docker, so every visit goes
+  through Caddy. Steps: [Putting it on the internet](docs/maintenance.md#putting-it-on-the-internet).
+  `WEB_PORT` is no longer used; `HTTP_PORT` (default 80) and `HTTPS_PORT`
+  (default 443) replace it. If something else on your server uses port 80 or
+  443 (Apache, nginx, or a Caddy you installed from the old guide), switch it
+  off first. To get the new notes in `.env`, see
+  [Changing settings](docs/settings.md#getting-the-newest-notes-in-env).
 - **An Obituaries page** (in the top menu) for obituaries, death notices,
   rosaries and funerals. They no longer appear under Latest, on the other
   topics' pages or in the archive, but search still finds them. Obituaries

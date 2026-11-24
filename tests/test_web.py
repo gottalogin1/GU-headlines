@@ -288,6 +288,15 @@ def test_security_and_caching_headers(client):
     css = client.get(css_link)
     assert "immutable" in css.headers["cache-control"]
     assert css.headers["x-content-type-options"] == "nosniff"
+    # HSTS only over https; browsers ignore it over plain http anyway.
+    assert "strict-transport-security" not in page.headers
+
+
+def test_https_visits_get_hsts(client):
+    # Caddy sends X-Forwarded-Proto: https, which Uvicorn turns into the scheme.
+    client.base_url = "https://testserver"
+    for path in ("/", "/static/style.css", "/nope"):
+        assert client.get(path).headers["strict-transport-security"] == "max-age=31536000"
 
 
 def test_top_photo_loads_first(client):
@@ -386,6 +395,23 @@ def test_site_url_must_be_a_web_address():
     assert _site_url(" https://news.example.com/ ") == "https://news.example.com"
     for bad in ("", None, "news.example.com", "javascript:alert(1)", "https://"):
         assert _site_url(bad) == ""
+
+
+def test_site_domain_gives_the_site_url_when_site_url_is_empty(monkeypatch):
+    from guheadlines.settings import _domain_site_url, load_settings
+
+    assert _domain_site_url("guamheadlines.com") == "https://guamheadlines.com"
+    assert _domain_site_url(" GuamHeadlines.com, www.guamheadlines.com") == (
+        "https://guamheadlines.com"
+    )
+    assert _domain_site_url("https://guamheadlines.com/") == "https://guamheadlines.com"
+    for bad in ("", None, ":80", "localhost", "guam headlines"):
+        assert _domain_site_url(bad) == "", bad
+    monkeypatch.setenv("SITE_DOMAIN", "guamheadlines.com, www.guamheadlines.com")
+    monkeypatch.delenv("SITE_URL", raising=False)
+    assert load_settings().site_url == "https://guamheadlines.com"
+    monkeypatch.setenv("SITE_URL", "https://www.guamheadlines.com")
+    assert load_settings().site_url == "https://www.guamheadlines.com"
 
 
 def test_structured_data_cannot_end_its_script_block():

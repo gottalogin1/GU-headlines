@@ -59,7 +59,7 @@ jobs:
       - name: Wait for the website
         run: |
           for i in $(seq 1 60); do
-            if curl -fsS http://localhost:8000/healthz; then echo; exit 0; fi
+            if curl -fsS http://localhost/healthz; then echo; exit 0; fi
             sleep 2
           done
           docker compose ps
@@ -67,11 +67,33 @@ jobs:
       - name: Pages respond
         run: |
           for path in / /category/military /category/labor "/search?q=guam" /archive /jobs /status /robots.txt /sitemap.xml /favicon.ico /static/style.css; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$path")
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost$path")
             echo "$path -> $code"
             test "$code" = 200
           done
-          test "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/nope)" = 404
+          test "$(curl -s -o /dev/null -w "%{http_code}" http://localhost/nope)" = 404
+      - name: Only Caddy is reachable from outside Docker
+        run: |
+          if curl -s --max-time 5 http://localhost:8000/healthz; then
+            echo "the website answers on port 8000; it should be reachable only through Caddy"
+            exit 1
+          fi
+          if curl -s -D - -o /dev/null http://localhost/ | grep -i '^server:'; then
+            echo "the site names its web server software"
+            exit 1
+          fi
+      - name: https with a domain
+        run: |
+          # "localhost" gets a certificate from Caddy's own local authority
+          # instead of Let's Encrypt, which is enough to test the https path.
+          sed -i 's/^SITE_DOMAIN=.*/SITE_DOMAIN=localhost/' .env
+          docker compose up -d
+          for i in $(seq 1 30); do
+            if curl -fsSk https://localhost/healthz; then echo; break; fi
+            sleep 2
+          done
+          curl -fsSk -D - -o /dev/null https://localhost/ | grep -i '^strict-transport-security: max-age='
+          test "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://localhost/jobs)" = "308 https://localhost/jobs"
       - name: Worker commands
         run: |
           docker compose exec -T worker guheadlines migrate
