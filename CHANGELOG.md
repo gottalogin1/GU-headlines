@@ -59,6 +59,12 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **The weather box on the home page is about half as tall.** The airport
+  reading sits beside the forecast, each forecast period takes one line, and
+  typhoons and advisories share one line under it. Click an advisory to read
+  it and see when it ends. On a tablet, or a laptop with the sidebar, the
+  box shows the next three forecast periods; on a phone, the next two.
+  Nothing to do when you update.
 - **Andersen Air Force Base is collected again.** The base's own site turns
   automated visitors away, so it was listed under **Can't be collected**.
   Its 36th Wing posts the same news releases, with photos, to its page on

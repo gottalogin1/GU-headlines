@@ -26,9 +26,11 @@ automatically (see [Topics](topics.md)).
   the National Weather Service. The banner goes away when the warning ends.
 - **The weather box** at the top of the home page shows the latest reading at
   Guam International Airport (temperature, how hot it feels, humidity, wind),
-  the forecast, the tropical storms and typhoons in the western North Pacific
-  from the Joint Typhoon Warning Center, and the advisories, such as a Small
-  Craft Advisory. Click an advisory to read it. Point at a forecast to see the
+  the forecast (one line per period: the next four, or three on a tablet or a
+  laptop with the sidebar, or two on a phone), the tropical storms and
+  typhoons in the western North Pacific from the Joint Typhoon Warning Center
+  (JTWC), and the advisories, such as a Small Craft Advisory. Click an
+  advisory to read it and see when it ends. Point at a forecast to see the
   full forecast text.
 
 See [Weather](settings.md#weather) for where the weather comes from.

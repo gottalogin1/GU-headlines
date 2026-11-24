@@ -310,7 +310,8 @@ def test_banner_on_every_page_and_weather_box_on_the_home_page(client):
     assert "Typhoon 25W (Yagi) Warning #12" in home
     # Advisories are in the box; the warning is in the banner only.
     box = home.split('class="weather"', 1)[1].split("</section>", 1)[0]
-    assert "<strong>Small Craft Advisory</strong>, until" in box
+    assert "<summary><strong>Small Craft Advisory</strong></summary>" in box
+    assert "<p><strong>Until " in box  # the end time is inside, when it is opened
     assert "<strong>Typhoon Warning" not in box
     for path in ("/category/military", "/jobs", "/status"):
         assert 'class="weather"' not in client.get(path).text, path
