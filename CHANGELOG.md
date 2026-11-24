@@ -5,6 +5,25 @@ release, see [Updating](docs/maintenance.md#updating).
 
 ## Unreleased
 
+### Added
+- **Automatic updates for a server.** `./scripts/auto-update.sh --install`
+  makes the server check every 5 minutes for new commits on the `main`
+  branch. When there are some, it makes a database backup, then rebuilds
+  and restarts the site by itself. If the new version doesn't start within
+  5 minutes, it goes back to the version before. It also checks that the
+  site answers. See
+  [Automatic updates](docs/maintenance.md#automatic-updates).
+- **Alerts in Discord.** With `DISCORD_WEBHOOK_URL` in `.env`, GU Headlines
+  posts a message in a Discord channel when a news site or job board has
+  not worked for a day (`ALERT_AFTER_HOURS`), when the site stops
+  answering, when the news hasn't been checked for 3 hours, and after each
+  automatic update. A new **Site check** on GitHub checks the site from
+  outside every 30 minutes, so an outage of the whole server is reported
+  too. `guheadlines alert-test` posts a test message. See
+  [Alerts in Discord](docs/maintenance.md#alerts-in-discord). When you
+  update, the database gets one small new table, by itself. To get the
+  alerts, follow the steps there; without them, nothing changes.
+
 ### Changed
 - **Andersen Air Force Base is collected again.** The base's own site turns
   automated visitors away, so it was listed under **Can't be collected**.

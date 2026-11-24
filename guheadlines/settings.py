@@ -75,6 +75,11 @@ class Settings:
     # for the USAJOBS board; without them that board is skipped.
     usajobs_api_key: str = ""
     usajobs_email: str = ""
+    # Alerts are posted to the Discord channel of this webhook link
+    # (https://discord.com/api/webhooks/...). Empty: no alerts. See alerts.py.
+    discord_webhook_url: str = ""
+    # A news site or job board that has not worked for this many hours gets an alert.
+    alert_after_hours: int = 24
 
     @property
     def sources_file(self) -> Path:
@@ -175,6 +180,8 @@ def load_settings() -> Settings:
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
         usajobs_api_key=env.get("USAJOBS_API_KEY", "").strip(),
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
+        discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
+        alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
     )
 
 
