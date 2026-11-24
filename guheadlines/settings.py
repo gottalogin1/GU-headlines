@@ -85,6 +85,10 @@ class Settings:
     discord_webhook_url: str = ""
     # A news site or job board that has not worked for this many hours gets an alert.
     alert_after_hours: int = 24
+    # How often the worker reads the weather (NWS alerts, forecast and airport
+    # reading; the JTWC storm list), in minutes. 0 turns the warning banner
+    # and the weather box off.
+    weather_interval_minutes: int = 10
 
     @property
     def sources_file(self) -> Path:
@@ -158,6 +162,7 @@ def load_settings() -> Settings:
         )
 
     defaults = Settings(database_url="", config_dir=Path(), media_dir=Path())
+    weather_minutes = _int(env.get("WEATHER_INTERVAL_MINUTES"), defaults.weather_interval_minutes)
     return Settings(
         database_url=_normalize_db_url(db_url),
         config_dir=Path(env.get("CONFIG_DIR", PROJECT_DIR / "config")),
@@ -189,6 +194,7 @@ def load_settings() -> Settings:
         google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
+        weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
     )
 
 

@@ -23,6 +23,20 @@ release, see [Updating](docs/maintenance.md#updating).
   [Alerts in Discord](docs/maintenance.md#alerts-in-discord). When you
   update, the database gets one small new table, by itself. To get the
   alerts, follow the steps there; without them, nothing changes.
+- **Weather and typhoon warnings.** While the National Weather Service has a
+  watch or a warning for Guam (a Typhoon Warning, a Tropical Storm Watch, a
+  Flood Watch and so on), a red or amber banner shows at the top of every
+  page. Visitors open it to read the full warning. The home page also has a
+  weather box: the latest reading at Guam International Airport, the
+  forecast, the tropical storms and typhoons in the western North Pacific
+  from the Joint Typhoon Warning Center, and the advisories. The worker reads
+  the weather every 10 minutes. Both services are free and need no key. The
+  new setting `WEATHER_INTERVAL_MINUTES` changes how often, and `0` turns the
+  weather off. When you update, add its line to your `.env` (see
+  [Getting the newest notes in .env](docs/settings.md#getting-the-newest-notes-in-env)),
+  or leave it out to use the default of 10. The new command
+  `guheadlines weather` reads the weather now and shows what each service
+  gave.
 - **An Events page** (new **Events** link in the top bar) listing what's
   coming up on Guam over the next 90 days, grouped by day, in Guam time:
   - Guam Legislature sessions, public hearings and committee meetings from

@@ -40,6 +40,10 @@
   --tag-cnmi: #f9a8d4;      --tag-cnmi-bg: rgba(244, 114, 182, .14);
   --tag-obituaries: #cbd5e1; --tag-obituaries-bg: rgba(148, 163, 184, .16);
 
+  /* The weather banner: red for a warning, amber for a watch. */
+  --warning-text: #fecaca; --warning-bg: #3b1219; --warning-line: rgba(248, 113, 113, .55);
+  --watch-text: #fde68a;   --watch-bg: #33240a;   --watch-line: rgba(251, 191, 36, .5);
+
   --r-xl: 28px;
   --r-lg: 22px;
   --r-md: 16px;
@@ -81,6 +85,8 @@
   --tag-food: #c2410c;      --tag-food-bg: rgba(249, 115, 22, .14);
   --tag-cnmi: #be185d;      --tag-cnmi-bg: rgba(236, 72, 153, .12);
   --tag-obituaries: #475569; --tag-obituaries-bg: rgba(100, 116, 139, .14);
+  --warning-text: #7f1d1d; --warning-bg: #fef2f2; --warning-line: #f87171;
+  --watch-text: #78350f;   --watch-bg: #fffbeb;   --watch-line: #f59e0b;
 }
 
 * { box-sizing: border-box; }
@@ -126,6 +132,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .glass,
 .story,
 .panel,
+.weather,
 .search-form,
 .tips,
 .empty,
@@ -144,7 +151,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 var(--glass-edge);
 }
-.story, .search-form, .tips, .empty, .site-note, .table-wrap, .day-list { background-color: var(--glass-strong); }
+.story, .weather, .search-form, .tips, .empty, .site-note, .table-wrap, .day-list { background-color: var(--glass-strong); }
 
 /* ---------- header ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
@@ -400,6 +407,73 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .dot.tag-food { background: var(--tag-food); }
 .dot.tag-cnmi { background: var(--tag-cnmi); }
 .dot.tag-obituaries { background: var(--tag-obituaries); }
+
+/* ---------- weather ---------- */
+/* The banner of watches and warnings on every page (_weather_banner.html).
+   Solid colours, not glass: it must stand out from the stories. */
+.weather-alerts { display: grid; gap: 8px; padding-top: 12px; }
+.weather-alert {
+  border-radius: var(--r-md); border: 1px solid var(--warning-line);
+  color: var(--warning-text); background: var(--warning-bg);
+}
+.weather-alert.is-watch { border-color: var(--watch-line); color: var(--watch-text); background: var(--watch-bg); }
+.weather-alert summary {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  cursor: pointer; list-style: none; font-size: .95rem; line-height: 1.4;
+}
+.weather-alert summary::-webkit-details-marker { display: none; }
+.weather-alert summary > span:first-of-type { flex: 1; min-width: 0; }
+.weather-alert-icon {
+  flex: none; width: 20px; height: 20px;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+}
+.weather-alert-more { flex: none; font-size: .8rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.weather-alert[open] .weather-alert-more { display: none; }
+.weather-alert-text { padding: 0 14px 6px 44px; }
+.weather-alert-text p { margin: 0 0 10px; max-width: 80ch; }
+.weather-alert-text a { color: inherit; font-weight: 700; text-decoration: underline; }
+
+/* The weather box on the home page (_weather.html). */
+.weather { padding: 16px 20px; margin-bottom: 18px; border-radius: var(--r-xl); }
+.weather h2, .weather h3 {
+  margin: 0; font-size: .72rem; font-weight: 750; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.weather-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.weather-body { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1fr); gap: 18px; margin-top: 8px; }
+.weather-now p { margin: 0; }
+.weather-now > p { margin-top: 2px; }
+.weather-temp { font-size: 2.4rem; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
+.weather-now .weather-sky { font-weight: 650; margin-bottom: 4px; }
+.weather-forecast {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+}
+.weather-forecast li {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px;
+  border-radius: var(--r-sm); background: var(--line); line-height: 1.35;
+}
+.weather-period { font-weight: 700; font-size: .85rem; }
+.weather-period-temp { font-weight: 750; font-size: 1.05rem; }
+.weather-row { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.weather-row p { margin: 4px 0 0; }
+.weather-storms { margin: 4px 0 0; padding-left: 18px; font-weight: 650; }
+.weather-advisory { margin-top: 4px; }
+.weather-advisory summary { cursor: pointer; font-size: .95rem; }
+.weather-advisory p { margin: 6px 0 0 18px; max-width: 80ch; color: var(--text-soft); }
+/* Phones: the reading beside the temperature, and only the next two forecast
+   periods, so the stories start near the top of the screen. */
+@media (max-width: 640px) {
+  .weather { padding: 14px; border-radius: var(--r-lg); font-size: .95rem; }
+  .weather-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .weather-now { display: flex; align-items: center; gap: 16px; }
+  .weather-now > p { margin: 0; }
+  .weather-forecast { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .weather-forecast li { padding: 8px 10px; }
+  .weather-forecast li:nth-child(n+3) { display: none; }
+  .weather-alert-text { padding-left: 14px; }
+  .weather-alerts { padding-bottom: 12px; }  /* phones: .wrap drops the layout's top padding */
+}
 
 /* ---------- search ---------- */
 .search-form {

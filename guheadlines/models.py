@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 # Text search configuration created in the initial migration: English stemming
@@ -273,3 +273,14 @@ class AlertState(Base):
     # When a failed check was first seen (used when it never worked at all).
     failing_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WeatherReport(Base):
+    """The last good copy of one weather source (see weather.py): alerts,
+    conditions, forecast or storms."""
+
+    __tablename__ = "weather"
+
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    data = mapped_column(JSONB, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

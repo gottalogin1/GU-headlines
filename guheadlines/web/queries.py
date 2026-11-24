@@ -18,6 +18,7 @@ from ..models import (
     JobSource,
     ScrapeRun,
     Source,
+    WeatherReport,
 )
 from ..scraper.text import GUAM_TZ
 
@@ -231,6 +232,12 @@ def all_sources(session: Session, keep: set[str] | frozenset[str] = frozenset())
 
 def last_updated(session: Session) -> datetime | None:
     return session.scalar(select(func.max(Source.last_run_at)))
+
+
+def weather_reports(session: Session) -> dict[str, tuple]:
+    """{kind: (data, fetched_at)} for each saved weather source."""
+    rows = session.execute(select(WeatherReport.kind, WeatherReport.data, WeatherReport.fetched_at))
+    return {kind: (data, fetched_at) for kind, data, fetched_at in rows}
 
 
 def archive_months(

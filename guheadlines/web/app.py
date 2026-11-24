@@ -33,6 +33,7 @@ from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
+from ..weather import JTWC_URL, NWS_GUAM_URL, for_page
 from . import queries, seo
 from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
 
@@ -302,6 +303,9 @@ class _TTLCache:
 # The sidebar's counts run several queries; every page shows them, so they are
 # shared between requests for two minutes.
 sidebar_cache = _TTLCache(ttl=120)
+# The weather is read on every page, for the warning banner; the worker
+# updates it every few minutes.
+weather_cache = _TTLCache(ttl=60)
 
 
 # --------------------------------------------------------- template helpers
@@ -317,6 +321,12 @@ def fmt_datetime(dt: datetime | None) -> str:
         return ""
     hour = local.hour % 12 or 12
     return f"{local:%b} {local.day}, {local.year}, {hour}:{local:%M} {local:%p} ChST"
+
+
+def fmt_until(dt: datetime) -> str:
+    """When a weather alert ends: Thu, Nov 26, 3:00 PM ChST"""
+    local = to_local(dt)
+    return f"{local:%a, %b} {local.day}, {local.hour % 12 or 12}:{local:%M %p} ChST"
 
 
 def fmt_date_long(value: date | datetime | None) -> str:
@@ -444,6 +454,7 @@ templates.env.filters.update(
     fmt_datetime=fmt_datetime,
     fmt_time=fmt_time,
     event_when=event_when,
+    fmt_until=fmt_until,
     fmt_date_long=fmt_date_long,
     fmt_day=fmt_day,
     rel_time=rel_time,
@@ -460,6 +471,8 @@ templates.env.globals.update(
     months=MONTHS,
     static_url=static_url,
     theme_script=Markup(THEME_SCRIPT),
+    nws_guam_url=NWS_GUAM_URL,
+    jtwc_url=JTWC_URL,
 )
 
 
@@ -519,6 +532,10 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "uncollectable": [s for s in config.uncollectable_sources if s.slug not in hidden],
         }
 
+    def weather():
+        with session_scope() as session:
+            return queries.weather_reports(session)
+
     context.setdefault("title", None)
     # The ad block, on the pages that ask for it, once AdSense is set up.
     show_ad = context.pop("show_ad", False) and bool(
@@ -546,6 +563,11 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "seo": meta,
             "show_ad": show_ad,
             "csp_nonce": nonce,
+            "weather": (
+                for_page(weather_cache.get("weather", weather), datetime.now(timezone.utc))
+                if settings.weather_interval_minutes
+                else None
+            ),
             **context,
         },
         status_code=status_code,
@@ -600,6 +622,7 @@ def home(request: Request, page: int = Query(1, ge=1, le=10000)):
         page,
         active_nav="latest",
         show_ad=True,
+        show_weather=page == 1,
     )
 
 

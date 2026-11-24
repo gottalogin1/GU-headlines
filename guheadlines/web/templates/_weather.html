@@ -1,0 +1,66 @@
+{# The weather box on the home page (see weather.py). Watches and warnings are
+   in the banner at the top of every page; this box lists the advisories. #}
+{% set c = weather.conditions %}
+{% set f = weather.forecast %}
+<section class="weather" aria-labelledby="weather-title">
+  <div class="weather-head">
+    <h2 id="weather-title">Guam weather</h2>
+    <a class="small" href="{{ nws_guam_url }}" target="_blank" rel="noopener">National Weather Service ↗</a>
+  </div>
+  {% if c or f %}
+  <div class="weather-body">
+    {% if c %}
+    <div class="weather-now">
+      <div>
+        {% if c.temp_f is not none %}<p class="weather-temp">{{ c.temp_f }}°F</p>{% endif %}
+        <p class="weather-sky">{{ c.sky }}</p>
+      </div>
+      <p class="small muted">
+        {%- if c.heat_index_f and c.heat_index_f > c.temp_f %}Feels like {{ c.heat_index_f }}°F<br>{% endif %}
+        {%- if c.humidity is not none %}Humidity {{ c.humidity }}%<br>{% endif %}
+        {%- if c.wind_mph is not none %}Wind {% if c.wind_mph %}{{ c.wind_dir or 'variable' }} {{ c.wind_mph }} mph{% if c.gust_mph %}, gusts {{ c.gust_mph }} mph{% endif %}{% else %}calm{% endif %}<br>{% endif %}
+        <span title="{{ c.time|fmt_datetime }}">Guam airport, {{ c.time|rel_time }}</span>
+      </p>
+    </div>
+    {% endif %}
+    {% if f %}
+    <ol class="weather-forecast" aria-label="Forecast">
+      {% for p in f %}
+      <li title="{{ p.detail }}">
+        <span class="weather-period">{{ p.name }}</span>
+        <span class="weather-period-temp">{{ "High" if p.daytime else "Low" }} {{ p.temp_f }}°</span>
+        <span class="small">{{ p.short }}</span>
+        {% if p.rain %}<span class="small muted">Rain {{ p.rain }}%</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="weather-row">
+    <h3>Typhoons</h3>
+    {% if weather.storms is none %}
+    <p>See the <a href="{{ jtwc_url }}" target="_blank" rel="noopener">Joint Typhoon Warning Center ↗</a> for tropical storms and typhoons.</p>
+    {% elif weather.storms %}
+    <ul class="weather-storms">
+      {% for s in weather.storms %}<li><a href="{{ s.url|safe_url }}" target="_blank" rel="noopener">{{ s.name }} ↗</a></li>{% endfor %}
+    </ul>
+    <p class="small muted">Warnings in the western North Pacific, from the <a href="{{ jtwc_url }}" target="_blank" rel="noopener">Joint Typhoon Warning Center ↗</a></p>
+    {% else %}
+    <p>No tropical storms or typhoons in the western North Pacific. <a class="small" href="{{ jtwc_url }}" target="_blank" rel="noopener">Joint Typhoon Warning Center ↗</a></p>
+    {% endif %}
+  </div>
+
+  {% if weather.advisories %}
+  <div class="weather-row">
+    <h3>Advisories</h3>
+    {% for a in weather.advisories %}
+    <details class="weather-advisory">
+      <summary><strong>{{ a.event }}</strong>{% if a.ends %}, until {{ a.ends|fmt_until }}{% endif %}</summary>
+      {% for p in a.text %}<p class="small">{{ p }}</p>{% endfor %}
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
