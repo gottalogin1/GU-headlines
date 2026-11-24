@@ -146,6 +146,10 @@ jobs:
         timeout-minutes: 35
         # A site that keeps rate-limiting (Marianas Variety from GitHub's
         # network) would otherwise keep this step going for a long time.
+        # Running out of time here still leaves plenty stored, so carry on:
+        # the summary, website check and screenshots below still run. The
+        # step itself still shows as failed on the run page.
+        continue-on-error: true
         run: guheadlines scrape --until-done --max-rounds 8
       - name: Re-run like the hourly worker (should fetch only new pages)
         run: guheadlines scrape
