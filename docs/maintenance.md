@@ -245,7 +245,8 @@ user that runs `docker compose` (on a rented server, usually `root`):
    It says `Done`, and posts a test message in your Discord channel. It adds
    one line to the server's **cron** schedule (see
    [Backing up automatically every night](#backing-up-automatically-every-night));
-   `crontab -l` shows it.
+   `crontab -l` shows it. If it says `Permission denied`, run
+   `bash scripts/auto-update.sh --install` instead; that works too.
 
 **What happens after a merge.** Within 5 minutes, the server starts the
 update. A minute or two later the site runs the new version, and Discord
