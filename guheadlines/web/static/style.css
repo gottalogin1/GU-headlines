@@ -385,44 +385,75 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .weather-alert-text p { margin: 0 0 10px; max-width: 80ch; }
 .weather-alert-text a { color: inherit; font-weight: 700; text-decoration: underline; }
 
-/* The weather box on the home page (_weather.html). */
-.weather { padding: 16px 20px; margin-bottom: 18px; border-radius: var(--r-xl); }
+/* The weather box on the home page (_weather.html). Kept short: the reading
+   sits beside the forecast, and typhoons and advisories share one line. */
+.weather { padding: 12px 18px; margin-bottom: 18px; border-radius: var(--r-xl); line-height: 1.35; container-type: inline-size; }
 .weather h2, .weather h3 {
-  margin: 0; font-size: .72rem; font-weight: 750; letter-spacing: .1em;
+  margin: 0; font-size: .7rem; font-weight: 750; letter-spacing: .1em;
   text-transform: uppercase; color: var(--muted);
 }
-.weather-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.weather-body { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1fr); gap: 18px; margin-top: 8px; }
-.weather-now p { margin: 0; }
-.weather-now > p { margin-top: 2px; }
-.weather-temp { font-size: 2.4rem; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
-.weather-now .weather-sky { font-weight: 650; margin-bottom: 4px; }
+.weather p { margin: 0; }
+.weather-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: .8rem; }
+.weather-main { display: grid; grid-template-columns: minmax(180px, 230px) minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 2px; }
+.weather-reading { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.weather-temp { font-size: 1.75rem; font-weight: 800; line-height: 1.15; letter-spacing: -.03em; }
+.weather-sky { font-weight: 650; }
+.weather-meta { font-size: .8rem; color: var(--muted); }
+.weather-meta span { white-space: nowrap; }
+.weather-meta span:not(:last-child)::after { content: " ·"; }
+/* One line per forecast period: name, high or low, sky, chance of rain. The
+   rows share the list's columns (subgrid), so they line up whatever the
+   period's name; a browser without subgrid uses the fixed widths. */
 .weather-forecast {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+  list-style: none; margin: 0; padding: 0; font-size: .85rem;
+  display: grid; grid-template-columns: max-content max-content minmax(0, 1fr) max-content; column-gap: 12px;
 }
 .weather-forecast li {
-  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px;
-  border-radius: var(--r-sm); background: var(--well); line-height: 1.35;
+  grid-column: 1 / -1; display: grid; column-gap: 12px; align-items: baseline; padding: 2px 0;
+  grid-template-columns: 9.5em 4.8em minmax(0, 1fr) auto;
+  grid-template-columns: subgrid;
 }
-.weather-period { font-weight: 700; font-size: .85rem; }
-.weather-period-temp { font-weight: 750; font-size: 1.05rem; }
-.weather-row { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-.weather-row p { margin: 4px 0 0; }
-.weather-storms { margin: 4px 0 0; padding-left: 18px; font-weight: 650; }
-.weather-advisory { margin-top: 4px; }
-.weather-advisory summary { cursor: pointer; font-size: .95rem; }
-.weather-advisory p { margin: 6px 0 0 18px; max-width: 80ch; color: var(--text-soft); }
-/* Phones: the reading beside the temperature, and only the next two forecast
-   periods, so the stories start near the top of the screen. */
+.weather-forecast li + li { border-top: 1px solid var(--line); }
+.weather-forecast li > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-period { font-weight: 650; }
+.weather-forecast strong { font-weight: 750; }
+.weather-short { color: var(--text-soft); }
+.weather-strip {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px;
+  margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line); font-size: .85rem;
+}
+.weather-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.weather-storm { font-weight: 700; }
+.weather-advisory summary {
+  cursor: pointer; list-style: none; display: inline-flex; align-items: baseline; gap: 5px;
+}
+.weather-advisory summary::-webkit-details-marker { display: none; }
+.weather-advisory summary::after { content: "▾"; font-size: .75em; color: var(--muted); }
+.weather-advisory[open] summary::after { content: "▴"; }
+.weather-advisory strong { font-weight: 650; }
+.weather-advisory[open] { flex-basis: 100%; }
+.weather-advisory-text { padding: 4px 0 2px 2px; }
+.weather-advisory-text p { margin: 0 0 6px; max-width: 80ch; color: var(--text-soft); }
+/* A narrower box (a tablet, or a laptop with the sidebar beside it): the
+   reading above the forecast, so the forecast keeps room for its words, and
+   the next three periods only. */
+@container (max-width: 720px) {
+  .weather-main { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .weather-now { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; }
+  .weather-forecast li:nth-child(n+4) { display: none; }
+}
+/* Phones: the next two forecast periods only, under the reading, so the
+   stories start near the top of the screen. */
 @media (max-width: 640px) {
-  .weather { padding: 14px; border-radius: var(--r-lg); font-size: .95rem; }
-  .weather-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .weather-now { display: flex; align-items: center; gap: 16px; }
-  .weather-now > p { margin: 0; }
-  .weather-forecast { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .weather-forecast li { padding: 8px 10px; }
+  .weather { padding: 10px 14px; border-radius: var(--r-lg); }
+  .weather-main { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  /* Each period on two lines: name, high or low and rain, then the sky. */
+  .weather-forecast { grid-template-columns: minmax(0, 1fr) max-content max-content; }
+  .weather-forecast li { grid-template-columns: minmax(0, 1fr) 4.8em 4.8em; grid-template-columns: subgrid; }
+  .weather-forecast li > :nth-child(4) { grid-column: 3; grid-row: 1; text-align: right; }
+  .weather-forecast .weather-short { grid-column: 1 / -1; grid-row: 2; font-size: .8rem; }
   .weather-forecast li:nth-child(n+3) { display: none; }
+  .weather-strip { gap: 2px 16px; margin-top: 6px; padding-top: 6px; font-size: .8rem; }
   .weather-alert-text { padding-left: 14px; }
   .weather-alerts { padding-bottom: 12px; }  /* phones: .wrap drops the layout's top padding */
 }
