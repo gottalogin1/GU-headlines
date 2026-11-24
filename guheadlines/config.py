@@ -364,3 +364,112 @@ def load_jobs_config(config_dir: Path) -> list[JobSourceConfig]:
     except yaml.YAMLError as exc:
         raise ConfigError(f"jobs.yaml: invalid YAML: {exc}") from exc
     return parse_jobs_config(data, set(PARSERS))
+
+
+# ----------------------------------------------------------------- events
+
+
+@dataclass
+class CalendarConfig:
+    """One calendar in events.yaml: a place that lists Guam events.
+
+    A calendar is read from one or more inputs, each a different kind of
+    address (see config/events.yaml and docs/events.md)."""
+
+    slug: str
+    name: str
+    homepage: str | None = None
+    # A public Google Calendar's ID, read through Google's Calendar API
+    # (needs GOOGLE_CALENDAR_API_KEY).
+    google_calendar: list[str] = field(default_factory=list)
+    # iCal (.ics) addresses, the format calendar apps share calendars in.
+    ical: list[str] = field(default_factory=list)
+    # Pages that list meeting agendas as PDF links under a dated heading
+    # (the Guam Legislature's session agendas).
+    agendas: list[str] = field(default_factory=list)
+    # notices.guam.gov listing pages: the government's public meeting notices.
+    notices: list[str] = field(default_factory=list)
+    # Web pages that list events, read with the CSS selectors below.
+    pages: list[str] = field(default_factory=list)
+    item: str | None = None  # each event on a page
+    title: str | None = None  # the event's name (and link) inside an item
+    when: str | None = None  # where an item's date and time are written
+    description: str | None = None  # an item's short description
+    # Used when an event does not say where it is or who holds it.
+    location: str | None = None
+    organizer: str | None = None
+    # Leave out events whose title or organizer matches one of these (regexes, any case).
+    exclude: list[re.Pattern[str]] = field(default_factory=list)
+    enabled: bool = True
+    request_delay: float | None = None
+    ignore_robots: bool = False
+    # Why this calendar can't be collected; it is listed on the Events page with a link.
+    cannot_scrape: str | None = None
+
+    @property
+    def collected(self) -> bool:
+        return self.enabled and not self.cannot_scrape
+
+    @property
+    def addresses(self) -> list[str]:
+        """Every web address this calendar reads (for robots.txt and delays)."""
+        return self.ical + self.agendas + self.notices + self.pages
+
+    def excluded(self, *labels: str | None) -> bool:
+        return any(p.search(label) for p in self.exclude for label in labels if label)
+
+
+def parse_events_config(data: dict) -> list[CalendarConfig]:
+    calendars: list[CalendarConfig] = []
+    seen: set[str] = set()
+    for raw in _as_list((data or {}).get("calendars")):
+        slug = str(raw.get("slug", "")).strip()
+        where = f"events.yaml [{slug or '?'}]"
+        if not _SLUG_RE.match(slug):
+            raise ConfigError(f"{where}: invalid or missing slug")
+        if slug in seen:
+            raise ConfigError(f"{where}: duplicate slug")
+        seen.add(slug)
+        if not raw.get("name"):
+            raise ConfigError(f"{where}: missing name")
+        urls = {
+            key: [str(u).strip() for u in _as_list(raw.get(key)) if str(u).strip()]
+            for key in ("google_calendar", "ical", "agendas", "notices", "pages")
+        }
+        calendar = CalendarConfig(
+            slug=slug,
+            name=str(raw["name"]),
+            homepage=raw.get("homepage"),
+            **urls,
+            item=raw.get("item"),
+            title=raw.get("title"),
+            when=raw.get("when"),
+            description=raw.get("description"),
+            location=raw.get("location"),
+            organizer=raw.get("organizer"),
+            exclude=_compile([str(p) for p in _as_list(raw.get("exclude"))], where),
+            enabled=bool(raw.get("enabled", True)),
+            request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
+            ignore_robots=bool(raw.get("ignore_robots", False)),
+            cannot_scrape=_reason(raw.get("cannot_scrape")),
+        )
+        if calendar.collected and not any(urls.values()):
+            raise ConfigError(
+                f"{where}: needs at least one of google_calendar, ical, agendas, notices or pages"
+            )
+        if calendar.pages and not calendar.item:
+            raise ConfigError(f"{where}: pages needs an item selector")
+        calendars.append(calendar)
+    return calendars
+
+
+def load_events_config(config_dir: Path) -> list[CalendarConfig]:
+    """config/events.yaml; no file means no calendars."""
+    path = config_dir / "events.yaml"
+    if not path.exists():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"events.yaml: invalid YAML: {exc}") from exc
+    return parse_events_config(data)

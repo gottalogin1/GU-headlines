@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, text, update
 
-from .config import AppConfig, ConfigError, load_config, load_jobs_config
+from .config import AppConfig, ConfigError, load_config, load_events_config, load_jobs_config
 from .db import MIGRATION_LOCK_KEY, advisory_lock, get_engine, session_scope
 from .models import Article
 from .settings import PACKAGE_DIR, Settings, get_settings
@@ -207,6 +207,7 @@ def cmd_worker(args, settings: Settings) -> None:
     config = _config(settings)
     pending: dict = {}
     next_jobs = 0.0  # when the job boards are due (time.monotonic); 0: on the first run
+    next_events = 0.0  # when the event calendars are due
 
     def run_jobs_if_due() -> None:
         """Job boards change more slowly than news: read them every JOBS_INTERVAL_HOURS."""
@@ -226,6 +227,24 @@ def cmd_worker(args, settings: Settings) -> None:
             _run_jobs(settings, boards)
         except Exception:
             log.exception("job check failed")
+
+    def run_events_if_due() -> None:
+        """Calendars are read every EVENTS_INTERVAL_HOURS."""
+        nonlocal next_events
+        if time.monotonic() < next_events:
+            return
+        next_events = time.monotonic() + settings.events_interval_hours * 3600 - 60
+        try:
+            calendars = load_events_config(settings.config_dir)
+        except ConfigError as exc:
+            log.error("events.yaml error, calendars not read: %s", exc)
+            return
+        if not any(c.collected for c in calendars):
+            return
+        try:
+            _run_events(settings, calendars)
+        except Exception:
+            log.exception("events check failed")
 
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
@@ -252,6 +271,7 @@ def cmd_worker(args, settings: Settings) -> None:
     if settings.scrape_on_start:
         run_once()
         run_jobs_if_due()
+        run_events_if_due()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -264,6 +284,7 @@ def cmd_worker(args, settings: Settings) -> None:
         run_once(catch_up=kind == "catch-up")
         if kind == "regular":
             run_jobs_if_due()
+            run_events_if_due()
     log.info("worker stopped")
 
 
@@ -468,6 +489,84 @@ def cmd_jobs(args, settings: Settings) -> None:
         scraper.close()
 
 
+def _events_config(settings: Settings):
+    try:
+        return load_events_config(settings.config_dir)
+    except ConfigError as exc:
+        raise SystemExit(f"config error: {exc}") from None
+
+
+def _run_events(settings: Settings, calendars, only: list[str] | None = None):
+    from .events.pipeline import EventChecker
+
+    checker = EventChecker(settings, calendars)
+    try:
+        return checker.run(only=only)
+    finally:
+        checker.close()
+
+
+def cmd_events(args, settings: Settings) -> None:
+    """Read the calendars in config/events.yaml now (or, with --check, only show
+    what each calendar gives, without a database)."""
+    calendars = _events_config(settings)
+    known = {c.slug for c in calendars}
+    for slug in args.source or []:
+        if slug not in known:
+            raise SystemExit(f"unknown calendar {slug!r}; see config/events.yaml")
+    if not args.check:
+        wait_for_db()
+        migrate()
+        results = _run_events(settings, calendars, only=args.source)
+        if results is None:
+            raise SystemExit("another events check is running")
+        for r in results:
+            note = f"  ERROR: {r.error}" if r.error else ""
+            counts = f"{r.found:>4} upcoming  {r.new:>4} new  {r.removed:>4} removed"
+            print(f"{r.slug:<18} {counts}{note}")
+        return
+
+    from .events.ical import CalendarError
+    from .events.pipeline import EventChecker
+    from .scraper.http import FetchError
+    from .scraper.text import GUAM_TZ
+
+    checker = EventChecker(settings, calendars)
+    try:
+        for calendar in calendars:
+            if args.source and calendar.slug not in args.source:
+                continue
+            print(f"### {calendar.slug}: {calendar.name}")
+            if calendar.cannot_scrape:
+                print(f"  not collected: {calendar.cannot_scrape}\n")
+                continue
+            if not calendar.enabled:
+                print("  paused (enabled: false)\n")
+                continue
+            try:
+                events, errors = checker.collect(calendar)
+            except (FetchError, CalendarError) as exc:
+                print(f"  ERROR: {exc}\n")
+                continue
+            for error in errors:
+                print(f"  ERROR (other inputs still read): {error}")
+            print(f"  {len(events)} upcoming events")
+            for e in events[: args.limit]:
+                local = e.starts_at.astimezone(GUAM_TZ)
+                when = f"{local:%a %Y-%m-%d}" + ("" if e.all_day else f" {local:%H:%M}")
+                if e.ends_at and not e.all_day:
+                    when += f" to {e.ends_at.astimezone(GUAM_TZ):%H:%M}"
+                print(f"  - {when}  {e.title}")
+                for name in ("location", "organizer", "url", "agenda_url"):
+                    if getattr(e, name):
+                        print(f"    {name}: {getattr(e, name)}")
+                if e.description:
+                    print(f"    description: {e.description[:200]!r}")
+            print()
+    finally:
+        checker.close()
+
+
 def cmd_probe(args, settings: Settings) -> None:
     """Describe pages/feeds (no database needed) to help write sources.yaml."""
     from .scraper.http import HttpClient
@@ -568,6 +667,13 @@ def main(argv: list[str] | None = None) -> None:
         "--details", type=int, default=2, help="with --check: posting pages to read per board"
     )
 
+    events = sub.add_parser("events", help="read the event calendars in config/events.yaml now")
+    events.add_argument("--source", action="append", help="only this calendar (repeatable)")
+    events.add_argument(
+        "--check", action="store_true", help="only show what each calendar gives; save nothing"
+    )
+    events.add_argument("--limit", type=int, default=6, help="with --check: events to show")
+
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -593,6 +699,7 @@ def main(argv: list[str] | None = None) -> None:
         "sources": cmd_sources,
         "probe": cmd_probe,
         "jobs": cmd_jobs,
+        "events": cmd_events,
     }[args.command]
     handler(args, settings)
 

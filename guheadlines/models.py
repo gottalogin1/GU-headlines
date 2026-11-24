@@ -206,3 +206,57 @@ class Job(Base):
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     source: Mapped[JobSource] = relationship(back_populates="jobs")
+
+
+class EventCalendar(Base):
+    """One row per calendar in events.yaml; powers the calendar list on /events."""
+
+    __tablename__ = "event_calendars"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    homepage: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    # Upcoming events found on the last successful check.
+    last_count: Mapped[int | None] = mapped_column(Integer)
+
+    events: Mapped[list[Event]] = relationship(back_populates="calendar")
+
+
+class Event(Base):
+    """An event on a calendar. Fields a calendar does not give are left empty."""
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    calendar_id: Mapped[int] = mapped_column(
+        ForeignKey("event_calendars.id", ondelete="CASCADE"), nullable=False
+    )
+    # The calendar's own ID for the event (one per date of a repeating event),
+    # so an edited event is updated rather than added again.
+    uid: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A date without a time (all day, or the time isn't given).
+    all_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    location: Mapped[str | None] = mapped_column(Text)
+    organizer: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    # The event's own page, and its agenda (PDF) when there is one.
+    url: Mapped[str | None] = mapped_column(Text)
+    agenda_url: Mapped[str | None] = mapped_column(Text)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set when the calendar no longer lists the event (cancelled or removed).
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    calendar: Mapped[EventCalendar] = relationship(back_populates="events")

@@ -18,13 +18,14 @@ on:
         type: boolean
         default: false
       only_jobs:
-        description: "Only check the job boards (config/jobs.yaml), not the news sites"
+        description: "Only check the job boards and event calendars (config/jobs.yaml, config/events.yaml), not the news sites"
         type: boolean
         default: false
   push:
     paths:
       - "config/**"
       - "guheadlines/scraper/**"
+      - "guheadlines/events/**"
       - ".github/workflows/live-check.yml"
 
 permissions:
@@ -39,6 +40,9 @@ env:
   # that it needs a key.
   USAJOBS_API_KEY: ${{ secrets.USAJOBS_API_KEY }}
   USAJOBS_EMAIL: ${{ secrets.USAJOBS_EMAIL }}
+  # The Legislature's calendar (Events page) reads this repository secret;
+  # without it, that calendar reports that it needs a key.
+  GOOGLE_CALENDAR_API_KEY: ${{ secrets.GOOGLE_CALENDAR_API_KEY }}
 
 # Runners are pinned to Ubuntu 24.04: Playwright 1.56.1 (used for the
 # screenshots) can't install its browser dependencies on ubuntu-latest,
@@ -82,7 +86,7 @@ jobs:
           done
 
   jobs:
-    name: Check job boards
+    name: Check job boards and calendars
     if: >-
       (github.event_name != 'push' && inputs.urls == '') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
@@ -101,6 +105,11 @@ jobs:
         env:
           LOG_LEVEL: DEBUG
         run: guheadlines jobs --check --limit 3 --details 2
+      - name: What each events calendar gives (nothing is saved)
+        if: ${{ !cancelled() }}
+        env:
+          LOG_LEVEL: DEBUG
+        run: guheadlines events --check --limit 5
 
   scrape:
     name: Check and scrape sources
@@ -166,6 +175,8 @@ jobs:
         run: guheadlines scrape
       - name: Read the job boards
         run: guheadlines jobs
+      - name: Read the event calendars
+        run: guheadlines events
       - name: Summary
         # Also runs when an earlier step failed, so a broken run still shows
         # what was loaded.
@@ -186,6 +197,11 @@ jobs:
                     count(j.pdf_url) AS pdfs, left(s.last_error, 120) AS error
              FROM job_sources s LEFT JOIN jobs j ON j.source_id = s.id GROUP BY s.slug, s.last_error
              ORDER BY jobs DESC"
+          q "SELECT c.slug, count(e.id) AS events, count(e.ends_at) AS ends, count(e.location) AS places,
+                    count(e.description) AS described, count(e.agenda_url) AS agendas,
+                    min(e.starts_at) AS first, max(e.starts_at) AS last, left(c.last_error, 120) AS error
+             FROM event_calendars c LEFT JOIN events e ON e.calendar_id = c.id AND e.removed_at IS NULL
+             GROUP BY c.slug, c.last_error ORDER BY events DESC"
           q "SELECT slug, day, title, categories, img, intro FROM (
                SELECT s.slug, a.published_at::date AS day, left(a.title, 70) AS title,
                       a.categories, a.image_path IS NOT NULL AS img, left(a.intro, 90) AS intro,
@@ -197,7 +213,7 @@ jobs:
           guheadlines web --port 8000 --workers 1 > web.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
           echo
-          for path in / /category/local /category/military /category/business /category/labor /category/tourism /category/sports /category/food /category/cnmi /category/obituaries "/search?q=guam" "/search?q=hagatna" /archive /status /jobs; do
+          for path in / /category/local /category/military /category/business /category/labor /category/tourism /category/sports /category/food /category/cnmi /category/obituaries "/search?q=guam" "/search?q=hagatna" /archive /status /jobs /events; do
             code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
             echo "$path -> HTTP $code, $(grep -c 'class="story' page.html) stories, $(grep -c 'class="thumb-img"' page.html) with photos"
             test "$code" = 200

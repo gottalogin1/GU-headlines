@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% block main %}
+<header class="page-head">
+  <h1>Events</h1>
+  <p class="muted">What's coming up on Guam over the next 90 days, from {{ calendars|length }} {{ "calendar" if calendars|length == 1 else "calendars" }}, checked every {{ settings.events_interval_hours }} hours. Every event links to the calendar that published it.</p>
+</header>
+
+<form class="search-form event-filter" action="/events" method="get">
+  <div class="field event-words">
+    <label for="eq">Words</label>
+    <input id="eq" type="search" name="q" value="{{ event_filters.q }}" placeholder="e.g. hearing, budget, Dededo" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="ecalendar">Calendar</label>
+    <select id="ecalendar" name="calendar">
+      <option value="">All calendars</option>
+      {% for c in calendars %}<option value="{{ c.calendar.slug }}" {% if event_filters.calendar == c.calendar.slug %}selected{% endif %}>{{ c.calendar.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if event_filters.q or event_filters.calendar %}<a class="reset" href="/events">Clear</a>{% endif %}
+  </div>
+</form>
+
+<p class="result-count">{{ "{:,}".format(result.total) }} upcoming {{ "event" if result.total == 1 else "events" }}{% if event_filters.q %} matching “{{ event_filters.q }}”{% endif %}</p>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No upcoming events here yet</h2>
+  <p>The calendars are read every {{ settings.events_interval_hours }} hours, starting when the worker boots. Each calendar's state is listed {% if calendars %}beside this list{% else %}here once it has been read{% endif %}.</p>
+</div>
+{% endif %}
+
+{% for day, label, items in groups %}
+<section class="day">
+  <h2 class="day-label"><time datetime="{{ day.isoformat() }}">{{ label }}</time></h2>
+  {% for item in items %}
+  {% set e = item.event %}
+  <article class="story no-photo event">
+    <p class="event-time">{{ event_time(e, day) }}</p>
+    <div class="story-body">
+      <h3 class="headline">{% if e.url %}<a href="{{ e.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ e.url|domain }}">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}</h3>
+      <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
+      <dl class="job-facts event-facts">
+        <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
+        <div><dt>Where</dt><dd>{{ e.location or "Not given" }}</dd></div>
+      </dl>
+      {% if e.description %}<p class="intro job-description">{{ e.description|truncate(420) }}</p>{% endif %}
+      {% if e.url or e.agenda_url %}
+      <p class="job-links">
+        {% if e.url %}
+        <a class="read-link" href="{{ e.url|safe_url }}" target="_blank" rel="noopener">Details at <span class="read-domain">{{ e.url|domain }}</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+        {% endif %}
+        {% if e.agenda_url %}
+        <a class="read-link" href="{{ e.agenda_url|safe_url }}" target="_blank" rel="noopener">Agenda (PDF)
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+        {% endif %}
+      </p>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>Calendars</h2>
+  {% if calendars %}
+  <ul class="facets">
+    {% for c in calendars %}
+    {% set s = c.calendar %}
+    <li>
+      <span class="facet-name">
+        <a href="/events?calendar={{ s.slug }}">{{ s.name }}</a>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.last_run_at %}<span class="muted small" title="{{ s.last_run_at|fmt_datetime }}">checked {{ s.last_run_at|rel_time }}</span>{% endif %}
+        {% if s.last_error %}<span class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(140) }}</span>{% endif %}
+      </span>
+      <span class="count">{{ c.upcoming }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Upcoming events per calendar. ⚠ marks a calendar that couldn't be fully read on its last check; its earlier events stay listed.</p>
+  {% else %}
+  <p class="muted">Waiting for the first check.</p>
+  {% endif %}
+  {% if uncollectable %}
+  <h3 class="panel-sub">Can't be collected</h3>
+  <ul class="facets">
+    {% for s in uncollectable %}
+    <li>
+      <span class="facet-name">
+        <span>{{ s.name }}</span>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        <span class="muted small">{{ s.cannot_scrape }}</span>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>About these listings</h2>
+  <p class="small">Times are Guam time. Events leave this page once they are over, or when their calendar stops listing them. Events marked cancelled or postponed are left out.</p>
+  <p class="small">Plans change, so check the details with the organizer before you go. Legislature session agendas are linked when the Legislature has posted them.</p>
+</section>
+{% endblock %}

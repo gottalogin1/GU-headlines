@@ -49,6 +49,7 @@ def session_scope(url: str | None = None) -> Iterator[Session]:
 MIGRATION_LOCK_KEY = 0x6775_0001
 SCRAPE_LOCK_KEY = 0x6775_0002
 JOBS_LOCK_KEY = 0x6775_0003
+EVENTS_LOCK_KEY = 0x6775_0004
 
 
 @contextmanager

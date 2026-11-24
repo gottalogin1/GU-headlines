@@ -75,6 +75,11 @@ class Settings:
     # for the USAJOBS board; without them that board is skipped.
     usajobs_api_key: str = ""
     usajobs_email: str = ""
+    # How often the worker reads the event calendars in config/events.yaml.
+    events_interval_hours: int = 3
+    # A free Google API key with the Google Calendar API turned on, for the
+    # calendars in events.yaml that are public Google Calendars.
+    google_calendar_api_key: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -175,6 +180,8 @@ def load_settings() -> Settings:
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
         usajobs_api_key=env.get("USAJOBS_API_KEY", "").strip(),
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
+        events_interval_hours=max(1, _int(env.get("EVENTS_INTERVAL_HOURS"), 3)),
+        google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
     )
 
 
