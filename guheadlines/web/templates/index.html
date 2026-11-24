@@ -5,6 +5,7 @@
 {# The home page's heading, for search engines and screen readers; the top bar already shows the name. #}
 <h1 class="visually-hidden">{{ settings.site_name }}: the latest Guam news</h1>
 {% endif %}
+{% if show_weather and weather and (weather.conditions or weather.forecast or weather.storms is not none) %}{% include "_weather.html" %}{% endif %}
 {% if heading %}
 <header class="page-head">
   {% if archive_day %}<p class="crumbs"><a href="/archive">Archive</a> › <a href="/archive/{{ archive_day.year }}/{{ archive_day.month }}">{{ months[archive_day.month - 1] }} {{ archive_day.year }}</a></p>{% endif %}

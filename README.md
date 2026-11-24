@@ -79,6 +79,11 @@ your local changes, see [Updating](docs/maintenance.md#updating).
 - **Search** finds stories from any date. It understands word endings
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
+- **Weather and typhoon warnings**: a banner on every page while the National
+  Weather Service has a watch or a warning for Guam, and a weather box on the
+  home page with the airport reading, the forecast, the typhoons in the
+  western North Pacific and the advisories. Free government data, no key.
+  See [Weather](docs/settings.md#weather).
 - **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
   from the news. It can show an ad.
 - **Light and dark mode**: follows your device's setting, with a switch in the

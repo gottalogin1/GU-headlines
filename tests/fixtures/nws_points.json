@@ -1,0 +1,112 @@
+{
+ "@context": [
+  "https://geojson.org/geojson-ld/geojson-context.jsonld",
+  {
+   "@version": "1.1",
+   "wx": "https://api.weather.gov/ontology#",
+   "s": "https://schema.org/",
+   "geo": "http://www.opengis.net/ont/geosparql#",
+   "unit": "http://codes.wmo.int/common/unit/",
+   "@vocab": "https://api.weather.gov/ontology#",
+   "geometry": {
+    "@id": "s:GeoCoordinates",
+    "@type": "geo:wktLiteral"
+   },
+   "city": "s:addressLocality",
+   "state": "s:addressRegion",
+   "distance": {
+    "@id": "s:Distance",
+    "@type": "s:QuantitativeValue"
+   },
+   "bearing": {
+    "@type": "s:QuantitativeValue"
+   },
+   "value": {
+    "@id": "s:value"
+   },
+   "unitCode": {
+    "@id": "s:unitCode",
+    "@type": "@id"
+   },
+   "forecastOffice": {
+    "@type": "@id"
+   },
+   "forecastGridData": {
+    "@type": "@id"
+   },
+   "publicZone": {
+    "@type": "@id"
+   },
+   "county": {
+    "@type": "@id"
+   }
+  }
+ ],
+ "id": "https://api.weather.gov/points/13.4443,144.7937",
+ "type": "Feature",
+ "geometry": {
+  "type": "Point",
+  "coordinates": [
+   144.7937,
+   13.4443
+  ]
+ },
+ "properties": {
+  "@id": "https://api.weather.gov/points/13.4443,144.7937",
+  "@type": "wx:Point",
+  "cwa": "GUM",
+  "type": "land",
+  "forecastOffice": "https://api.weather.gov/offices/GUM",
+  "gridId": "GUM",
+  "gridX": 47,
+  "gridY": 48,
+  "forecast": "https://api.weather.gov/gridpoints/GUM/47,48/forecast",
+  "forecastHourly": "https://api.weather.gov/gridpoints/GUM/47,48/forecast/hourly",
+  "forecastGridData": "https://api.weather.gov/gridpoints/GUM/47,48",
+  "observationStations": "https://api.weather.gov/gridpoints/GUM/47,48/stations",
+  "relativeLocation": {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     144.8005734,
+     13.4482211
+    ]
+   },
+   "properties": {
+    "city": "Mangilao",
+    "state": "GU",
+    "distance": {
+     "unitCode": "wmoUnit:m",
+     "value": 0
+    },
+    "bearing": {
+     "unitCode": "wmoUnit:degree_(angle)",
+     "value": 0
+    }
+   }
+  },
+  "forecastZone": "https://api.weather.gov/zones/forecast/GUZ001",
+  "county": "https://api.weather.gov/zones/county/GUC010",
+  "fireWeatherZone": "https://api.weather.gov/zones/fire/GUZ001",
+  "timeZone": "Pacific/Guam",
+  "radarStation": "PGUA",
+  "astronomicalData": {
+   "sunrise": "2026-11-23T06:23:39+10:00",
+   "sunset": "2026-11-23T17:50:32+10:00",
+   "transit": "2026-11-23T12:07:06+10:00",
+   "civilTwilightBegin": "2026-11-23T06:01:07+10:00",
+   "civilTwilightEnd": "2026-11-23T18:13:05+10:00",
+   "nauticalTwilightBegin": "2026-11-23T05:35:02+10:00",
+   "nauticalTwilightEnd": "2026-11-23T18:39:10+10:00",
+   "astronomicalTwilightBegin": "2026-11-23T05:09:07+10:00",
+   "astronomicalTwilightEnd": "2026-11-23T19:05:05+10:00"
+  },
+  "nwr": {
+   "transmitter": "WXM85",
+   "sameCode": "066010",
+   "areaBroadcast": "https://api.weather.gov/radio/WXM85/broadcast",
+   "pointBroadcast": "https://api.weather.gov/points/13.4443,144.7937/radio"
+  }
+ }
+}

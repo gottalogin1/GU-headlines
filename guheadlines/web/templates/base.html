@@ -50,6 +50,8 @@
     </div>
   </header>
 
+  {% if weather and weather.warnings %}{% include "_weather_banner.html" %}{% endif %}
+
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
     <aside class="sidebar">

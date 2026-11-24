@@ -17,6 +17,21 @@ A tour of every page, and how to find older stories.
 The topic links come from the topic list; if you add a topic, it appears here
 automatically (see [Topics](topics.md)).
 
+## Weather warnings and the weather box
+
+- **The banner** at the top of every page appears while the National Weather
+  Service has a watch or a warning for Guam, for example a Typhoon Warning. A
+  warning is red and a watch is amber. Click it to read the full text from
+  the National Weather Service. The banner goes away when the warning ends.
+- **The weather box** at the top of the home page shows the latest reading at
+  Guam International Airport (temperature, how hot it feels, humidity, wind),
+  the forecast, the tropical storms and typhoons in the western North Pacific
+  from the Joint Typhoon Warning Center, and the advisories, such as a Small
+  Craft Advisory. Click an advisory to read it. Point at a forecast to see the
+  full forecast text.
+
+See [Weather](settings.md#weather) for where the weather comes from.
+
 ## A story card
 
 Each story shows:

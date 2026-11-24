@@ -75,6 +75,10 @@ class Settings:
     # for the USAJOBS board; without them that board is skipped.
     usajobs_api_key: str = ""
     usajobs_email: str = ""
+    # How often the worker reads the weather (NWS alerts, forecast and airport
+    # reading; the JTWC storm list), in minutes. 0 turns the warning banner
+    # and the weather box off.
+    weather_interval_minutes: int = 10
 
     @property
     def sources_file(self) -> Path:
@@ -148,6 +152,7 @@ def load_settings() -> Settings:
         )
 
     defaults = Settings(database_url="", config_dir=Path(), media_dir=Path())
+    weather_minutes = _int(env.get("WEATHER_INTERVAL_MINUTES"), defaults.weather_interval_minutes)
     return Settings(
         database_url=_normalize_db_url(db_url),
         config_dir=Path(env.get("CONFIG_DIR", PROJECT_DIR / "config")),
@@ -175,6 +180,7 @@ def load_settings() -> Settings:
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
         usajobs_api_key=env.get("USAJOBS_API_KEY", "").strip(),
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
+        weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
     )
 
 

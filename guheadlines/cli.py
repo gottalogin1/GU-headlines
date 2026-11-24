@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import signal
 import sys
@@ -249,6 +250,10 @@ def cmd_worker(args, settings: Settings) -> None:
         settings.scrape_interval_minutes,
         settings.catch_up_seconds,
     )
+    if settings.weather_interval_minutes:
+        threading.Thread(
+            target=_weather_loop, args=(settings, stop), name="weather", daemon=True
+        ).start()
     if settings.scrape_on_start:
         run_once()
         run_jobs_if_due()
@@ -265,6 +270,32 @@ def cmd_worker(args, settings: Settings) -> None:
         if kind == "regular":
             run_jobs_if_due()
     log.info("worker stopped")
+
+
+def _weather_loop(settings: Settings, stop: threading.Event) -> None:
+    """Weather changes faster than the news, and a typhoon warning must not
+    wait for the hourly check, so the weather has a thread of its own."""
+    from .weather import check_weather
+
+    while True:
+        try:
+            check_weather(settings)
+        except Exception:
+            log.exception("weather check failed")
+        if stop.wait(settings.weather_interval_minutes * 60):
+            return
+
+
+def cmd_weather(args, settings: Settings) -> None:
+    """Read the weather now and save it (the worker does this every
+    WEATHER_INTERVAL_MINUTES)."""
+    from .weather import check_weather
+
+    wait_for_db()
+    migrate()
+    for kind, data, error in check_weather(settings):
+        shown = f"ERROR: {error}" if error else json.dumps(data, ensure_ascii=False)[:300]
+        print(f"{kind:<11} {shown}")
 
 
 def cmd_check(args, settings: Settings) -> None:
@@ -568,6 +599,8 @@ def main(argv: list[str] | None = None) -> None:
         "--details", type=int, default=2, help="with --check: posting pages to read per board"
     )
 
+    sub.add_parser("weather", help="read the weather and the storm list now")
+
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -593,6 +626,7 @@ def main(argv: list[str] | None = None) -> None:
         "sources": cmd_sources,
         "probe": cmd_probe,
         "jobs": cmd_jobs,
+        "weather": cmd_weather,
     }[args.command]
     handler(args, settings)
 

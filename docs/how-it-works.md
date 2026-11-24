@@ -24,7 +24,7 @@ page to run GU Headlines.
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
-| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)). |
+| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), and the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)). |
 | `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. |
 
 `web` and `worker` are the same program (`guheadlines`) started with
@@ -112,6 +112,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `backfill --source SLUG --since YYYY-MM-DD` | Import older stories from the site's sitemaps (`--limit N`, default 300). |
 | `reclassify` | Re-apply `categories.yaml` to every stored story. |
 | `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
+| `weather` | Read the weather now (NWS alerts, the airport reading, the forecast, the JTWC storm list) and save it. Prints what each part gave, or the error. |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
 | `migrate` | Apply database upgrades (done automatically on start). |
 | `web` | Run the website (`--port`, `--workers`). |
@@ -129,6 +130,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `scrape_runs` | One row per site per check, for the Sources page (kept 180 days) |
 | `job_sources` | One row per job board: name, homepage, on/off, last check, last error, postings found |
 | `jobs` | The job postings: URL (unique), title, employer, pay, description, location, open and close date, closing note, PDF, first and last seen, and when the board stopped listing it |
+| `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `storms`) as JSON, with the time it was read |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
 

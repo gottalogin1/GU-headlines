@@ -235,6 +235,44 @@ SCRAPE_INTERVAL_MINUTES=30
 SITE_TAGLINE=Guam news, updated every 30 minutes
 ```
 
+## Weather
+
+The worker also reads the weather for Guam from two free United States
+government services. They need no key.
+
+- The **National Weather Service** (NWS) office in Tiyan
+  ([weather.gov/gum](https://www.weather.gov/gum/)): the watches, warnings and
+  advisories for Guam and the Guam coastal waters, the forecast for Hagåtña,
+  and the latest reading at Guam International Airport.
+- The **Joint Typhoon Warning Center** (JTWC): the tropical storms and
+  typhoons that it has warnings for in the western North Pacific.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `WEATHER_INTERVAL_MINUTES` | `10` | How often to read the weather, in minutes. The minimum is 5. `0` turns the weather off: no banner and no weather box. |
+
+What the site shows:
+
+- **A banner at the top of every page** while NWS has a watch or a warning for
+  Guam (a Typhoon Warning, a Tropical Storm Watch, a Flood Watch, a Tsunami
+  Warning and so on). Warnings are red and watches are amber. A visitor opens
+  the banner to read the full NWS text.
+- **A weather box at the top of the home page**: the temperature, how hot it
+  feels, the humidity and the wind at the airport, the next four forecast
+  periods (two on phones), the storm list, and the advisories and statements
+  (a Small Craft Advisory, a Rip Current Statement), which are not in the
+  banner.
+
+If a service cannot be reached, the site keeps what it got last. A warning
+stays in the banner until its end time. The reading, the forecast and the
+storm list leave the box when they are more than 6 hours old.
+
+To read the weather now and see what each service gave:
+
+```
+docker compose exec worker guheadlines weather
+```
+
 ## Being a good visitor
 
 | Setting | Default | What it does |

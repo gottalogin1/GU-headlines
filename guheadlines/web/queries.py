@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import Select, Text, and_, func, literal, literal_column, not_, select, text, true
 from sqlalchemy.orm import Session
 
-from ..models import SEARCH_CONFIG, Article, Job, JobSource, ScrapeRun, Source
+from ..models import SEARCH_CONFIG, Article, Job, JobSource, ScrapeRun, Source, WeatherReport
 from ..scraper.text import GUAM_TZ
 
 # ts_headline markers; replaced by <mark> after HTML-escaping the snippet.
@@ -222,6 +222,12 @@ def all_sources(session: Session, keep: set[str] | frozenset[str] = frozenset())
 
 def last_updated(session: Session) -> datetime | None:
     return session.scalar(select(func.max(Source.last_run_at)))
+
+
+def weather_reports(session: Session) -> dict[str, tuple]:
+    """{kind: (data, fetched_at)} for each saved weather source."""
+    rows = session.execute(select(WeatherReport.kind, WeatherReport.data, WeatherReport.fetched_at))
+    return {kind: (data, fetched_at) for kind, data, fetched_at in rows}
 
 
 def archive_months(

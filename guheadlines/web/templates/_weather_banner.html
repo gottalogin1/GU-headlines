@@ -1,0 +1,20 @@
+{# Weather watches and warnings for Guam, on every page (see weather.py).
+   Each one opens to show the full National Weather Service text. #}
+<div class="wrap">
+  <section class="weather-alerts" aria-label="Weather warnings">
+    {% for a in weather.warnings %}
+    <details class="weather-alert {{ 'is-watch' if a.event.endswith('Watch') else 'is-warning' }}">
+      <summary>
+        <svg class="weather-alert-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5m0 3v.01"/></svg>
+        <span><strong>{{ a.event }}</strong> for {{ a.area }}{% if a.ends %}, until {{ a.ends|fmt_until }}{% endif %}</span>
+        <span class="weather-alert-more">Details</span>
+      </summary>
+      <div class="weather-alert-text">
+        {% for p in a.text %}<p>{{ p }}</p>{% endfor %}
+        <p class="small">From the National Weather Service office in Tiyan.
+          <a href="{{ nws_guam_url }}" target="_blank" rel="noopener">The latest from NWS Guam ↗</a></p>
+      </div>
+    </details>
+    {% endfor %}
+  </section>
+</div>
