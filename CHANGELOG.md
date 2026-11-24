@@ -5,6 +5,19 @@ release, see [Updating](docs/maintenance.md#updating).
 
 ## Unreleased
 
+### Removed
+- **r/guam and the Community page.** Reddit ended its public feeds on
+  November 13, 2026, and stopped giving out API keys on October 31, 2026, so
+  r/guam can't be collected any more. The r/guam source, the Community topic
+  and page, and the Reddit settings (`REDDIT_CLIENT_ID`,
+  `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`) are gone. When you update, the
+  r/guam posts already stored are **deleted**, with their pictures, the
+  first time GU Headlines starts. That can't be undone, so take a backup first
+  (`./scripts/backup.sh`). Old links to the Community page now show "page not
+  found". If your `.env` has the three `REDDIT_` lines, you can delete them;
+  they are no longer used. The same goes for the `REDDIT_` repository secrets
+  on GitHub, if you added them.
+
 ### Fixed
 - **New stories that show only a date stay at the top.** Some news sites
   give the day of a story but not the time. Such a story was put at 12:00 AM,

@@ -9,7 +9,6 @@ option.
 - [How it reads a news site](#how-it-reads-a-news-site)
 - [Editing sources.yaml safely](#editing-sourcesyaml-safely)
 - [Common tasks](#common-tasks): pause, remove, rename, test, sites that can't be collected
-- [Reddit (r/guam)](#reddit): getting the free Reddit key it needs
 - [Adding a new news site, step by step](#adding-a-new-news-site-step-by-step)
 - [Every option explained](#every-option-explained)
 - [Fixing problems](#fixing-problems)
@@ -298,88 +297,6 @@ site's own address (for example `/business/local/` becomes
 **A regional site that also covers Saipan, Palau or other islands:** add
 `require_guam: true` to keep only stories that mention Guam.
 
-**A Reddit community** (subreddit): give its name in `reddit:` instead of
-feeds. Posts are read through Reddit's API, which needs the key described in
-[Reddit (r/guam)](#reddit). This is how r/guam is set up:
-
-```yaml
-  - slug: reddit-guam
-    name: r/guam (Reddit)
-    homepage: https://www.reddit.com/r/guam/
-    reddit: guam
-    ignore_robots: true
-    only_in_topic: community
-```
-
-`only_in_topic: community` keeps the posts on the Community page only, away
-from the news on the front page. `ignore_robots: true` lets the pictures of
-picture posts be downloaded (Reddit's robots.txt turns all robots away).
-
----
-
-## Reddit
-
-r/guam's posts come from Reddit's official API. Until November 2026 they came
-from the community's public feed, but since then every Reddit feed answers
-"Not Found" to anyone who isn't logged in. The API needs a free key, made from
-a Reddit account. Until the key is set, the Sources page lists r/guam under
-**Can't be collected** with "Waiting for a Reddit API key", and the posts
-collected before stay on the Community page.
-
-**Getting the key:**
-
-1. Sign in to Reddit. Any account works; a separate one for the site (such as
-   u/GUHeadlines) keeps it apart from your own.
-2. Open <https://www.reddit.com/prefs/apps> and choose **create another
-   app...** (or **are you a developer? create an app...**).
-3. Fill in:
-   - **name:** GU Headlines
-   - type: **script**
-   - **description:** Shows r/guam's newest posts on a Guam news site, once
-     an hour.
-   - **about url:** your site's address (or the GitHub repository)
-   - **redirect uri:** `http://localhost:8080` (Reddit requires one; it isn't
-     used)
-4. Choose **create app**. The **client ID** is the short code under
-   "personal use script", below the app's name. The **secret** is next to
-   "secret".
-
-   Reddit may first ask you to accept its Developer Terms, or to fill in a
-   form asking for API access and wait for an answer. If it does, say it is a
-   personal, non-commercial site that shows a Guam community's newest post
-   titles, with links back to Reddit, checked once an hour.
-5. Add three lines to `.env`:
-   ```
-   REDDIT_CLIENT_ID=the-client-id
-   REDDIT_CLIENT_SECRET=the-secret
-   REDDIT_USERNAME=the-account-name
-   ```
-   `REDDIT_USERNAME` is the account that made the app, without `u/`. Reddit's
-   API rules ask apps to name it in every request.
-6. `docker compose up -d` to apply, then check it:
-   ```sh
-   docker compose exec worker guheadlines check --source reddit-guam
-   ```
-   It should say `discovered 50 article links` (or close to it) and show a
-   few posts. If it says `Reddit refused the API key`, copy the ID and secret
-   again. If it says `HTTP 403`, Reddit hasn't approved the app yet.
-
-The live check on GitHub (see [How it works](how-it-works.md#github-checks))
-reads the same three values from repository secrets named
-`REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` and `REDDIT_USERNAME` (Settings →
-Secrets and variables → Actions).
-
-**What is read:** once an hour, the community's 50 newest posts: the title,
-the post's own text, the picture of a picture post, the author and the time.
-Posts are never opened one by one, and removed or adult (NSFW) posts are left
-out. Reddit allows a registered app 100 requests a minute; GU Headlines makes
-two an hour (one sign-in, one list of posts).
-
-**Reddit's rules:** Reddit's Data API Terms ask apps to remove content that
-was deleted on Reddit. GU Headlines doesn't yet go back to check posts it
-stored earlier, so a post deleted after it was collected stays on the
-Community page until you remove it.
-
 ---
 
 ## Every option explained
@@ -400,16 +317,15 @@ entry are required.
 | `exclude_url_patterns` | `- '/opinion/'` | Skip story links whose address matches one of these patterns. Added to the shared list under `defaults:` at the top of the file. |
 | `exclude_sections` | `[Opinion, Sports]` | Skip stories that the site files under these sections or feed categories. Added to the shared list under `defaults:`. |
 | `allow_sections` | `[Sports, Lifestyle]` | Collect these sections from this site even though the shared `defaults:` skip them. It lifts both the section name and the matching default address pattern (`/sports/`, `/lifestyle/`). Other sites still skip them. |
-| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor`, `tourism`, `sports`, `food`, `cnmi` or `community`. |
+| `categories` | `[military]` | Always put this site's stories in these topics, in addition to the automatic sorting. Use topic *slugs* from `categories.yaml`: `local`, `military`, `business`, `labor`, `tourism`, `sports`, `food`, `cnmi` or `obituaries`. |
 | `require_guam` | `true` | Keep only stories that mention Guam or the CNMI (Saipan, Tinian). What counts is the `guam_keywords` list near the top of the file. |
 | `request_delay` | `5` | Seconds between requests to this site. Use it for sites that answer "too many requests" (HTTP 429). If the site's robots.txt asks for a longer delay, that is used instead. |
 | `max_age_days` | `30` | Links found on *listing pages* that are older than this are skipped. Home pages often link to old "evergreen" pages (station promos, guides); this keeps them out. Feed stories are never skipped for age. |
 | `body_selector` | `'.story-text'` | Where the story text is on the page. Only needed if the intro comes out wrong. To find it, open a story in Chrome or Firefox, right-click its first paragraph and choose **Inspect**. Look a few lines up for the box that holds all the paragraphs, such as `<div class="story-text">`, and write its class with a dot in front: `'.story-text'`. |
 | `ignore_robots` | `true` | Read this site even where its robots.txt asks robots not to (see [robots.txt](#robotstxt)). Also covers the photos its stories point to. |
-| `only_in_topic` | `community` | Put this site's stories in that one topic only, whatever they mention, and show them only on that topic's page: not on the front page, the other topics or the archive. Search shows them when you search within that topic. Use a topic *slug* from `categories.yaml`. |
+| `only_in_topic` | `sports` | Put this site's stories in that one topic only, whatever they mention, and show them only on that topic's page: not on the front page, the other topics or the archive. Search shows them when you search within that topic. Use a topic *slug* from `categories.yaml`. |
 | `cannot_scrape` | `Its firewall (Cloudflare) turns away automated visitors.` | The site can't be collected. GU Headlines never reads it, and lists it separately on the Sources page and in the sidebar, with this reason and a link. See [Sites that can't be collected](#sites-that-cant-be-collected). |
 | `feed_only` | `true` | Build stories from the feed alone: the headline, text, photo and date the feed gives, without opening each story's page. For sites whose pages turn robots away but whose feed works. Needs `feeds`. |
-| `reddit` | `guam` | A Reddit community to read through Reddit's API instead of feeds: its 50 newest posts, built like `feed_only` stories. Needs the free key in `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`; see [Reddit](#reddit). |
 | `undated` | `true` | The site's pages show no date (such as the Guam Visitors Bureau). Pages that match `article_pattern` are accepted without one and dated when first found, so the first run dates everything on the listing page that day. Needs `article_pattern`. |
 | `sitemaps` | *(a list of addresses)* | Sitemap files for [importing older stories](#importing-older-stories). Usually found automatically. |
 
@@ -434,14 +350,11 @@ At the top of `sources.yaml`:
 ### robots.txt
 
 Many sites have a file called `robots.txt` that tells automated programs which
-pages they may read. GU Headlines obeys it. Two sites are set to
+pages they may read. GU Headlines obeys it. One site is set to
 `ignore_robots: true` on your instructions:
 
 - **Marianas Variety**, whose robots.txt asks all robots except a few search
   engines to stay out.
-- **r/guam**, because Reddit's robots.txt turns all robots away. The posts
-  come from Reddit's API (see [Reddit](#reddit)), and robots.txt is only
-  skipped for the pictures of picture posts.
 
 If you use `ignore_robots` on a site, know that the site owner has asked not
 to be read this way and may block your server. To turn the exception off,

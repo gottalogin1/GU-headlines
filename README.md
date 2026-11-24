@@ -9,11 +9,8 @@ to the news site that published it.
 
 Stories are sorted into topics: **Local, Military, Business, Labor, Tourism,
 Sports, Food and Saipan & CNMI**. Everything is kept, so you can search for a
-story from last week or from three years ago. Posts from Reddit's r/guam have
-their own **Community** page, away from the news. They are read through
-Reddit's API, which needs a free Reddit key ([how to get
-one](docs/news-sources.md#reddit)). Obituaries and death notices have their own
-**Obituaries** page too, and stay off the front page.
+story from last week or from three years ago. Obituaries and death notices
+have their own **Obituaries** page, and stay off the front page.
 
 ![The front page (sample stories)](docs/screenshot.jpg)
 
@@ -30,7 +27,7 @@ needed; you will copy and paste a few commands.
 | 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page, light and dark mode |
 | 3. [Changing settings](docs/settings.md) | Site name, web address and https, how often it checks for news, photos, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
-| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business, Labor, Tourism, Sports, Food and Saipan & CNMI (plus Community and Obituaries), and how to change or add topics |
+| 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business, Labor, Tourism, Sports, Food and Saipan & CNMI (plus Obituaries), and how to change or add topics |
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
@@ -82,7 +79,6 @@ your local changes, see [Updating](docs/maintenance.md#updating).
 - **Search** finds stories from any date. It understands word endings
   ("workers" finds "worker") and ignores accents ("Hagatna" finds "Hagåtña").
 - **Archive** by year, month and day, in Chamorro Standard Time.
-- **Community page** for posts from Reddit's r/guam, kept apart from the news.
 - **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
   from the news. It can show an ad.
 - **Light and dark mode**: follows your device's setting, with a switch in the
@@ -120,7 +116,6 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Guam Sports Network (GSPN) | Sports |
 | Guam Football Association | Soccer: the Matao and local leagues |
 | Guam Visitors Bureau | Tourism news releases |
-| r/guam on Reddit | Shown only on the **Community** page, not on the front page; read through Reddit's API, which needs a free key ([how](docs/news-sources.md#reddit)) |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
 | Guam News Network | Local news, including its National, World and sports stories about Guam; opinion pieces are skipped |
 

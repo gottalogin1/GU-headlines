@@ -476,147 +476,76 @@ def test_ignore_robots_is_per_source(clean_db, scraper, site, config):
         other.close()
 
 
-REDDIT_FEED = "https://www.reddit.com/r/guam/new/.rss?limit=50"
+FEED = "https://www.islandposts.example/feed/"
+FEED_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+<channel><title>Island Posts</title>
+<item>
+  <title>Port Authority approves new gantry cranes</title>
+  <link>https://www.islandposts.example/posts/port-cranes/</link>
+  <description>The board voted to buy two cranes for the commercial port.</description>
+  <pubDate>Tue, 29 Sep 2026 03:22:48 GMT</pubDate>
+</item>
+<item>
+  <title>Sunset at Ypao Beach tonight</title>
+  <link>https://www.islandposts.example/posts/ypao-sunset/</link>
+  <pubDate>Tue, 29 Sep 2026 02:10:00 GMT</pubDate>
+  <media:content url="https://img.islandposts.example/ypao.jpeg" medium="image"/>
+</item>
+</channel></rss>
+"""
 
 
 def test_feed_only_source_never_opens_the_posts(clean_db):
     requests: Counter[str] = Counter()
 
-    def reddit(request: httpx.Request) -> httpx.Response:
+    def site(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         requests[url] += 1
         if url.endswith("/robots.txt"):
             return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
-        if url == REDDIT_FEED:
+        if url == FEED:
             return httpx.Response(
-                200,
-                content=fixture_bytes("reddit_feed.xml"),
-                headers={"content-type": "application/atom+xml"},
+                200, content=FEED_XML, headers={"content-type": "application/rss+xml"}
             )
-        if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
-            # Like Reddit: a request for a web page goes to the (blocked) viewer.
+        if url == "https://img.islandposts.example/ypao.jpeg":
+            # Some image hosts send a request for a web page to their viewer.
             if "image/" not in request.headers.get("accept", ""):
-                return httpx.Response(302, headers={"location": "https://www.reddit.com/media"})
+                return httpx.Response(302, headers={"location": "https://img.islandposts.example/"})
             return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
         return httpx.Response(403, text="Blocked")
 
     sources = {
         "sources": [
             {
-                "slug": "reddit-guam",
-                "name": "r/guam (Reddit)",
-                "homepage": "https://www.reddit.com/r/guam/",
-                "feeds": [REDDIT_FEED],
+                "slug": "islandposts",
+                "name": "Island Posts",
+                "homepage": "https://www.islandposts.example/",
+                "feeds": [FEED],
                 "feed_only": True,
                 "ignore_robots": True,
-                "only_in_topic": "community",
+                "only_in_topic": "sports",
             }
         ]
     }
     categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
     client = HttpClient(
-        "test-agent", per_host_delay=0, transport=httpx.MockTransport(reddit), sleep=lambda s: None
+        "test-agent", per_host_delay=0, transport=httpx.MockTransport(site), sleep=lambda s: None
     )
     try:
         scraper = Scraper(get_settings(), parse_config(sources, categories), client=client)
-        assert scraper.run()[0].new_articles == 3
+        assert scraper.run()[0].new_articles == 2
     finally:
         client.close()
 
-    assert not any("/comments/" in url for url in requests)  # posts never opened
+    assert not any("/posts/" in url for url in requests)  # posts never opened
     articles = _articles()
-    post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
-    assert post.intro.startswith("My appointment at the Department of Revenue")
-    assert post.author == "u/islandcommuter"
-    # Only the Community topic, whatever a post mentions.
-    assert {tuple(a.categories) for a in articles.values()} == {("community",)}
-    picture = articles[
-        "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
-    ]
+    post = articles["https://www.islandposts.example/posts/port-cranes/"]
+    assert post.intro == "The board voted to buy two cranes for the commercial port."
+    # Only the one topic, whatever a post mentions (the port is business news).
+    assert {tuple(a.categories) for a in articles.values()} == {("sports",)}
+    picture = articles["https://www.islandposts.example/posts/ypao-sunset/"]
     assert picture.image_path and picture.intro is None
-
-
-def test_reddit_source_reads_the_api(clean_db):
-    requests: Counter[str] = Counter()
-
-    def reddit(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        requests[url.split("?")[0]] += 1
-        if url == "https://www.reddit.com/api/v1/access_token":
-            return httpx.Response(200, json={"access_token": "t", "expires_in": 86400})
-        if url.startswith("https://oauth.reddit.com/r/guam/new?"):
-            return httpx.Response(
-                200,
-                content=fixture_bytes("reddit_new.json"),
-                headers={"content-type": "application/json"},
-            )
-        if url == "https://i.redd.it/k2v9w8ypao1.jpeg":
-            return httpx.Response(200, content=make_jpeg(), headers={"content-type": "image/jpeg"})
-        if url.endswith("/robots.txt"):
-            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
-        return httpx.Response(403, text="Blocked")
-
-    sources = {
-        "sources": [
-            {
-                "slug": "reddit-guam",
-                "name": "r/guam (Reddit)",
-                "homepage": "https://www.reddit.com/r/guam/",
-                "reddit": "guam",
-                "ignore_robots": True,
-                "only_in_topic": "community",
-            }
-        ]
-    }
-    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
-    settings = replace(get_settings(), reddit_client_id="id", reddit_client_secret="secret")
-    client = HttpClient(
-        "test-agent", per_host_delay=0, transport=httpx.MockTransport(reddit), sleep=lambda s: None
-    )
-    try:
-        scraper = Scraper(settings, parse_config(sources, categories), client=client)
-        assert scraper.run()[0].new_articles == 3
-        # The next hour: one more look at the newest posts, nothing new stored.
-        assert scraper.run()[0].new_articles == 0
-    finally:
-        client.close()
-
-    assert requests["https://www.reddit.com/api/v1/access_token"] == 1
-    assert requests["https://oauth.reddit.com/r/guam/new"] == 2
-    assert not any("/comments/" in url for url in requests)  # posts never opened
-    articles = _articles()
-    post = articles["https://www.reddit.com/r/guam/comments/1wszcb6/dmv_need_help_guam_id/"]
-    assert post.intro.startswith("My appointment at the Department of Revenue")
-    assert post.author == "u/islandcommuter"
-    assert {tuple(a.categories) for a in articles.values()} == {("community",)}
-    picture = articles[
-        "https://www.reddit.com/r/guam/comments/1wsr9zq/sunset_at_ypao_beach_tonight/"
-    ]
-    assert picture.image_path and picture.intro is None
-
-
-def test_reddit_source_without_a_key_explains(clean_db):
-    sources = {
-        "sources": [
-            {"slug": "reddit-guam", "name": "r/guam (Reddit)", "reddit": "guam"},
-        ]
-    }
-    categories = yaml.safe_load((ROOT / "config" / "categories.yaml").read_text())
-    settings = replace(get_settings(), reddit_client_id="", reddit_client_secret="")
-    client = HttpClient(
-        "test-agent",
-        per_host_delay=0,
-        transport=httpx.MockTransport(lambda r: httpx.Response(500)),
-        sleep=lambda s: None,
-    )
-    try:
-        result = Scraper(settings, parse_config(sources, categories), client=client).run()[0]
-    finally:
-        client.close()
-    assert result.errors == [
-        "Reddit r/guam: needs a Reddit API key: set REDDIT_CLIENT_ID and "
-        "REDDIT_CLIENT_SECRET (see docs/news-sources.md#reddit)"
-    ]
 
 
 BOT_CHECK = b"""<!DOCTYPE html><html><head><title>One moment, please...</title>
@@ -671,10 +600,10 @@ def test_stories_stored_before_only_in_topic_move_to_that_topic(clean_db, config
                 published_at=datetime.now(timezone.utc),
             )
         )
-    config.source("pnc").only_in_topic = "community"
+    config.source("pnc").only_in_topic = "sports"
     with session_scope() as session:
         sync_sources(session, config)
-    assert [a.categories for a in _articles().values()] == [["community"]]
+    assert [a.categories for a in _articles().values()] == [["sports"]]
 
 
 def test_website_builder_credits_are_cleared_from_stored_stories(clean_db, config):

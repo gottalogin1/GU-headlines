@@ -1,3 +1,4 @@
+from guheadlines.config import parse_config
 from guheadlines.scraper.classify import classify, mentions_guam
 
 
@@ -33,18 +34,23 @@ def test_site_section_counts(app_config):
     assert "business" in cats
 
 
-def test_news_never_lands_in_community(app_config):
-    # Community (r/guam posts) has no keywords: a news site's own "Community"
-    # section, or "community" in a story's address, doesn't put news there.
+def test_topic_without_keywords_is_only_given_on_purpose():
+    # A topic without keywords is only given by a site's categories: or
+    # only_in_topic:. A news site's own section with its name, or the name in
+    # a story's address, doesn't put news there.
+    config = parse_config(
+        {"sources": [{"slug": "a", "name": "A", "feeds": ["https://a.example/feed"]}]},
+        {"categories": [{"slug": "community", "name": "Community"}]},
+    )
     cats = classify(
-        app_config,
+        config,
         title="Humatak family loses home in fire",
         section="Community",
         url="https://guamnewsnetwork.com/news/community-rallies-for-humatak-family",
     )
     assert "community" not in cats
-    assert classify(app_config, title="Best kelaguen?", only="community") == ["community"]
-    assert "community" in classify(app_config, title="Ceremony held", forced=["community"])
+    assert classify(config, title="Best kelaguen?", only="community") == ["community"]
+    assert "community" in classify(config, title="Ceremony held", forced=["community"])
 
 
 def test_forced_categories(app_config):

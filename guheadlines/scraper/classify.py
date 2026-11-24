@@ -45,9 +45,9 @@ def classify(
     for category in config.categories:
         if category.slug in matched:
             continue
-        # A topic without keywords (Community) is only given by a site's
-        # categories: or only_in_topic:, even when a news site files a story
-        # under a section with its name (Guam News Network's "Community").
+        # A topic without keywords is only given by a site's categories: or
+        # only_in_topic:, even when a news site files a story under a section
+        # with its name.
         if not category.keywords:
             continue
         # The site filed it under e.g. /business/ or section "Military".
