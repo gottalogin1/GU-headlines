@@ -1,92 +1,86 @@
-/* GU Headlines: frosted glass, soft curves, readable text. One file, no build step. */
+/* GU Headlines: a matte, paper-like look, like a colour e-paper screen. Flat
+   surfaces, thin rules, muted colours and crisp text. One file, no build step. */
 
 /* Dark is the default theme. A small script in base.html sets data-theme on
    <html>: the visitor's choice from the switch in the top bar, else their
    device's light/dark setting, else dark. */
 :root {
   color-scheme: dark;
-  --bg: #0a1020;
-  --text: #e8edf5;
-  --text-soft: #c9d2e0;
-  --muted: #97a3b6;
-  --line: rgba(255, 255, 255, .08);
-  --accent: #6ea8ff;
-  --accent-2: #38bdf8;
-  --link: #9cc3ff;
-  --mark: #7c5e10;
-  --focus: #8fb8ff;
-  --error: #fca5a5;
-  --field-bg: rgba(255, 255, 255, .06);  /* search box, the light/dark switch */
-  --input-bg: rgba(255, 255, 255, .05);  /* search page fields */
-  --backdrop-opacity: .55;               /* the soft colours behind the glass */
+  --bg: #1b1a18;
+  --surface: #23221f;      /* cards and panels: flat and opaque, no blur, gloss or shadow */
+  --well: #2b2a26;         /* small blocks inside a card: forecast, job facts, counts */
+  --text: #e8e5de;
+  --text-soft: #cdc9c0;
+  --muted: #a39e94;
+  --line: #3a3833;         /* thin rules around and between things */
+  --line-strong: #5b5850;  /* the rule of a card under the pointer */
+  --accent: #9db7d5;
+  --link: #a9c2de;
+  --fill: #3d5a7d;         /* the current section, buttons */
+  --on-fill: #f4f2ec;
+  --mark: #5c4b1e;
+  --focus: #b7cbe3;
+  --error: #eaa59a;
+  --field-bg: #262521;     /* search box, the light/dark switch */
+  --input-bg: #1f1e1b;     /* search page fields */
+  --knob: #3a3833;  --knob-icon: #e6cf8e;
+  --serif: ui-serif, "Iowan Old Style", Charter, "Bitstream Charter", Georgia, Cambria, serif;
 
-  /* Glass surfaces. Cards carrying body text are nearly opaque for contrast. */
-  --glass: rgba(22, 30, 50, .50);
-  --glass-strong: rgba(20, 28, 46, .74);
-  --glass-border: rgba(255, 255, 255, .09);
-  --glass-edge: rgba(0, 0, 0, .25);
-  --gloss: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 40%);
-  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -18px rgba(0, 0, 0, .7);
-  --shadow-hover: 0 2px 4px rgba(0, 0, 0, .3), 0 24px 52px -18px rgba(0, 0, 0, .85);
-  --blur: blur(22px) saturate(170%);
-
-  --tag-local: #5eead4;     --tag-local-bg: rgba(45, 212, 191, .13);
-  --tag-military: #bef264;  --tag-military-bg: rgba(163, 230, 53, .12);
-  --tag-business: #93c5fd;  --tag-business-bg: rgba(96, 165, 250, .14);
-  --tag-labor: #fcd34d;     --tag-labor-bg: rgba(251, 191, 36, .13);
-  --tag-tourism: #67e8f9;   --tag-tourism-bg: rgba(34, 211, 238, .13);
-  --tag-sports: #fca5a5;    --tag-sports-bg: rgba(248, 113, 113, .14);
-  --tag-food: #fdba74;      --tag-food-bg: rgba(251, 146, 60, .14);
-  --tag-cnmi: #f9a8d4;      --tag-cnmi-bg: rgba(244, 114, 182, .14);
-  --tag-obituaries: #cbd5e1; --tag-obituaries-bg: rgba(148, 163, 184, .16);
+  /* Muted inks, as on a colour e-paper screen. */
+  --tag-local: #9cc9c0;     --tag-local-bg: #26332f;
+  --tag-military: #c3cc96;  --tag-military-bg: #2e3122;
+  --tag-business: #a9bedb;  --tag-business-bg: #262d38;
+  --tag-labor: #e0c38a;     --tag-labor-bg: #3a3020;
+  --tag-tourism: #9cc8d4;   --tag-tourism-bg: #233236;
+  --tag-sports: #e3a79e;    --tag-sports-bg: #3b2623;
+  --tag-food: #e5b48c;      --tag-food-bg: #3b2a1f;
+  --tag-cnmi: #dcaac2;      --tag-cnmi-bg: #38262f;
+  --tag-obituaries: #c4bfb6; --tag-obituaries-bg: #302e2a;
 
   /* The weather banner: red for a warning, amber for a watch. */
-  --warning-text: #fecaca; --warning-bg: #3b1219; --warning-line: rgba(248, 113, 113, .55);
-  --watch-text: #fde68a;   --watch-bg: #33240a;   --watch-line: rgba(251, 191, 36, .5);
+  --warning-text: #f2c6be; --warning-bg: #3b211e; --warning-line: #9a4f45;
+  --watch-text: #ecd5a0;   --watch-bg: #362c19;   --watch-line: #9a7b3b;
 
-  --r-xl: 28px;
-  --r-lg: 22px;
-  --r-md: 16px;
-  --r-sm: 12px;
+  --r-xl: 14px;
+  --r-lg: 12px;
+  --r-md: 10px;
+  --r-sm: 8px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }
 
-/* Light theme: a plain white page with white cards set off by thin borders. */
+/* Light theme: warm paper, with slightly lighter cards set off by thin rules. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #ffffff;
-  --text: #0f172a;
-  --text-soft: #334155;
-  --muted: #5b6b82;
-  --line: rgba(15, 23, 42, .09);
-  --accent: #2563eb;
-  --accent-2: #0ea5e9;
-  --link: #1d4ed8;
-  --mark: #fde68a;
-  --focus: #2563eb;
-  --error: #b91c1c;
-  --field-bg: #f1f5f9;
-  --input-bg: #ffffff;
-  --backdrop-opacity: 0;
-  --glass: rgba(255, 255, 255, .86);
-  --glass-strong: #ffffff;
-  --glass-border: rgba(15, 23, 42, .10);
-  --glass-edge: rgba(15, 23, 42, .04);
-  --gloss: none;
-  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 8px 24px -14px rgba(15, 23, 42, .18);
-  --shadow-hover: 0 2px 4px rgba(15, 23, 42, .06), 0 16px 36px -16px rgba(15, 23, 42, .26);
-  --tag-local: #0f766e;     --tag-local-bg: rgba(20, 184, 166, .14);
-  --tag-military: #4d7c0f;  --tag-military-bg: rgba(132, 204, 22, .16);
-  --tag-business: #1d4ed8;  --tag-business-bg: rgba(59, 130, 246, .13);
-  --tag-labor: #b45309;     --tag-labor-bg: rgba(245, 158, 11, .16);
-  --tag-tourism: #0e7490;   --tag-tourism-bg: rgba(6, 182, 212, .13);
-  --tag-sports: #b91c1c;    --tag-sports-bg: rgba(239, 68, 68, .12);
-  --tag-food: #c2410c;      --tag-food-bg: rgba(249, 115, 22, .14);
-  --tag-cnmi: #be185d;      --tag-cnmi-bg: rgba(236, 72, 153, .12);
-  --tag-obituaries: #475569; --tag-obituaries-bg: rgba(100, 116, 139, .14);
-  --warning-text: #7f1d1d; --warning-bg: #fef2f2; --warning-line: #f87171;
-  --watch-text: #78350f;   --watch-bg: #fffbeb;   --watch-line: #f59e0b;
+  --bg: #eeebe3;
+  --surface: #f7f5ef;
+  --well: #ebe7de;
+  --text: #1c1b19;
+  --text-soft: #3b3934;
+  --muted: #5f5a51;
+  --line: #d8d3c7;
+  --line-strong: #aea898;
+  --accent: #2f5277;
+  --link: #2a4b73;
+  --fill: #2f4f73;
+  --on-fill: #fbfaf6;
+  --mark: #ecd9a0;
+  --focus: #2f5277;
+  --error: #9b2c22;
+  --field-bg: #f3f1ea;
+  --input-bg: #fbfaf6;
+  --knob: #fbfaf6;  --knob-icon: #8a5a12;
+  --tag-local: #2f6660;     --tag-local-bg: #dbe6e1;
+  --tag-military: #4f5d2a;  --tag-military-bg: #e2e5d2;
+  --tag-business: #34507a;  --tag-business-bg: #dde3ec;
+  --tag-labor: #7a5418;     --tag-labor-bg: #efe3cc;
+  --tag-tourism: #2c6375;   --tag-tourism-bg: #d9e6ea;
+  --tag-sports: #8a3a32;    --tag-sports-bg: #f0dcd8;
+  --tag-food: #8a4a1f;      --tag-food-bg: #f0e0d2;
+  --tag-cnmi: #84375e;      --tag-cnmi-bg: #eedbe4;
+  --tag-obituaries: #4f4c47; --tag-obituaries-bg: #e5e2db;
+  --warning-text: #6b1f19; --warning-bg: #f3dfdb; --warning-line: #b9584d;
+  --watch-text: #5c3d0d;   --watch-bg: #f2e6cc;   --watch-line: #b08a3e;
 }
 
 * { box-sizing: border-box; }
@@ -99,26 +93,11 @@ body {
   font: 16px/1.6 var(--font);
   -webkit-font-smoothing: antialiased;
 }
-/* Soft ocean-coloured light behind the glass. Fixed, so it never scrolls. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -10vh -10vw;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(38vw 38vw at 8% 6%, rgba(56, 189, 248, .38), transparent 70%),
-    radial-gradient(34vw 34vw at 92% 4%, rgba(99, 102, 241, .26), transparent 70%),
-    radial-gradient(42vw 42vw at 88% 78%, rgba(20, 184, 166, .24), transparent 70%),
-    radial-gradient(36vw 36vw at 6% 92%, rgba(244, 114, 182, .16), transparent 70%);
-  opacity: var(--backdrop-opacity);
-}
-
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 8px; }
 img { max-width: 100%; }
-code { background: var(--line); padding: .1em .4em; border-radius: 6px; font-size: .9em; }
+code { background: var(--well); padding: .1em .4em; border-radius: 6px; font-size: .9em; }
 mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius: 4px; }
 
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
@@ -126,10 +105,11 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .small { font-size: .85rem; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .skip { position: absolute; left: -9999px; }
-.skip:focus { left: 12px; top: 12px; z-index: 50; padding: 10px 14px; background: var(--glass-strong); border-radius: 12px; }
+.skip:focus { left: 12px; top: 12px; z-index: 50; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 
-/* ---------- glass ---------- */
-.glass,
+/* ---------- surfaces ---------- */
+/* Flat, opaque sheets set off by a thin rule, like cards laid on paper. */
+.bar,
 .story,
 .panel,
 .weather,
@@ -144,14 +124,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .pagination .current,
 .day-label {
   position: relative;
-  background-color: var(--glass);
-  background-image: var(--gloss); /* the glossy sheen along the top edge */
-  -webkit-backdrop-filter: var(--blur);
-  backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 0 var(--glass-edge);
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
-.story, .weather, .search-form, .tips, .empty, .site-note, .table-wrap, .day-list { background-color: var(--glass-strong); }
 
 /* ---------- header ---------- */
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
@@ -167,15 +142,12 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .brand:hover { text-decoration: none; }
 .brand-mark {
   position: relative; display: grid; place-items: center; overflow: hidden;
-  width: 42px; height: 42px; border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .42), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(145deg, #38bdf8, #1e40af 70%);
-  color: #fff; font-weight: 800; font-size: 15px; letter-spacing: -.02em;
-  box-shadow: 0 6px 16px -6px rgba(30, 64, 175, .7), inset 0 1px 0 rgba(255, 255, 255, .5);
+  width: 42px; height: 42px; border-radius: 10px;
+  background: var(--fill);
+  color: var(--on-fill); font-weight: 800; font-size: 15px; letter-spacing: -.02em;
 }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-name { font-weight: 750; font-size: 1.12rem; letter-spacing: -.02em; }
+.brand-name { font-family: var(--serif); font-weight: 700; font-size: 1.2rem; letter-spacing: -.01em; }
 .brand-tagline { font-size: .74rem; color: var(--muted); }
 
 .nav {
@@ -188,21 +160,15 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   color: var(--text-soft); font-weight: 600; font-size: .9rem;
   transition: background-color .15s ease, color .15s ease;
 }
-.nav a:hover { background: rgba(127, 140, 160, .14); color: var(--text); text-decoration: none; }
-.nav a[aria-current="page"] {
-  color: #fff;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(180deg, #3b82f6, #1d4ed8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 14px -6px rgba(37, 99, 235, .8);
-}
+.nav a:hover { background: var(--well); color: var(--text); text-decoration: none; }
+.nav a[aria-current="page"] { color: var(--on-fill); background: var(--fill); }
 
 .search {
   display: flex; align-items: center; flex: 1 1 190px; min-width: 170px; max-width: 360px; margin-left: auto;
   padding: 4px 4px 4px 12px; border-radius: 999px;
   background: var(--field-bg); border: 1px solid var(--line);
 }
-.search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, .15); }
+.search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 /* The light/dark switch. Its look follows aria-checked (on = dark). */
 .theme-toggle {
@@ -215,12 +181,12 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .theme-toggle:hover { border-color: var(--accent); }
 .theme-knob {
   display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
-  background: #ffffff; color: #b45309; box-shadow: 0 1px 3px rgba(15, 23, 42, .3);
+  background: var(--knob); color: var(--knob-icon); border: 1px solid var(--line-strong);
   transition: transform .2s ease, background-color .2s ease;
 }
 .theme-knob svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .theme-toggle .icon-moon { display: none; }
-.theme-toggle[aria-checked="true"] .theme-knob { transform: translateX(22px); background: #1e293b; color: #fde68a; }
+.theme-toggle[aria-checked="true"] .theme-knob { transform: translateX(22px); }
 .theme-toggle[aria-checked="true"] .icon-sun { display: none; }
 .theme-toggle[aria-checked="true"] .icon-moon { display: block; }
 .search-icon { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
@@ -233,9 +199,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .search button,
 .search-form button {
   border: 0; cursor: pointer; border-radius: 999px;
-  padding: 9px 18px; font: 650 .9rem var(--font); color: #fff;
-  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 8px 18px -8px rgba(37, 99, 235, .9);
+  padding: 9px 18px; font: 650 .9rem var(--font); color: var(--on-fill);
+  background: var(--fill);
   transition: filter .15s ease, transform .15s ease;
 }
 .search button:hover, .search-form button:hover { filter: brightness(1.08); }
@@ -264,7 +229,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 
 .page-head { margin: 6px 4px 18px; }
-.page-head h1 { font-size: clamp(1.7rem, 3vw, 2.2rem); line-height: 1.15; letter-spacing: -.03em; font-weight: 800; margin: 0 0 6px; }
+.page-head h1 { font-family: var(--serif); font-size: clamp(1.7rem, 3vw, 2.2rem); line-height: 1.15; letter-spacing: -.015em; font-weight: 700; margin: 0 0 6px; }
 .page-head p { margin: 2px 0; }
 .crumbs { font-size: .85rem; color: var(--muted); }
 .section-title { font-size: 1.25rem; font-weight: 750; letter-spacing: -.02em; margin: 34px 4px 12px; }
@@ -286,30 +251,21 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .story {
   display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 20px;
   padding: 14px; margin-bottom: 14px; border-radius: var(--r-xl);
-  transition: transform .2s ease, box-shadow .2s ease;
-  /* Cards are nearly opaque, so a blur behind them does not show, but a page of
-     30 blurred cards makes the browser slow to draw and scroll. */
-  -webkit-backdrop-filter: none; backdrop-filter: none;
+  transition: border-color .15s ease;
 }
-.story:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.story:hover { border-color: var(--line-strong); }
 .thumb {
   position: relative; display: block; aspect-ratio: 3 / 2; overflow: hidden; align-self: start;
-  border-radius: var(--r-lg); background: var(--line); isolation: isolate;
+  border-radius: var(--r-lg); background: var(--well); isolation: isolate;
 }
 /* The article's own photo, shown whole ("contain"), never stretched or cropped;
-   any space around it is filled by a blurred, enlarged copy of the same photo. */
+   any space around it is filled by a blurred, faded copy of the same photo. */
 .thumb-fill, .thumb-img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .thumb-fill {
   object-fit: cover; transform: scale(1.25);
-  filter: blur(18px) saturate(1.25) brightness(.95); opacity: .9;
+  filter: blur(18px) saturate(.7); opacity: .5;
 }
-.thumb-img { object-fit: contain; transition: transform .35s ease; }
-.story:hover .thumb-img { transform: scale(1.02); }
-.thumb::after {
-  /* a faint glass rim over the photo */
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), inset 0 1px 0 rgba(255, 255, 255, .35);
-}
+.thumb-img { object-fit: contain; }
 .story.no-photo { grid-template-columns: minmax(0, 1fr); }
 .story.no-photo .story-body { padding-left: 8px; }
 .story-body { padding: 4px 6px 4px 0; min-width: 0; }
@@ -317,7 +273,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tag {
   padding: 3px 10px; border-radius: 999px;
   font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--muted); background: var(--line);
+  color: var(--muted); background: var(--well);
 }
 .tag:hover { text-decoration: none; filter: saturate(1.4); }
 .tag-local { color: var(--tag-local); background: var(--tag-local-bg); }
@@ -329,7 +285,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tag-food { color: var(--tag-food); background: var(--tag-food-bg); }
 .tag-cnmi { color: var(--tag-cnmi); background: var(--tag-cnmi-bg); }
 .tag-obituaries { color: var(--tag-obituaries); background: var(--tag-obituaries-bg); }
-.headline { font-size: 1.2rem; line-height: 1.3; font-weight: 720; letter-spacing: -.015em; margin: 0 0 6px; }
+.headline { font-family: var(--serif); font-size: 1.22rem; line-height: 1.3; font-weight: 700; letter-spacing: -.005em; margin: 0 0 6px; }
 .headline a { color: var(--text); }
 .headline a:hover { color: var(--link); }
 .intro { margin: 0 0 6px; color: var(--text-soft); font-size: .97rem; line-height: 1.62; }
@@ -343,10 +299,10 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
   padding: 6px 12px; border-radius: 999px;
   font-size: .82rem; font-weight: 650; color: var(--link);
-  background: rgba(37, 99, 235, .08); border: 1px solid rgba(37, 99, 235, .16);
+  border: 1px solid var(--line);
   transition: background-color .15s ease;
 }
-.read-link:hover { text-decoration: none; background: rgba(37, 99, 235, .15); }
+.read-link:hover { text-decoration: none; background: var(--well); }
 .read-link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .read-domain { font-weight: 750; }
 .site-link { display: block; font-size: .78rem; color: var(--muted); }
@@ -372,11 +328,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 .pagination a { color: var(--text); }
 .pagination a:hover { text-decoration: none; border-color: var(--accent); }
-.pagination .current {
-  color: #fff; border-color: transparent;
-  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 8px 18px -8px rgba(37, 99, 235, .9);
-}
+.pagination .current { color: var(--on-fill); border-color: transparent; background: var(--fill); }
 .pagination .disabled { color: var(--muted); opacity: .5; }
 .pagination .pages { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -395,7 +347,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .facets a { color: var(--text-soft); }
 .facets .count, .day-list .count {
   color: var(--muted); font-variant-numeric: tabular-nums; font-size: .8rem;
-  padding: 1px 9px; border-radius: 999px; background: var(--line);
+  padding: 1px 9px; border-radius: 999px; background: var(--well);
 }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 9px; background: currentColor; }
 .dot.tag-local { background: var(--tag-local); }
@@ -410,7 +362,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 
 /* ---------- weather ---------- */
 /* The banner of watches and warnings on every page (_weather_banner.html).
-   Solid colours, not glass: it must stand out from the stories. */
+   Stronger colours than the cards: it must stand out from the stories. */
 .weather-alerts { display: grid; gap: 8px; padding-top: 12px; }
 .weather-alert {
   border-radius: var(--r-md); border: 1px solid var(--warning-line);
@@ -451,7 +403,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 .weather-forecast li {
   display: flex; flex-direction: column; gap: 2px; padding: 10px 12px;
-  border-radius: var(--r-sm); background: var(--line); line-height: 1.35;
+  border-radius: var(--r-sm); background: var(--well); line-height: 1.35;
 }
 .weather-period { font-weight: 700; font-size: .85rem; }
 .weather-period-temp { font-weight: 750; font-size: 1.05rem; }
@@ -487,9 +439,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   font: inherit; padding: 10px 12px; border-radius: var(--r-sm); min-width: 0;
   border: 1px solid var(--line); color: var(--text);
   background: var(--input-bg);
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .05);
 }
-.field input:focus, .field select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(37, 99, 235, .15); }
+.field input:focus, .field select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .field.actions { flex-direction: row; align-items: center; align-self: end; gap: 14px; min-height: 44px; }
 .reset { font-size: .9rem; }
 .result-count { color: var(--muted); margin: 6px 4px 12px; }
@@ -502,9 +453,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .month-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .month-grid a {
   display: flex; flex-direction: column; padding: 14px 16px; border-radius: var(--r-lg);
-  color: var(--text); transition: transform .2s ease, box-shadow .2s ease;
+  color: var(--text); transition: border-color .15s ease;
 }
-.month-grid a:hover { text-decoration: none; transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.month-grid a:hover { text-decoration: none; border-color: var(--line-strong); }
 .month-grid .month { font-weight: 750; font-size: 1.05rem; letter-spacing: -.01em; }
 .month-grid .count { font-size: .85rem; color: var(--muted); }
 .month-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-weight: 650; }
@@ -521,7 +472,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .status-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .status-table.compact td { padding: 8px 16px; }
 .status-table tr.disabled { opacity: .55; }
-.badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; background: var(--line); color: var(--muted); margin-left: 6px; font-weight: 650; }
+.badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; background: var(--well); color: var(--muted); margin-left: 6px; font-weight: 650; }
 .error { color: var(--error); }
 
 /* ---------- misc ---------- */
@@ -530,25 +481,17 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .footer { padding: 8px 0 40px; color: var(--muted); font-size: .84rem; }
 .footer-inner { text-align: center; max-width: 720px; }
 
-/* ---------- accessibility and fallbacks ---------- */
-/* Without backdrop blur, translucent panels would show busy colour: go solid. */
-@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  :root { --glass: rgba(18, 26, 44, .95); --glass-strong: rgba(18, 26, 44, .97); }
-  :root[data-theme="light"] { --glass: #ffffff; --glass-strong: #ffffff; }
-}
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --glass: #131b2e; --glass-strong: #131b2e; --gloss: none; --glass-border: rgba(255, 255, 255, .22); --muted: #b3bdcc; }
-  :root[data-theme="light"] { --glass: #ffffff; --glass-strong: #ffffff; --glass-border: rgba(15, 23, 42, .18); --muted: #475569; }
-  body::before { display: none; }
+/* ---------- accessibility ---------- */
+@media (prefers-contrast: more) {
+  :root { --line: #6b675f; --muted: #bdb8ae; }
+  :root[data-theme="light"] { --line: #8f897c; --muted: #47433c; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
-  .story:hover, .month-grid a:hover { transform: none; }
-  .story:hover .thumb img { transform: none; }
 }
 @media print {
-  body::before, .topbar, .sidebar, .pagination { display: none; }
-  .story, .panel { box-shadow: none; background: #fff; border: 1px solid #ddd; }
+  .topbar, .sidebar, .pagination { display: none; }
+  .story, .panel { background: #fff; border: 1px solid #ddd; }
 }
 
 /* ---------- jobs ---------- */
@@ -557,7 +500,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .job-employer strong { color: var(--text-soft); }
 .job-facts {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 16px;
-  margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--line);
+  margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--well);
 }
 .job-facts dt { font-size: .68rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .job-facts dd { margin: 2px 0 0; font-size: .92rem; color: var(--text); overflow-wrap: anywhere; }

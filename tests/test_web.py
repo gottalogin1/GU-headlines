@@ -265,8 +265,10 @@ def test_light_dark_switch(client):
     css = client.get("/static/style.css").text
     dark, light = css.split(':root[data-theme="light"] {', 1)
     assert "color-scheme: dark;" in dark.split(":root {", 1)[1]  # dark by default
-    assert "--bg: #ffffff;" in light.split("}", 1)[0]  # light mode is plain white
+    assert "--bg: #eeebe3;" in light.split("}", 1)[0]  # light mode is paper, not white
     assert "prefers-color-scheme" not in css  # the script decides, not the CSS
+    # Matte: flat surfaces, with no glass blur, gloss or glow.
+    assert "backdrop-filter" not in css and "gradient(" not in css
 
 
 def test_scraped_links_must_be_web_addresses():

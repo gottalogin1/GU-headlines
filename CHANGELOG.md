@@ -165,6 +165,14 @@ Agendas page and the other calendars.
   verification tag. See [Advertising](docs/settings.md#advertising).
 
 ### Changed
+- **A matte look, like the screen of a color e-reader.** The frosted glass,
+  the glossy edges, the shadows and the colored light behind the page are
+  gone. Light mode is a warm paper color instead of plain white, and dark
+  mode is a soft charcoal instead of dark blue. Cards are flat sheets with a
+  thin border, the topic colors are muted, and headlines use a book-style
+  serif font. The tab icon, the phone icon and the link-preview picture
+  have the new look too. If a browser still shows the old look, reload the
+  page once (Ctrl+Shift+R, or Cmd+Shift+R on a Mac).
 - **Pages load faster.** Pages are sent compressed, browsers keep the site's
   styles and scripts for a year (and fetch them again when they change) and
   stored photos for 30 days, and the top story's photo loads first. Story

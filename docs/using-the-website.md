@@ -164,7 +164,8 @@ What the red messages mean, and what to do about them, is in
 ## Light and dark
 
 The switch at the right of the top bar (a sun in light mode, a moon in dark
-mode) changes between a white page and a dark one.
+mode) changes between a paper-colored page and a dark one. Both have a
+flat, matte look, like the screen of a color e-reader.
 
 - On a first visit, the site follows your device's light or dark setting.
   Devices without a setting count as light; browsers report them that way.
