@@ -147,8 +147,8 @@ hour, mark them with `cannot_scrape` and a short reason:
 GU Headlines then never reads the site. The Sources page lists it under
 **Can't be collected**, with your reason and a link to the site, and the
 sidebar lists it below the other sources. Marianas Business Journal, Guam
-Business Magazine and RNZ Pacific are set up this way. Their feeds and pages
-are kept in the file for when they work again. RNZ Pacific is also kept out by
+Business Magazine, the Guam Visitors Bureau and RNZ Pacific are set up this
+way. Their feeds and pages are kept in the file for when they work again. RNZ Pacific is also kept out by
 its terms of use, which don't let other websites use its feeds; the notes
 above it in `sources.yaml` explain what it would take.
 

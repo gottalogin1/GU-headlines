@@ -12,14 +12,19 @@ release, see [Updating](docs/maintenance.md#updating).
   DVIDS (the Defense Department's service for sharing military news), and
   GU Headlines now reads that page. Stories that never mention Guam or
   Andersen are skipped. Nothing to do when you update.
+- **The Guam Visitors Bureau is listed under Can't be collected.** Its
+  firewall has turned automated visitors away since about October 2026, so
+  no new release was collected after October 3. The Sources page and the
+  sidebar now list it with a link, like the other blocked sites. If
+  `guheadlines check --source gvb` finds stories again from your server,
+  delete its `cannot_scrape` line in `config/sources.yaml`.
 - **The sites that still can't be collected were checked again** in
-  November 2026: Marianas Business Journal, Guam Business Magazine and RNZ
-  Pacific still turn automated visitors away, and none has another official
-  copy of its stories that GU Headlines may use. RNZ's terms of use also
-  don't let other websites use its feeds, and the Sources page now says so.
-  The Guam Visitors Bureau's site turns away GitHub's servers too; it stays
-  switched on, in case it works from your server. The notes in
-  `config/sources.yaml` list what was tried.
+  November 2026: Marianas Business Journal, Guam Business Magazine, the Guam
+  Visitors Bureau and RNZ Pacific still turn automated visitors away, and
+  none has another official copy of its stories that GU Headlines may use.
+  RNZ's terms of use also don't let other websites use its feeds, and the
+  Sources page now says so. The notes in `config/sources.yaml` list what was
+  tried.
 
 ### Removed
 - **r/guam and the Community page.** Reddit ended its public feeds on

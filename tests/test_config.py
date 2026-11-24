@@ -70,7 +70,7 @@ def test_invalid_config_is_reported():
 
 def test_shipped_sources(app_config):
     assert app_config.source("pnc") is None  # PNC News First has closed
-    assert [s.slug for s in app_config.uncollectable_sources] == ["mbj", "gbm", "rnz"]
+    assert [s.slug for s in app_config.uncollectable_sources] == ["mbj", "gbm", "gvb", "rnz"]
     assert all(not s.collected for s in app_config.uncollectable_sources)
     # Andersen's own site turns robots away; its 36th Wing posts the same
     # stories to DVIDS, which is read instead.

@@ -234,7 +234,12 @@ def test_sources_page_lists_sites_that_cannot_be_collected(client):
     page = client.get("/status").text
     assert "PNC News First" not in page
     blocked = page.split("Can't be collected", 1)[1].split("Recent runs", 1)[0]
-    for name in ("Marianas Business Journal", "Guam Business Magazine", "RNZ Pacific"):
+    for name in (
+        "Marianas Business Journal",
+        "Guam Business Magazine",
+        "Guam Visitors Bureau",
+        "RNZ Pacific",
+    ):
         assert name in blocked
     assert "Its firewall (Cloudflare) turns away automated visitors." in blocked
     assert "Andersen Air Force Base" not in blocked  # read from DVIDS since Nov 2026

@@ -116,7 +116,6 @@ These are set up out of the box. You can add, pause or remove sites; see
 | Office of the Governor | Press releases |
 | Guam Sports Network (GSPN) | Sports |
 | Guam Football Association | Soccer: the Matao and local leagues |
-| Guam Visitors Bureau | Tourism news releases |
 | Isla Public Media (KPRG) | The NPR station's own newsroom; Guam and CNMI stories only |
 | Guam News Network | Local news, including its National, World and sports stories about Guam; opinion pieces are skipped |
 
@@ -125,6 +124,7 @@ GU Headlines doesn't try to read them. The Sources page and the sidebar list
 them separately, with links to visit them directly:
 - Marianas Business Journal
 - Guam Business Magazine
+- Guam Visitors Bureau
 - RNZ Pacific (its terms also don't let other websites use its feeds)
 
 To see whether one has started working, and how to switch it back on, see
