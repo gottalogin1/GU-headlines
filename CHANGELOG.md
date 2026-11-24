@@ -3,6 +3,17 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
+## Unreleased
+
+### Fixed
+- **New stories that show only a date stay at the top.** Some news sites
+  give the day of a story but not the time. Such a story was put at 12:00 AM,
+  below the stories from earlier that day, and its card said "15 hrs ago" for
+  a story that was new. Now, when the story is collected on the day it shows,
+  it gets the time it was collected. Stories are still sorted newest first by
+  the time the news site gives, and by the time they were collected when the
+  site gives none. Stories already on the site keep their times.
+
 ## 1.2.0 (2026-11-24)
 
 ### Added
