@@ -80,6 +80,11 @@ class Settings:
     # A free Google API key with the Google Calendar API turned on, for the
     # calendars in events.yaml that are public Google Calendars.
     google_calendar_api_key: str = ""
+    # Alerts are posted to the Discord channel of this webhook link
+    # (https://discord.com/api/webhooks/...). Empty: no alerts. See alerts.py.
+    discord_webhook_url: str = ""
+    # A news site or job board that has not worked for this many hours gets an alert.
+    alert_after_hours: int = 24
 
     @property
     def sources_file(self) -> Path:
@@ -182,6 +187,8 @@ def load_settings() -> Settings:
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
         events_interval_hours=max(1, _int(env.get("EVENTS_INTERVAL_HOURS"), 3)),
         google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
+        discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
+        alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
     )
 
 

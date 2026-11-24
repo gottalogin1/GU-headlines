@@ -75,7 +75,7 @@ def clean_db(database):
         conn.execute(
             text(
                 "TRUNCATE articles, seen_urls, ignored_images, http_cache, scrape_runs, sources, "
-                "jobs, job_sources, events, event_calendars "
+                "jobs, job_sources, events, event_calendars, alerts "
                 "RESTART IDENTITY CASCADE"
             )
         )

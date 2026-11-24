@@ -246,6 +246,25 @@ def cmd_worker(args, settings: Settings) -> None:
         except Exception:
             log.exception("events check failed")
 
+    def check_alerts() -> None:
+        """Alerts for news sites and job boards that stopped working."""
+        if not settings.discord_webhook_url:
+            return
+        from .alerts import check_sources
+
+        try:
+            boards = load_jobs_config(settings.config_dir)
+        except ConfigError:
+            boards = []
+        try:
+            check_sources(
+                settings,
+                [s.slug for s in config.sources if s.collected],
+                [b.slug for b in boards if b.collected],
+            )
+        except Exception:
+            log.exception("alert check failed")
+
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
         try:
@@ -268,10 +287,16 @@ def cmd_worker(args, settings: Settings) -> None:
         settings.scrape_interval_minutes,
         settings.catch_up_seconds,
     )
+    if settings.discord_webhook_url:
+        log.info(
+            "alerts on: a news site or job board that has not worked for %d hours is reported",
+            settings.alert_after_hours,
+        )
     if settings.scrape_on_start:
         run_once()
         run_jobs_if_due()
         run_events_if_due()
+        check_alerts()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -285,6 +310,7 @@ def cmd_worker(args, settings: Settings) -> None:
         if kind == "regular":
             run_jobs_if_due()
             run_events_if_due()
+            check_alerts()
     log.info("worker stopped")
 
 
@@ -629,6 +655,20 @@ def cmd_sources(args, settings: Settings) -> None:
         print(f"{s.slug:<12} {state:<5} {counts.get(s.slug, 0):>7} articles  {s.name}")
 
 
+def cmd_alert_test(args, settings: Settings) -> None:
+    """Post a test alert to the Discord channel of DISCORD_WEBHOOK_URL."""
+    from .alerts import send_test_alert
+
+    if not settings.discord_webhook_url:
+        raise SystemExit(
+            "DISCORD_WEBHOOK_URL is empty, so alerts are off. Set it in .env (see .env.example), "
+            "then run: docker compose up -d"
+        )
+    if not send_test_alert(settings):
+        raise SystemExit("the test alert could not be sent; see the message above")
+    print("Test alert sent. It shows in your Discord channel within a few seconds.")
+
+
 def main(argv: list[str] | None = None) -> None:
     settings = get_settings()
     setup_logging(settings)
@@ -680,6 +720,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     events.add_argument("--limit", type=int, default=6, help="with --check: events to show")
 
+    sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -706,6 +747,7 @@ def main(argv: list[str] | None = None) -> None:
         "probe": cmd_probe,
         "jobs": cmd_jobs,
         "events": cmd_events,
+        "alert-test": cmd_alert_test,
     }[args.command]
     handler(args, settings)
 

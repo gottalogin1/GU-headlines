@@ -1,7 +1,7 @@
 """Events for the Events page: event_calendars and events.
 
-Revision ID: 0004_events
-Revises: 0003_remove_reddit_guam
+Revision ID: 0005_events
+Revises: 0004_alerts
 Create Date: 2026-11-24
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0004_events"
-down_revision = "0003_remove_reddit_guam"
+revision = "0005_events"
+down_revision = "0004_alerts"
 branch_labels = None
 depends_on = None
 
