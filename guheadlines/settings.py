@@ -134,12 +134,12 @@ def _domain_site_url(value: str | None) -> str:
 
 
 def _adsense_client(value: str | None) -> str:
-    """ca-pub-1234567890123456, or "" if not a publisher ID. AdSense shows the
-    ID without "ca-" on its account page; both forms are accepted."""
-    value = (value or "").strip()
-    if re.fullmatch(r"pub-\d{10,20}", value):
-        value = "ca-" + value
-    return value if re.fullmatch(r"ca-pub-\d{10,20}", value) else ""
+    """ca-pub-1234567890123456, or "" if the value has no publisher ID. AdSense
+    shows the ID in different forms: without "ca-" on its account page, inside
+    the ads.txt line, and inside its verification code. The ID is taken out of
+    any of them."""
+    found = re.search(r"\bpub-(\d{10,20})\b", value or "")
+    return f"ca-pub-{found.group(1)}" if found else ""
 
 
 def _adsense_slot(value: str | None) -> str:

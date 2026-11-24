@@ -604,7 +604,17 @@ def test_adsense_settings_must_be_ids():
 
     assert _adsense_client(" ca-pub-1234567890123456 ") == "ca-pub-1234567890123456"
     assert _adsense_client("pub-1234567890123456") == "ca-pub-1234567890123456"
-    for bad in ("", None, "ca-pub-12", '"ca-pub-1234567890123456"', "ca-pub-1234567890123456 x"):
+    # The other forms that AdSense shows the ID in: the ads.txt line, the
+    # verification meta tag and the AdSense code.
+    for pasted in (
+        '"ca-pub-1234567890123456"',
+        "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0",
+        '<meta name="google-adsense-account" content="ca-pub-1234567890123456">',
+        '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'
+        '?client=ca-pub-1234567890123456" crossorigin="anonymous"></script>',
+    ):
+        assert _adsense_client(pasted) == "ca-pub-1234567890123456", pasted
+    for bad in ("", None, "ca-pub-12", "ca-pub-1234567890123456x", "xpub-1234567890123456"):
         assert _adsense_client(bad) == ""
     assert _adsense_slot(" 9876543210 ") == "9876543210"
     for bad in ("", None, "slot", "98765 43210", '9876543210"'):
