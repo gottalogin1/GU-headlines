@@ -167,7 +167,7 @@ and no ad code.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ADSENSE_CLIENT` | *(empty)* | Your AdSense publisher ID, such as `ca-pub-1234567890123456` (`pub-1234567890123456` also works). With only this setting, the site can be verified, but it shows no ad. |
+| `ADSENSE_CLIENT` | *(empty)* | Your AdSense publisher ID, such as `ca-pub-1234567890123456` (`pub-1234567890123456` also works). You can also paste the ads.txt line or the verification code from AdSense: the site takes the ID out of it. With only this setting, the site can be verified, but it shows no ad. |
 | `ADSENSE_SLOT` | *(empty)* | The ad unit's number, such as `9876543210`. With `ADSENSE_CLIENT`, the ad block is shown. |
 
 **How to set it up**
@@ -197,6 +197,20 @@ and no ad code.
 
    A new ad unit can stay empty for up to an hour. When Google has no ad to
    show, the block folds away.
+
+**If AdSense says that it found no ads.txt file**
+
+Open `https://your-domain/ads.txt` in a browser (put your own domain in).
+
+- If it shows one line, such as
+  `google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0`, with your
+  publisher ID, the site is correct. AdSense can take a few days to see a
+  new ads.txt file. You do not have to do anything.
+- If it shows the "Not found" page, the site has no publisher ID. Put it in
+  `.env` as `ADSENSE_CLIENT` and run `docker compose up -d` in the
+  GU Headlines folder. The automatic update does not read a changed `.env`
+  until the next update, so run the command yourself. Then open the address
+  again.
 
 **What changes when ads are on**
 - The pages with the ad get a less strict Content-Security-Policy, which

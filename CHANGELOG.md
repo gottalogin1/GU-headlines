@@ -99,6 +99,14 @@ Agendas page and the other calendars.
   on GitHub, if you added them.
 
 ### Fixed
+- **The AdSense publisher ID is found in any form that AdSense shows.** The
+  site serves `ads.txt` only when `ADSENSE_CLIENT` holds a publisher ID. A
+  value in a different form, such as the full line from the ads.txt page of
+  AdSense, was ignored, so AdSense said that it found no ads.txt file. Now
+  the site takes the ID out of the ads.txt line, the verification code or the
+  AdSense code. [Advertising](docs/settings.md#advertising) tells what to do
+  when AdSense says that it found no ads.txt file. Nothing to do when you
+  update.
 - **New stories that show only a date stay at the top.** Some news sites
   give the day of a story but not the time. Such a story was put at 12:00 AM,
   below the stories from earlier that day, and its card said "15 hrs ago" for
