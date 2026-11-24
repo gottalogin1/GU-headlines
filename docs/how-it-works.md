@@ -114,6 +114,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
 | `weather` | Read the weather now (NWS alerts, the airport reading, the forecast, the JTWC storm list) and save it. Prints what each part gave, or the error. |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
+| `alert-test` | Post a test message in the Discord channel of `DISCORD_WEBHOOK_URL` (see [Alerts in Discord](maintenance.md#alerts-in-discord)). |
 | `migrate` | Apply database upgrades (done automatically on start). |
 | `web` | Run the website (`--port`, `--workers`). |
 | `worker` | Run the scheduled news collector. |
@@ -130,13 +131,14 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `scrape_runs` | One row per site per check, for the Sources page (kept 180 days) |
 | `job_sources` | One row per job board: name, homepage, on/off, last check, last error, postings found |
 | `jobs` | The job postings: URL (unique), title, employer, pay, description, location, open and close date, closing note, PDF, first and last seen, and when the board stopped listing it |
+| `alerts` | News sites and job boards whose latest check failed, and whether their alert was posted, so each problem is posted once |
 | `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `storms`) as JSON, with the time it was read |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
 
 ## GitHub checks
 
-Three workflows run in GitHub Actions:
+Four workflows run in GitHub Actions:
 
 - **CI**, on every push and pull request: lint (ruff), the test suite
   against PostgreSQL, and a Docker Compose smoke test that builds the image,
@@ -160,6 +162,11 @@ Three workflows run in GitHub Actions:
   Actions tab with the tag name): checks that the tag matches the version in
   `pyproject.toml` and publishes a GitHub release with that version's notes
   from `CHANGELOG.md`.
+
+- **Site check**, every 30 minutes once the `SITE_CHECK_URL` variable is
+  set: asks the live site's `/healthz` from outside the server and posts in
+  Discord when it stops answering and when it answers again (see
+  [Watching from outside the server](maintenance.md#watching-from-outside-the-server)).
 
 To make a new release: set the new `version` in `pyproject.toml` and
 `guheadlines/__init__.py`, add a section for it at the top of

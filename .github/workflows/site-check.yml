@@ -1,0 +1,80 @@
+name: Site check
+
+# Checks the live site from outside the server every 30 minutes, and posts an
+# alert in Discord when it stops answering, and another when it answers again.
+# The checks on the server itself (scripts/auto-update.sh) can't post anything
+# when the whole server is down or cut off from the internet; this one can.
+#
+# It does nothing until the SITE_CHECK_URL variable is set. Setup:
+# docs/maintenance.md#watching-from-outside-the-server
+
+on:
+  schedule:
+    # At 17 and 47 minutes past each hour. GitHub may start a scheduled run
+    # some minutes late, most often near the top of the hour.
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read # to see the previous check's result
+  contents: read
+
+concurrency:
+  group: site-check
+
+jobs:
+  check:
+    name: Does the site answer?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      SITE: ${{ vars.SITE_CHECK_URL }}
+      WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check the site
+        run: |
+          if [ -z "$SITE" ]; then
+            echo "The SITE_CHECK_URL variable is not set, so there is nothing to check."
+            exit 0
+          fi
+          site=${SITE%/}
+          label=${site#*://}
+
+          post() {
+            if [ -z "$WEBHOOK" ]; then
+              echo "The DISCORD_WEBHOOK_URL secret is not set, so no alert was posted."
+              return 0
+            fi
+            # allowed_mentions: never notify anyone because of text like "@everyone".
+            # flags 4: no preview cards for links.
+            jq -cn --arg c "$1" '{content: $c, allowed_mentions: {parse: []}, flags: 4}' |
+              curl -fsS --max-time 20 -o /dev/null -H "Content-Type: application/json" \
+                --data-binary @- "$WEBHOOK" ||
+              echo "Could not post the alert in Discord."
+          }
+
+          # An alert is posted only when the result changes, so this run
+          # needs the previous one's: failure means the site was down.
+          previous=$(gh run list --workflow site-check.yml --status completed --limit 1 \
+            --json conclusion --jq '.[0].conclusion // ""' || true)
+
+          # Three tries, a minute apart, so a short hiccup is not reported.
+          for try in 1 2 3; do
+            if answer=$(curl -fsS --max-time 20 "$site/healthz" 2>&1) &&
+              [[ $answer == *'"status":"ok"'* ]]; then
+              echo "The site answers: $answer"
+              if [ "$previous" = failure ]; then
+                post "✅ **$label answers again**"$'\n'"Checked from outside the server."
+              fi
+              exit 0
+            fi
+            echo "Try $try: $answer"
+            [ "$try" = 3 ] || sleep 60
+          done
+
+          if [ "$previous" != failure ]; then
+            post "🚨 **$label does not answer**"$'\n'"It did not answer 3 times in 3 minutes, checked from outside the server. The error: ${answer:0:300}"$'\n'"If the server's own checks posted nothing, the whole server may be down or cut off from the internet. Look at your server in your provider's control panel."
+          fi
+          exit 1
