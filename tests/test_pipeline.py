@@ -283,6 +283,42 @@ def test_listing_pages_without_metadata(clean_db, scraper, config):
         scraper.build_draft(source, None, Candidate(url=BARE, key=BARE, via="listing"))
 
 
+def test_date_without_time(clean_db, scraper, site, config):
+    from guheadlines.scraper.discover import Candidate
+    from guheadlines.scraper.text import GUAM_TZ
+
+    today = datetime.now(GUAM_TZ).date()
+    yesterday = today - timedelta(days=1)
+    pages = {
+        "https://www.pncguam.com/story-dated-today-without-time/": today,
+        "https://www.pncguam.com/story-dated-yesterday-without-time/": yesterday,
+    }
+    original = site.__call__
+
+    def serve(request):
+        day = pages.get(str(request.url))
+        if day is None:
+            return original(request)
+        html = BARE_HTML.replace(b"2026-09-20T10:00:00+10:00", day.isoformat().encode())
+        return httpx.Response(200, content=html, headers={"content-type": "text/html"})
+
+    scraper.client._client._transport = httpx.MockTransport(serve)
+    source = config.source("pnc")
+    drafts = {}
+    before = datetime.now(timezone.utc)
+    for url in pages:
+        drafts[pages[url]] = scraper.build_draft(
+            source, None, Candidate(url=url, key=url, via="listing")
+        )
+    # A story that gives only today's date gets the time it was found, so it is
+    # not put under the stories from earlier today...
+    assert before <= drafts[today].published_at <= datetime.now(timezone.utc)
+    # ...and a story that gives only an earlier date keeps that date.
+    assert drafts[yesterday].published_at == datetime.combine(
+        yesterday, datetime.min.time(), tzinfo=GUAM_TZ
+    )
+
+
 def test_full_text_search_vector(clean_db, scraper):
     scraper.run()
     with session_scope() as session:

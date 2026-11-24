@@ -32,8 +32,11 @@ Each story shows:
   ago the story was published and, when known, who wrote it.
 - **"Read the full story at …"**, which also opens the story.
 
-Stories are grouped by day ("Today", "Yesterday", then dates). All times are
-**Chamorro Standard Time (ChST)**.
+Stories are grouped by day ("Today", "Yesterday", then dates), with the
+newest story at the top. A story's time is the time the news site gives. If
+the site gives no time, the story gets the time it was collected (for a story
+that shows only a date, this applies when it is collected on that date). All
+times are **Chamorro Standard Time (ChST)**.
 
 ## The sidebar
 

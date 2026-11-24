@@ -49,7 +49,7 @@ from .extract import build_intro, extract_article
 from .http import FetchError, FetchResult, HttpClient, RateLimited, RobotsDisallowed
 from .images import store_image
 from .reddit import RedditApi
-from .text import SITE_CREDIT_RE, clean_byline, clean_text, truncate
+from .text import GUAM_TZ, SITE_CREDIT_RE, clean_byline, clean_text, truncate
 from .urls import normalize_url, same_site, url_variants
 
 log = logging.getLogger(__name__)
@@ -622,6 +622,15 @@ class Scraper:
             intro = None  # some sites repeat the headline as the description
 
         published = (data.published_at if data else None) or cand.published_at or _now()
+        local = published.astimezone(GUAM_TZ)
+        if (
+            local.time() == datetime.min.time()
+            and local.date() == _now().astimezone(GUAM_TZ).date()
+        ):
+            # A date with no time of day reads as midnight, which puts a story
+            # found this afternoon under this morning's stories. Use the time
+            # it was found instead.
+            published = _now()
         published = min(published, _now())
         if cand.via == "listing" and published < _now() - timedelta(days=source.max_age_days):
             raise Skip("rejected", f"older than {source.max_age_days} days (evergreen link)")
