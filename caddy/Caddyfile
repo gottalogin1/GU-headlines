@@ -1,0 +1,31 @@
+# Caddy is the front door of GU Headlines. It answers visitors on port 80
+# (http) and port 443 (https), and passes each request on to the website
+# (the "web" container, port 8000 inside Docker's own network).
+#
+# SITE_ADDRESS comes from SITE_DOMAIN in .env (see docker-compose.yml):
+#
+#   SITE_DOMAIN empty                 ->  :80
+#     Plain http:// on port 80, for any address that reaches the server,
+#     such as its IP address. No certificate.
+#
+#   SITE_DOMAIN=guamheadlines.com     ->  guamheadlines.com
+#     https:// for that domain. Caddy gets a free certificate from Let's
+#     Encrypt (or ZeroSSL) and renews it by itself. http:// visits are sent
+#     on to https://. The domain must already point at this server, and
+#     ports 80 and 443 must be open. See docs/maintenance.md.
+#
+# You do not need to change this file. Change SITE_DOMAIN in .env, then run
+# "docker compose up -d".
+
+{$SITE_ADDRESS} {
+	# The website. Caddy tells it each visitor's address and whether the
+	# visit came over https (the X-Forwarded-For and X-Forwarded-Proto
+	# headers).
+	reverse_proxy web:8000
+
+	# Do not tell visitors which web server software runs the site.
+	header {
+		-Server
+		-Via
+	}
+}

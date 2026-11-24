@@ -5,7 +5,7 @@ page to run GU Headlines.
 
 **Contents**
 
-- [The three parts](#the-three-parts)
+- [The four parts](#the-four-parts)
 - [What happens every hour](#what-happens-every-hour)
 - [How search works](#how-search-works)
 - [All commands](#all-commands)
@@ -16,15 +16,16 @@ page to run GU Headlines.
 
 ---
 
-## The three parts
+## The four parts
 
-`docker compose up` starts three containers:
+`docker compose up` starts four containers:
 
 | Container | What it is | Details |
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
-| `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 (`WEB_PORT`). |
+| `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
 | `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)). |
+| `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. |
 
 `web` and `worker` are the same program (`guheadlines`) started with
 different commands. Both read `config/` from your folder (mounted

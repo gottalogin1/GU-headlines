@@ -28,10 +28,10 @@ needed; you will copy and paste a few commands.
 |---|---|
 | 1. [Getting started](docs/getting-started.md) | Installing it on your computer or server, step by step |
 | 2. [Using the website](docs/using-the-website.md) | Topics, search tips, the archive, the Sources page, light and dark mode |
-| 3. [Changing settings](docs/settings.md) | Site name, how often it checks for news, photos, the port, and every other setting |
+| 3. [Changing settings](docs/settings.md) | Site name, web address and https, how often it checks for news, photos, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business and Labor (plus Community for r/guam), and how to change or add topics |
-| 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain |
+| 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 
@@ -49,7 +49,7 @@ nano .env                      # change POSTGRES_PASSWORD, then save
 docker compose up -d --build
 ```
 
-Then open **http://localhost:8000** in your browser. The first stories appear
+Then open **http://localhost** in your browser. The first stories appear
 within a few minutes. The full walkthrough is in
 [Getting started](docs/getting-started.md).
 

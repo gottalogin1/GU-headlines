@@ -110,17 +110,37 @@ computer. Keep the copy with your other backups, or delete it.
 
 ---
 
+## Web address and https
+
+Visitors reach the site through **Caddy**, a free web server that runs as the
+fourth container (`caddy`) and passes each request on to the website. Caddy
+also gets the certificate that https needs from Let's Encrypt, and renews it
+by itself. [Putting it on the internet](maintenance.md#putting-it-on-the-internet)
+has the steps.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SITE_DOMAIN` | *(empty)* | The site's domain name, such as `guamheadlines.com` (no `https://`, no `/`). Empty: plain `http://` on port 80, at any address that reaches the server, such as its IP address. Set: `https://` for that name with a free certificate, and `http://` visits are sent on to `https://`. For two names, put a comma between them: `guamheadlines.com, www.guamheadlines.com`. Each name must already point at the server, or Caddy can't get its certificate. |
+| `HTTP_PORT` | `80` | The port for `http://`. With 80 the address needs no port: `http://localhost`. On a computer where another program already uses port 80, use another number such as `8000` and open `http://localhost:8000`. Keep 80 on a server with a domain name. |
+| `HTTPS_PORT` | `443` | The port for `https://`. Keep 443 on a server with a domain name. Change it only on a computer that doesn't use https, where another program already uses 443. |
+
+`HTTP_PORT` and `HTTPS_PORT` are read only by Docker Compose. Inside Docker,
+Caddy always uses ports 80 and 443, and the website always uses port 8000.
+The website itself isn't reachable from outside Docker, so every visit goes
+through Caddy.
+
+---
+
 ## Website
 
 | Setting | Default | What it does |
 |---|---|---|
 | `SITE_NAME` | `GU Headlines` | The name in the top bar, browser tab and footer. |
 | `SITE_TAGLINE` | `Guam news, updated every hour` | The short line in the footer and in the description search engines show. If you change how often the site checks for news, update this too. |
-| `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: the address each visitor used. |
+| `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: `https://` and the first name in `SITE_DOMAIN`, or, without `SITE_DOMAIN`, the address each visitor used. Set it only to pick a different main address, such as `https://www.guamheadlines.com`. |
 | `GOOGLE_SITE_VERIFICATION` | *(empty)* | Proves to [Google Search Console](https://search.google.com/search-console) that the site is yours: choose **URL prefix**, then **HTML tag**, and paste only the `content="..."` value here. See [Search engines](maintenance.md#search-engines). |
 | `BING_SITE_VERIFICATION` | *(empty)* | The same for [Bing Webmaster Tools](https://www.bing.com/webmasters) (its **HTML Meta Tag** option). |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
-| `WEB_PORT` | `8000` | The port the website uses: `http://your-server:8000`. Change it if something else already uses 8000, or set it to `80` to leave the port off the address (only if nothing else on the server uses port 80). |
 
 **Example: rename the site**
 

@@ -145,8 +145,15 @@ SECURITY_HEADERS = [
 ]
 
 
+# Sent only on visits over https (through Caddy, once SITE_DOMAIN is set):
+# browsers then use https for this site for a year, even when a visitor types
+# or follows a plain http:// address. Browsers ignore it over http.
+HSTS_HEADER = (b"strict-transport-security", b"max-age=31536000")
+
+
 class SecurityHeadersMiddleware:
-    """Adds SECURITY_HEADERS to every response (pages, files and errors alike)."""
+    """Adds SECURITY_HEADERS to every response (pages, files and errors alike),
+    and HSTS_HEADER to those sent over https."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -156,10 +163,15 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Uvicorn takes the scheme from Caddy's X-Forwarded-Proto header.
+        headers = SECURITY_HEADERS
+        if scope["scheme"] == "https":
+            headers = [*SECURITY_HEADERS, HSTS_HEADER]
+
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 names = {name for name, _ in message.get("headers", [])}
-                extra = [(n, v) for n, v in SECURITY_HEADERS if n not in names]
+                extra = [(n, v) for n, v in headers if n not in names]
                 message["headers"] = [*message.get("headers", []), *extra]
             await send(message)
 

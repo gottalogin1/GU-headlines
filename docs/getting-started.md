@@ -43,9 +43,9 @@ few commands; each one is explained.
 | **Terminal** | The window where you type commands. On Linux and Mac it is called *Terminal*; on Windows use *PowerShell*. |
 | **Command** | A line you type in the terminal and run by pressing **Enter**. In this guide commands are in grey boxes. Copy them exactly. |
 | **Docker** | A free program that runs GU Headlines and its database in sealed-off boxes called **containers**, so you don't have to install anything else. |
-| **Container** | One running part of GU Headlines. There are three: `db` (the database), `web` (the website) and `worker` (the program that collects the news). |
+| **Container** | One running part of GU Headlines. There are four: `db` (the database), `web` (the website), `worker` (the program that collects the news) and `caddy` (the front door that visitors talk to, which also handles https). |
 | **`.env` file** | A small text file holding your settings, such as your database password. |
-| **Port** | A number that tells your browser which program on a computer to talk to. GU Headlines uses port 8000 unless you change it. |
+| **Port** | A number that tells your browser which program on a computer to talk to. Web addresses use port 80 (`http://`) and port 443 (`https://`) unless they name another one, and so does GU Headlines. |
 
 ## 3. Install Docker
 
@@ -174,19 +174,19 @@ What happens:
 - `-d` ("detached") keeps it running in the background after the command
   finishes and after you close the terminal.
 
-When it finishes, check that all three parts are running:
+When it finishes, check that all four parts are running:
 
 ```sh
 docker compose ps
 ```
 
-You should see `db`, `web` and `worker`, each with a status of **Up** (`db`
-also shows **healthy**).
+You should see `db`, `web`, `worker` and `caddy`, each with a status of
+**Up** (`db` also shows **healthy**).
 
 ## 7. Open the website
 
 - **On the same computer:** open your web browser and go to
-  **<http://localhost:8000>**
+  **<http://localhost>**
 - **From another computer, phone or tablet on your network:** find your
   server's address with
 
@@ -195,16 +195,17 @@ also shows **healthy**).
   ```
 
   It prints something like `192.168.1.50`. On the other device, go to
-  `http://192.168.1.50:8000` (with your own address).
+  `http://192.168.1.50` (with your own address).
 
   If it doesn't load and your server uses the `ufw` firewall, allow the port:
-  `sudo ufw allow 8000/tcp`.
+  `sudo ufw allow 80/tcp`.
 
 At first the page says **No stories here yet**. That's expected; the news
 arrives in the next step.
 
-To make the site reachable on the internet with your own web address (like
-`news.example.com`), see [Looking after it](maintenance.md#putting-it-on-the-internet).
+To make the site reachable on the internet with your own web address and
+https (like `https://guamheadlines.com`), see
+[Looking after it](maintenance.md#putting-it-on-the-internet).
 
 ## 8. Watch the first news arrive
 
@@ -279,13 +280,18 @@ The `.env` file is missing, or the password line is empty. Go back to
 `.env` (with the dot) and sits in the `GU-headlines` folder.
 
 **"port is already allocated" or "address already in use"**
-Another program already uses port 8000. Open `.env`, change `WEB_PORT=8000` to
-another number such as `WEB_PORT=8080`, then run `docker compose up -d` and
-use `http://localhost:8080`.
+Another program already uses port 80 or 443. On a server, that's often a web
+server such as Apache or nginx; see
+[Looking after it](maintenance.md#putting-it-on-the-internet), step 3, to
+find and stop it. On your own computer, open `.env`, change `HTTP_PORT=80` to
+another number such as `HTTP_PORT=8000` (and `HTTPS_PORT=443` to
+`HTTPS_PORT=8443` if 443 is the busy one), then run `docker compose up -d`
+and use `http://localhost:8000`.
 
 **The page won't load**
 Run `docker compose ps`. If `web` is not **Up**, run
 `docker compose logs --tail 50 web` and look at the last lines for an error.
+If `caddy` is not **Up**, do the same with `docker compose logs --tail 50 caddy`.
 From another device, also check the firewall note in
 [step 7](#7-open-the-website).
 

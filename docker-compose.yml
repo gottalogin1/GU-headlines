@@ -1,9 +1,12 @@
-# Self-hosted stack: PostgreSQL + website + hourly scraper.
+# Self-hosted stack: PostgreSQL + website + hourly scraper, with Caddy in front
+# of the website.
 #
 #   cp .env.example .env    # then set POSTGRES_PASSWORD
 #   docker compose up -d --build
 #
-# Website: http://<server>:8000 (change WEB_PORT in .env)
+# Website: http://<server> (port 80). With SITE_DOMAIN set in .env and the
+# domain pointing at this server: https://<your domain>, with a free
+# certificate that Caddy gets and renews by itself.
 
 services:
   db:
@@ -30,8 +33,8 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
-    ports:
-      - "${WEB_PORT:-8000}:8000"
+    # No ports: visitors reach the site only through Caddy (below), which
+    # talks to it inside Docker's own network at web:8000.
     volumes:
       - media:/data/media
       - ./config:/app/config:ro
@@ -63,6 +66,35 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
+  caddy:
+    # The front door: answers visitors on ports 80 (http) and 443 (https) and
+    # passes each request on to the website. See caddy/Caddyfile.
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp" # HTTP/3, the newest and fastest way browsers connect
+    environment:
+      # Empty SITE_DOMAIN: plain http on port 80 for any address, such as the
+      # server's IP address. A domain: https for that domain.
+      SITE_ADDRESS: ${SITE_DOMAIN:-:80}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The certificates. Keep this volume: without it Caddy asks for new
+      # certificates on every start, and Let's Encrypt limits how many it gives.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+    cap_drop: [ALL]
+    # Ports below 1024 (80 and 443) need this one permission.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+
 volumes:
   pgdata:
   media:
+  caddy_data:
+  caddy_config:
