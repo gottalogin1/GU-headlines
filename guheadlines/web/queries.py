@@ -9,7 +9,17 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import Select, Text, and_, func, literal, literal_column, not_, select, text, true
 from sqlalchemy.orm import Session
 
-from ..models import SEARCH_CONFIG, Article, Job, JobSource, ScrapeRun, Source, WeatherReport
+from ..models import (
+    SEARCH_CONFIG,
+    Article,
+    Event,
+    EventCalendar,
+    Job,
+    JobSource,
+    ScrapeRun,
+    Source,
+    WeatherReport,
+)
 from ..scraper.text import GUAM_TZ
 
 # ts_headline markers; replaced by <mark> after HTML-escaping the snippet.
@@ -404,3 +414,68 @@ def job_boards(session: Session, today: date) -> list[dict]:
         .order_by(JobSource.name)
     ).all()
     return [{"board": r[0], "open": r.open} for r in rows]
+
+
+# ----------------------------------------------------------------- events
+
+
+@dataclass
+class EventFilters:
+    q: str = ""
+    calendar: str | None = None
+
+
+def _upcoming_events(since: datetime):
+    """Events still listed on their calendar that end at or after `since`
+    (the start of today, so today's earlier events stay on the page)."""
+    return and_(
+        Event.removed_at.is_(None),
+        func.coalesce(Event.ends_at, Event.starts_at) >= since,
+        EventCalendar.enabled.is_(True),
+    )
+
+
+def list_events(
+    session: Session, f: EventFilters, page: int, per_page: int, since: datetime
+) -> Page:
+    stmt = (
+        select(
+            Event,
+            EventCalendar.name.label("calendar_name"),
+            EventCalendar.homepage.label("homepage"),
+        )
+        .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+        .where(_upcoming_events(since))
+    )
+    if f.calendar:
+        stmt = stmt.where(EventCalendar.slug == f.calendar)
+    if f.q:
+        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(" ", Event.title, Event.location, Event.organizer, Event.description)
+        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    total = _count(session, stmt)
+    stmt = (
+        stmt.order_by(Event.starts_at, Event.title, Event.id)
+        .limit(per_page)
+        .offset((page - 1) * per_page)
+    )
+    items = [
+        {"event": row[0], "calendar_name": row.calendar_name, "calendar_homepage": row.homepage}
+        for row in session.execute(stmt)
+    ]
+    return Page(items, total, page, per_page)
+
+
+def event_calendars(session: Session, since: datetime) -> list[dict]:
+    """Each calendar with its upcoming events, for the Events page's calendar list."""
+    rows = session.execute(
+        select(
+            EventCalendar,
+            func.count(Event.id).filter(_upcoming_events(since)).label("upcoming"),
+        )
+        .outerjoin(Event, Event.calendar_id == EventCalendar.id)
+        .where(EventCalendar.enabled.is_(True))
+        .group_by(EventCalendar.id)
+        .order_by(EventCalendar.name)
+    ).all()
+    return [{"calendar": r[0], "upcoming": r.upcoming} for r in rows]

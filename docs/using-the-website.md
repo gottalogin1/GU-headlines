@@ -11,6 +11,7 @@ A tour of every page, and how to find older stories.
 | **Obituaries** | Obituaries, death notices, rosaries and funerals from the news sites. They appear only here, not under Latest, the other topics or the archive. Search still finds them, so you can look up a name. This page can show an ad (see [Advertising](settings.md#advertising)). |
 | **Archive** | Every story collected, organized by year, month and day |
 | **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
+| **Events** | What's coming up on Guam: sessions, hearings, public meetings and more (see [The Events page](#the-events-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
 
@@ -115,6 +116,19 @@ posting doesn't say. Use **Words** and **Board** to narrow the list. The
 sidebar lists each board with its number of open postings, a red **⚠** when
 its last check failed, and the boards that can't be collected. More in
 [Jobs](jobs.md).
+
+## The Events page
+
+The **Events** link lists what's coming up on Guam over the next 90 days,
+from the calendars in `config/events.yaml`, grouped by day (Today, Tomorrow,
+then each date). The time of each event is on its left, in Guam time; an
+event that started on an earlier day and is still going shows **Ongoing**.
+Each event shows its name (click to open it on its calendar), who holds it,
+when and where it is, the start of its description, and for Legislature
+sessions a link to the agenda. Use **Words** and **Calendar** to narrow the
+list. The sidebar lists each calendar with its number of upcoming events, a
+red **⚠** when its last check failed, and the calendars that can't be
+collected. More in [Events](events.md).
 
 ## The Sources page
 

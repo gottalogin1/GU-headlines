@@ -1,7 +1,7 @@
 """Weather for the warning banner and the weather box: the weather table.
 
-Revision ID: 0005_weather
-Revises: 0004_alerts
+Revision ID: 0006_weather
+Revises: 0005_events
 Create Date: 2026-11-24
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "0005_weather"
-down_revision = "0004_alerts"
+revision = "0006_weather"
+down_revision = "0005_events"
 branch_labels = None
 depends_on = None
 

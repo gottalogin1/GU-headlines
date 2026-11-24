@@ -21,14 +21,21 @@ from sqlalchemy import select
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from ..config import AppConfig, ConfigError, JobSourceConfig, load_config, load_jobs_config
+from ..config import (
+    AppConfig,
+    CalendarConfig,
+    ConfigError,
+    load_config,
+    load_events_config,
+    load_jobs_config,
+)
 from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
 from ..weather import JTWC_URL, NWS_GUAM_URL, for_page
 from . import queries, seo
-from .queries import MARK_END, MARK_START, Filters, JobFilters
+from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -252,25 +259,29 @@ class _ConfigCache:
 config_cache = _ConfigCache()
 
 
-class _JobsConfigCache:
-    """jobs.yaml, re-read at most once a minute (a broken edit keeps the last good copy;
-    a broken file at startup means no boards rather than a broken site)."""
+class _ListConfigCache:
+    """jobs.yaml or events.yaml, re-read at most once a minute (a broken edit
+    keeps the last good copy; a broken file at startup means an empty list
+    rather than a broken site)."""
 
-    def __init__(self) -> None:
-        self._boards: list[JobSourceConfig] = []
+    def __init__(self, load: Callable[[Path], list], name: str) -> None:
+        self._load = load
+        self._name = name
+        self._items: list = []
         self._loaded: float | None = None
 
-    def get(self) -> list[JobSourceConfig]:
+    def get(self) -> list:
         if self._loaded is None or time.monotonic() - self._loaded > CONFIG_RELOAD_SECONDS:
             try:
-                self._boards = load_jobs_config(settings.config_dir)
+                self._items = self._load(settings.config_dir)
             except ConfigError as exc:
-                log.error("jobs config error: %s", exc)
+                log.error("%s config error: %s", self._name, exc)
             self._loaded = time.monotonic()
-        return self._boards
+        return self._items
 
 
-jobs_config_cache = _JobsConfigCache()
+jobs_config_cache: _ListConfigCache = _ListConfigCache(load_jobs_config, "jobs")
+events_config_cache: _ListConfigCache = _ListConfigCache(load_events_config, "events")
 
 
 class _TTLCache:
@@ -358,9 +369,48 @@ def rel_time(dt: datetime | None) -> str:
 def day_label(day: date) -> str:
     today = datetime.now(GUAM_TZ).date()
     delta = (today - day).days
-    prefix = "Today" if delta == 0 else "Yesterday" if delta == 1 else None
+    prefix = {0: "Today", 1: "Yesterday", -1: "Tomorrow"}.get(delta)
     long = fmt_date_long(day)
     return f"{prefix} · {long}" if prefix else long
+
+
+def fmt_time(dt: datetime | None) -> str:
+    """9:30 AM (Guam time)"""
+    local = to_local(dt)
+    if not local:
+        return ""
+    return f"{local.hour % 12 or 12}:{local:%M} {local:%p}"
+
+
+def _short_day(value: date) -> str:
+    return f"{value:%a}, {value:%b} {value.day}"
+
+
+def event_when(event) -> str:
+    """When an event is, in full: "Tue, Dec 1, 9:00 AM – 12:00 PM", "Mon, Dec 21 –
+    Wed, Dec 23", "Sat, Dec 5, all day"."""
+    start = to_local(event.starts_at)
+    end = to_local(event.ends_at)
+    if event.all_day:
+        last = (end - timedelta(days=1)).date() if end else start.date()
+        if last > start.date():
+            return f"{_short_day(start.date())} – {_short_day(last)}"
+        return f"{_short_day(start.date())}, all day"
+    text = f"{_short_day(start.date())}, {fmt_time(start)}"
+    if end and end.date() == start.date():
+        return f"{text} – {fmt_time(end)}"
+    if end:
+        return f"{text} – {_short_day(end.date())}, {fmt_time(end)}"
+    return text
+
+
+def event_time(event, day: date) -> str:
+    """The short label beside an event under `day`: its start time, "All day",
+    or "Ongoing" for an event that began on an earlier day."""
+    start = to_local(event.starts_at)
+    if start.date() < day:
+        return "Ongoing"
+    return "All day" if event.all_day else fmt_time(event.starts_at)
 
 
 def highlight(snippet: str | None) -> Markup:
@@ -402,6 +452,8 @@ def domain(url: str | None) -> str:
 
 templates.env.filters.update(
     fmt_datetime=fmt_datetime,
+    fmt_time=fmt_time,
+    event_when=event_when,
     fmt_until=fmt_until,
     fmt_date_long=fmt_date_long,
     fmt_day=fmt_day,
@@ -415,6 +467,7 @@ templates.env.filters.update(
 templates.env.tests.update(note=is_note)
 templates.env.globals.update(
     settings=settings,
+    event_time=event_time,
     months=MONTHS,
     static_url=static_url,
     theme_script=Markup(THEME_SCRIPT),
@@ -433,6 +486,18 @@ def group_by_day(items: list[dict]) -> list[tuple[str, list[dict]]]:
             groups.append((day_label(day), []))
             current = day
         groups[-1][1].append(item)
+    return groups
+
+
+def group_events(items: list[dict], today: date) -> list[tuple[date, str, list[dict]]]:
+    """[(day, label, items)] in order. An event that began before today and
+    is still on is listed under today."""
+    groups: list[tuple[date, str, list[dict]]] = []
+    for item in items:
+        day = max(to_local(item["event"].starts_at).date(), today)
+        if not groups or groups[-1][0] != day:
+            groups.append((day, day_label(day), []))
+        groups[-1][2].append(item)
     return groups
 
 
@@ -816,11 +881,59 @@ def jobs(
     )
 
 
+@app.get("/events", response_class=HTMLResponse)
+def events(
+    request: Request,
+    q: str = Query("", max_length=200),
+    calendar: str = Query("", max_length=60),
+    page: int = Query(1, ge=1, le=10000),
+):
+    calendars_config: list[CalendarConfig] = events_config_cache.get()
+    event_filters = EventFilters(q=q.strip(), calendar=calendar.strip() or None)
+    today = datetime.now(GUAM_TZ).date()
+    since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
+    with session_scope() as session:
+        result = queries.list_events(session, event_filters, page, settings.page_size, since)
+        calendars = queries.event_calendars(session, since)
+    if page > 1 and not result.items:
+        raise HTTPException(404)
+    # Calendars that can't be collected are listed apart, with the reason.
+    collected = {c.slug for c in calendars_config if c.collected}
+    calendars = [c for c in calendars if c["calendar"].slug in collected]
+    return render(
+        request,
+        "events.html",
+        result=result,
+        groups=group_events(result.items, today),
+        event_filters=event_filters,
+        calendars=calendars,
+        uncollectable=[c for c in calendars_config if c.enabled and c.cannot_scrape],
+        title="Events on Guam",
+        description=_events_description([c["calendar"].name for c in calendars]),
+        active_nav="events",
+        canonical={"calendar": event_filters.calendar, "page": page},
+        # A word search is a search page; a calendar's own list is worth finding.
+        robots="noindex, follow" if event_filters.q else None,
+        breadcrumbs=[("Events", None)],
+        show_ad=True,
+    )
+
+
+def _names(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
+def _events_description(calendars: list[str]) -> str:
+    text = "Upcoming events on Guam: sessions, hearings, public meetings and more"
+    if calendars:
+        text += f", from {_names(calendars)}"
+    return text + ". Every event links to the calendar that published it."
+
+
 def _jobs_description(boards: list[str]) -> str:
     text = "Job openings on Guam with pay, location and closing dates"
     if boards:
-        names = boards[0] if len(boards) == 1 else ", ".join(boards[:-1]) + f" and {boards[-1]}"
-        text += f", from {names}"
+        text += f", from {_names(boards)}"
     return text + ". Every posting links to the board that published it."
 
 

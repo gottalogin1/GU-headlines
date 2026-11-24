@@ -37,6 +37,26 @@ release, see [Updating](docs/maintenance.md#updating).
   or leave it out to use the default of 10. The new command
   `guheadlines weather` reads the weather now and shows what each service
   gave.
+- **An Events page** (new **Events** link in the top bar) listing what's
+  coming up on Guam over the next 90 days, grouped by day, in Guam time:
+  - Guam Legislature sessions, public hearings and committee meetings from
+    the Legislature's Google Calendar, with each session's agenda (PDF) from
+    its Agendas page. Certificate presentations are left out.
+  - GovGuam board, commission and agency meetings from notices.guam.gov.
+  - Guam Community College events.
+
+  Search by word or narrow to one calendar. The Guam Visitors Bureau, the
+  Guampedia fiesta calendar and the Chamber of Commerce are listed with the
+  reason they can't be collected. The page can show an ad, like the Jobs
+  page. See [Events](docs/events.md).
+- `guheadlines events` reads the calendars now; `--check` shows what each
+  gives. The worker reads them every `EVENTS_INTERVAL_HOURS` (default 3).
+
+**To update:** the database upgrade runs by itself. For the Legislature's
+calendar, add a free Google key as `GOOGLE_CALENDAR_API_KEY` in `.env` (the
+steps are in `.env.example`, and in [Events](docs/events.md#google-calendar-key)).
+Without it, the Events page still lists the Legislature's sessions from its
+Agendas page and the other calendars.
 
 ### Changed
 - **Andersen Air Force Base is collected again.** The base's own site turns

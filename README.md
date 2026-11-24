@@ -31,6 +31,7 @@ needed; you will copy and paste a few commands.
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates (also automatic ones), alerts in Discord when something stops working, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
+| [Events](docs/events.md) | The Events page: which calendars are read, adding a free Google key for the Legislature's calendar, and calendars that can't be collected |
 
 ---
 
@@ -94,6 +95,10 @@ that is always on can do this by itself after each change; see
   GDOE, federal jobs, USAJOBS, UOG, GCC and its partners, GuamTemps), with
   pay, location, open and closing dates, the announcement PDF and when each
   posting was last seen. See [Jobs](docs/jobs.md).
+- **Events page** lists what's coming up on Guam over the next 90 days: Guam
+  Legislature sessions (with their agendas), hearings and committee
+  meetings, GovGuam board and commission meetings, and Guam Community
+  College events. See [Events](docs/events.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Ready for search engines**: every page has its own title and summary,
@@ -146,6 +151,7 @@ GU-headlines/
 ├── config/
 │   ├── sources.yaml    the list of news sites
 │   ├── jobs.yaml       the job boards for the Jobs page
+│   ├── events.yaml     the calendars for the Events page
 │   └── categories.yaml the topics and their keywords
 ├── docs/               the guides linked above
 ├── docker-compose.yml  tells Docker how to run everything

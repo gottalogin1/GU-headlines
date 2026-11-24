@@ -568,3 +568,18 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   .job-filter .job-words { grid-column: 1 / -1; }
   .job-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---------- events ---------- */
+.event-filter .event-words { grid-column: span 2; }
+/* The time sits in its own column beside the event, like a printed program. */
+.story.event { grid-template-columns: 92px minmax(0, 1fr); gap: 14px; }
+.event-time {
+  margin: 4px 0 0 8px; font-size: .95rem; font-weight: 750; color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.story.event .story-body { padding-left: 0; }
+@media (max-width: 640px) {
+  .event-filter .event-words { grid-column: 1 / -1; }
+  .story.event { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .story.event .story-body { padding-left: 8px; }
+}
