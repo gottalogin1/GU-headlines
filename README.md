@@ -90,7 +90,7 @@ that is always on can do this by itself after each change; see
 - **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
   from the news. It can show an ad.
 - **Light and dark mode**: follows your device's setting, with a switch in the
-  top bar. Light mode is a plain white page.
+  top bar. Both modes have a flat, matte look, like a color e-reader screen.
 - **Jobs page** lists openings on Guam from eight job boards (GuamJobsOnline,
   GDOE, federal jobs, USAJOBS, UOG, GCC and its partners, GuamTemps), with
   pay, location, open and closing dates, the announcement PDF and when each

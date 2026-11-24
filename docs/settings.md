@@ -339,14 +339,16 @@ update may replace these files (see
 
 - **Colors:** open `guheadlines/web/static/style.css`. The first block,
   starting `:root {`, lists every color of **dark mode** (the default) with a
-  name, for example `--accent: #6ea8ff;` (the blue used for buttons and
-  links). The second block, starting `:root[data-theme="light"] {`, holds the
-  same colors for **light mode**, such as `--bg: #ffffff;` (the white page
-  background). Colors are written as hex codes; any "color picker" website
+  name, for example `--fill: #3d5a7d;` (the blue of the buttons and the
+  current section). The second block, starting `:root[data-theme="light"] {`,
+  holds the same colors for **light mode**, such as `--bg: #eeebe3;` (the
+  paper-colored page background). Colors are written as hex codes; any "color picker" website
   gives you one.
 - **Logo:** the "GU" square is in `guheadlines/web/templates/base.html`
   (`<span class="brand-mark">GU</span>`). Change the letters there.
-- **Browser tab icon:** `guheadlines/web/static/favicon.svg`.
+- **Browser tab icon:** `guheadlines/web/static/favicon.svg`. Phones and
+  some browsers use `favicon.ico` and `apple-touch-icon.png` instead, and
+  link previews use `social-card.jpg`. Change those images too.
 
 Apply with:
 
