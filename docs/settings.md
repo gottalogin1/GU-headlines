@@ -275,6 +275,13 @@ nano .env                 # put the same new password in POSTGRES_PASSWORD
 docker compose up -d
 ```
 
+## Alerts
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DISCORD_WEBHOOK_URL` | (empty) | The secret webhook link of a Discord channel. Alerts are posted there: a news site or job board that stopped working, the site not answering, automatic updates. Empty: no alerts. See [Alerts in Discord](maintenance.md#alerts-in-discord). |
+| `ALERT_AFTER_HOURS` | `24` | How many hours a news site or job board must fail before its alert is posted. The minimum is 1. |
+
 ## Troubleshooting output
 
 | Setting | Default | What it does |

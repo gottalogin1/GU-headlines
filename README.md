@@ -28,7 +28,7 @@ needed; you will copy and paste a few commands.
 | 3. [Changing settings](docs/settings.md) | Site name, web address and https, how often it checks for news, photos, and every other setting |
 | 4. [News sources](docs/news-sources.md) | Adding, pausing, removing and fixing news websites |
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business, Labor, Tourism, Sports, Food and Saipan & CNMI (plus Obituaries), and how to change or add topics |
-| 6. [Looking after it](docs/maintenance.md) | Backups, updates, checking it is healthy, putting it on the internet with your own domain and https |
+| 6. [Looking after it](docs/maintenance.md) | Backups, updates (also automatic ones), alerts in Discord when something stops working, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 
@@ -64,7 +64,9 @@ docker compose up -d --build
 ```
 
 Your stories, photos and settings are kept. If `git pull` complains about
-your local changes, see [Updating](docs/maintenance.md#updating).
+your local changes, see [Updating](docs/maintenance.md#updating). A server
+that is always on can do this by itself after each change; see
+[Automatic updates](docs/maintenance.md#automatic-updates).
 
 ---
 
@@ -142,7 +144,9 @@ GU-headlines/
 │   └── categories.yaml the topics and their keywords
 ├── docs/               the guides linked above
 ├── docker-compose.yml  tells Docker how to run everything
-├── scripts/backup.sh   makes a database backup
+├── scripts/
+│   ├── backup.sh       makes a database backup
+│   └── auto-update.sh  keeps a server up to date and watched (optional)
 └── guheadlines/        the program itself (you don't need to touch this)
 ```
 

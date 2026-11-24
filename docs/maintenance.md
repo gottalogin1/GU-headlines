@@ -1,7 +1,8 @@
 # Looking after it
 
 GU Headlines mostly runs by itself. This guide covers the occasional jobs:
-checking it's healthy, backups, updates, and putting it on the internet.
+checking it's healthy, backups, updates, alerts, and putting it on the
+internet.
 
 All commands are run from inside the `GU-headlines` folder.
 
@@ -11,6 +12,8 @@ All commands are run from inside the `GU-headlines` folder.
 - [Backups](#backups)
 - [Restoring from a backup](#restoring-from-a-backup)
 - [Updating](#updating)
+  - [Automatic updates](#automatic-updates)
+- [Alerts in Discord](#alerts-in-discord)
 - [Disk space](#disk-space)
 - [Putting it on the internet](#putting-it-on-the-internet)
 - [Moving to a new computer](#moving-to-a-new-computer)
@@ -42,17 +45,17 @@ news collector has been doing:
 docker compose logs --tail 50 worker
 ```
 
-**Automatic monitoring (optional).** The address `/healthz` (for example
-`https://guamheadlines.com/healthz`, or `http://your-server/healthz` without
-a domain) answers like this:
+**Alerts.** GU Headlines can post a message in a Discord channel when the
+site stops answering or a news site stops working, so you don't have to
+look. See [Alerts in Discord](#alerts-in-discord).
+
+The address `/healthz` (for example `https://guamheadlines.com/healthz`, or
+`http://your-server/healthz` without a domain) answers like this, which
+monitoring services can check:
 
 ```json
 {"status": "ok", "last_scrape": "2026-09-27T19:00:41+00:00"}
 ```
-
-Free services such as [UptimeRobot](https://uptimerobot.com/) or a
-self-hosted [Uptime Kuma](https://github.com/louislam/uptime-kuma) can check
-this address every few minutes and email you if the site stops answering.
 
 ---
 
@@ -207,6 +210,190 @@ save, then run `git stash drop`. Check the file with
 `docker compose exec worker guheadlines sources`.
 
 It's a good idea to take a backup before updating: `./scripts/backup.sh`.
+
+### Automatic updates
+
+On a server that is always on, such as a rented server, GU Headlines can
+update itself. Every 5 minutes the server checks whether the `main` branch
+on GitHub has new commits (for example after a pull request is merged). If
+it has, the server does the steps above by itself: it downloads the new
+version, makes a database backup, and rebuilds and restarts the site. If the
+new version doesn't answer within 5 minutes, the server goes back to the
+version before. It also checks every 5 minutes that the site answers.
+
+It's meant for a Linux server. On a Windows or Mac computer, update by hand.
+
+**Turn it on** (once). On the server, in the `GU-headlines` folder, as the
+user that runs `docker compose` (on a rented server, usually `root`):
+
+1. Set up [alerts in Discord](#alerts-in-discord) first, so you hear about
+   updates and problems. (It works without them too.)
+2. Make sure the folder is on the `main` branch and up to date:
+
+   ```sh
+   git checkout main
+   git pull
+   docker compose up -d --build
+   ```
+
+3. Turn on the rounds every 5 minutes:
+
+   ```sh
+   ./scripts/auto-update.sh --install
+   ```
+
+   It says `Done`, and posts a test message in your Discord channel. It adds
+   one line to the server's **cron** schedule (see
+   [Backing up automatically every night](#backing-up-automatically-every-night));
+   `crontab -l` shows it.
+
+**What happens after a merge.** Within 5 minutes, the server starts the
+update. A minute or two later the site runs the new version, and Discord
+shows "🚀 guamheadlines.com updated" with the list of changes. This message
+comes without a phone notification.
+
+**Its log.** Each round writes what it did to `backups/auto-update.log`
+(a round with nothing to do writes nothing). To see the newest lines:
+
+```sh
+tail -n 30 backups/auto-update.log
+```
+
+**Other commands:**
+
+| Command | What it does |
+|---|---|
+| `./scripts/auto-update.sh` | One round now, and says where things stand. |
+| `./scripts/auto-update.sh --test-alert` | Posts a test message in your Discord channel. |
+| `./scripts/auto-update.sh --uninstall` | Turns the rounds off. Update by hand again. |
+
+**Good to know:**
+
+- `.env` is never changed by an update. A new setting uses its default
+  until you add it to `.env` (see
+  [Getting the newest notes in .env](settings.md#getting-the-newest-notes-in-env)).
+- Files you changed on the server, such as `config/sources.yaml`, are kept.
+  If an update changes the same file, the update stops, and Discord shows
+  "Automatic update stopped". Follow the steps under "If `git pull` says
+  your local changes would be overwritten" above. Within 5 minutes after
+  that, the update continues by itself.
+- A version that failed to start is not tried again. The next new commit
+  is. The site's messages from the failed start are in
+  `backups/.auto-update/failed-update.log`.
+- If a failed version changed the database, going back may not be enough,
+  and Discord shows "Update failed; ... is down". The backup from just
+  before the update is the newest file in `backups`; see
+  [Restoring from a backup](#restoring-from-a-backup).
+- Old versions of the program are deleted after each update to save disk
+  space (`docker image prune`). Stories and photos are never touched.
+
+---
+
+## Alerts in Discord
+
+GU Headlines can post a message in a Discord channel when something needs
+your attention. Discord is a free chat app; its phone app shows each
+message as a notification. These alerts come:
+
+| Message | Posted by | When |
+|---|---|---|
+| ⚠️ *Name* has stopped working, ✅ *Name* works again | the worker | A news site or job board has failed for a day (`ALERT_AFTER_HOURS`), and when it works again. |
+| 🚨 *site* is not answering, ✅ *site* is back | the server ([automatic updates](#automatic-updates)) | The site didn't answer for about 10 minutes, and when it answers again. |
+| ⚠️ news not checked for *N* hours, ✅ news checked again | the server | The worker hasn't checked the news for 3 hours. |
+| 🚀 updated, ⚠️ update failed, ⚠️ automatic update stopped | the server | After each [automatic update](#automatic-updates). |
+| 🚨 *site* does not answer, ✅ *site* answers again | GitHub ([outside check](#watching-from-outside-the-server)) | The site didn't answer from outside for 3 minutes. |
+
+Each problem is posted once, not every hour. Nothing is posted while all is
+well.
+
+### Getting the webhook link
+
+A **webhook** is a secret link that lets a program post messages in one
+Discord channel. It can only post; it can't read your messages. Making one
+is easiest on a computer, in the Discord app or at
+[discord.com/app](https://discord.com/app) in a web browser.
+
+1. Sign in to Discord. If you have no account, make a free one at
+   [discord.com/register](https://discord.com/register).
+2. Make your own Discord **server** (in Discord, a server is a private
+   group, not a computer). In the column on the left, press the **+**
+   button (**Add a Server**), then **Create My Own**, then **For me and my
+   friends**. Give it a name, for example `GU Headlines alerts`, and press
+   **Create**. It comes with a channel named **general**, which you can use.
+3. Point at the channel name and press the gear button next to it
+   (**Edit Channel**). Open **Integrations**, then **Webhooks**, then press
+   **New Webhook**.
+4. Press the new webhook to open it. Change its name to `GU Headlines` (the
+   name shown on each alert), then press **Copy Webhook URL**. Press
+   **Save Changes** if Discord shows that button.
+5. On the server, put the link in `.env`:
+
+   ```
+   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1234567890123456789/AbCd...
+   ```
+
+   and apply it:
+
+   ```sh
+   docker compose up -d
+   ```
+
+6. Check it:
+
+   ```sh
+   docker compose exec worker guheadlines alert-test
+   ```
+
+   A test message shows in the channel within a few seconds.
+7. **On your phone:** install the Discord app and sign in. Press and hold
+   your server's icon, open **Notifications** and choose **All Messages**.
+   Discord sends phone notifications only while you aren't using Discord on
+   a computer.
+
+Keep the link private, like a password: a person who has it can post in
+your channel. If someone else learns it, delete the webhook (step 3), make a
+new one, and put the new link in `.env` (and in GitHub, below).
+
+### Watching from outside the server
+
+The server's own checks can't post anything when the whole server is down
+or cut off from the internet. GitHub can check the site from outside every
+30 minutes and post in the same Discord channel. It's free for public
+repositories. Only the owner of the repository on GitHub can set it up:
+
+1. On GitHub, open the repository, then **Settings** › **Secrets and
+   variables** › **Actions**.
+2. On the **Secrets** tab, press **New repository secret**. Name:
+   `DISCORD_WEBHOOK_URL`. Secret: the same webhook link as in `.env`. Press
+   **Add secret**. GitHub never shows a secret again, also not in logs.
+3. On the **Variables** tab, press **New repository variable**. Name:
+   `SITE_CHECK_URL`. Value: your site's address, for example
+   `https://guamheadlines.com`. Press **Add variable**.
+4. Try it: open the **Actions** tab, choose **Site check** on the left, press
+   **Run workflow**, then the green **Run workflow** button. Within a minute
+   the run gets a green check mark: the site answers. Nothing is posted in
+   Discord while the site works.
+
+Good to know:
+
+- GitHub starts scheduled checks some minutes late when it's busy, so an
+  outage of the whole server can take up to an hour to be reported.
+- While the site doesn't answer, each check run is marked as failed (a red
+  ✗), and GitHub may also email you about it.
+- GitHub pauses scheduled checks in a public repository after 60 days
+  without any new commit. To turn them on again, open **Actions** ›
+  **Site check** and press **Enable workflow**.
+
+### When an alert comes
+
+| Alert | What to do |
+|---|---|
+| *Name* has stopped working | Open the **Sources** page; the site's last error is listed there. See [Reading the Sources page](news-sources.md#reading-the-sources-page). To try the site now: `docker compose exec worker guheadlines check --source SLUG` (the slug is in `config/sources.yaml`). |
+| *site* is not answering | On the server: `docker compose ps`. If a part isn't **Up**, start it with `docker compose up -d`, then look at `docker compose logs --tail 50 web caddy`. |
+| news not checked for *N* hours | `docker compose logs --tail 50 worker` shows why; `docker compose restart worker` starts it again. |
+| Update failed | The site runs the version before. The reason is in `backups/.auto-update/failed-update.log`; pass it on to whoever made the change. |
+| Automatic update stopped | Read the message: usually a file changed on the server is in the way (see [Updating](#updating)). |
+| *site* does not answer (from GitHub), but the server posted nothing | The whole server may be down. Look at it in your server provider's control panel, and restart it there if needed. GU Headlines starts again by itself when the server starts. |
 
 ---
 
@@ -378,13 +565,19 @@ searches lead to the publishers' own pages.
 3. [Restore the database and photos](#restoring-from-a-backup), then run
    `docker compose up -d --build`.
 4. Switch the old computer off (`docker compose down`), so both aren't
-   collecting news at the same time.
+   collecting news at the same time. If you turned on
+   [automatic updates](#automatic-updates) there, turn them off first:
+   `./scripts/auto-update.sh --uninstall`. Turn them on again on the new
+   computer.
 
 ---
 
 ## Starting over or uninstalling
 
-**Stop it** (everything is kept; `docker compose up -d` starts it again):
+**Stop it** (everything is kept; `docker compose up -d` starts it again).
+With [automatic updates](#automatic-updates) on, the next update starts it
+again, and the server posts "is not answering" alerts; run
+`./scripts/auto-update.sh --uninstall` first to stop those too:
 
 ```sh
 docker compose down
@@ -398,5 +591,6 @@ docker compose down -v
 docker compose up -d --build
 ```
 
-**Uninstall completely:** run `docker compose down -v`, then delete the
-`GU-headlines` folder.
+**Uninstall completely:** run `./scripts/auto-update.sh --uninstall` (if
+you turned on [automatic updates](#automatic-updates)) and
+`docker compose down -v`, then delete the `GU-headlines` folder.

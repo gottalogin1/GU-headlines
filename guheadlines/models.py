@@ -206,3 +206,16 @@ class Job(Base):
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     source: Mapped[JobSource] = relationship(back_populates="jobs")
+
+
+class AlertState(Base):
+    """A news site or job board whose latest check failed. The row goes away
+    when it works again; `notified_at` is set once its alert was sent."""
+
+    __tablename__ = "alerts"
+
+    # "news:<slug>" or "jobs:<slug>"
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    # When a failed check was first seen (used when it never worked at all).
+    failing_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
