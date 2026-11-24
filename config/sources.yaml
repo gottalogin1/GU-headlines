@@ -254,13 +254,13 @@ sources:
     require_guam: true
     categories: [military]
 
-  # Andersen's 36th Wing, read from its DVIDS page. The base's own site
-  # (andersen.af.mil) has a firewall (Akamai) that turns robots away, as do
-  # the other af.mil sites. The wing's public affairs office posts the same
-  # stories and photos to DVIDS, the Defense Department's service for sharing
-  # military news with the media (since November 2026). Unit pages work the
-  # same way as the dvids source above; stories that never mention Guam or
-  # Andersen (exercises in Japan, for example) are skipped.
+  # Andersen's 36th Wing, read from its DVIDS page since November 2026. The
+  # base's own site (andersen.af.mil) has a firewall (Akamai) that turns
+  # robots away, as do the other af.mil sites. The wing's public affairs
+  # office also posts its stories and photos to DVIDS, the Defense
+  # Department's service for sharing military news with the media. Unit pages
+  # work the same way as the dvids source above; stories that never mention
+  # Guam or Andersen (exercises in Japan, for example) are skipped.
   - slug: andersen
     name: Andersen Air Force Base
     homepage: https://www.dvidshub.net/unit/36WPA
@@ -350,6 +350,13 @@ sources:
   # Drupal, no feed. News releases are linked from the listing page with
   # addresses straight off the root (/tumon-night-market-brings-holiday-cheer).
   # Its pages show no date, so each release is dated when first found.
+  # Since November 2026 its firewall (Cloudflare) answers HTTP 403 to GitHub's
+  # servers on every address, including /rss.xml and the sitemap. It stays
+  # switched on in case it works from your server; if your Status page shows
+  # it failing every hour, add a cannot_scrape line. Its travel site,
+  # visitguam.com, has a News Releases page too, but that page shows robots a
+  # bot check; the site's feed (/blog/rss/) holds travel guides, not news
+  # releases, so neither is read.
   - slug: gvb
     name: Guam Visitors Bureau
     homepage: https://www.guamvisitorsbureau.com/

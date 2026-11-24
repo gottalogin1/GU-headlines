@@ -61,11 +61,8 @@ jobs:
       - name: Probe every configured URL
         if: inputs.urls == '' && !inputs.only_jobs
         run: guheadlines probe --all
-      - name: TEMP try alternatives
-        if: inputs.urls == 'try'
-        run: python .github/scripts/try_alternatives.py
       - name: Probe the given addresses
-        if: inputs.urls != '' && inputs.urls != 'try'
+        if: inputs.urls != ''
         env:
           URLS: ${{ inputs.urls }}
           OUTLINE: ${{ inputs.outline }}
