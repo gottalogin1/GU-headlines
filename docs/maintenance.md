@@ -531,8 +531,8 @@ Before making the site public, read the [note on content](../README.md#a-note-on
 The site is ready for Google and Bing: every page has a title, a summary,
 one canonical address and a link preview card, and
 `https://news.example.com/sitemap.xml` lists every page worth finding (the
-home page, each topic and news site, the Jobs page, and the archive down to
-each day). Search engines find it through `robots.txt`.
+home page, each topic and news site, the Jobs and Events pages, and the
+archive down to each day). Search engines find it through `robots.txt`.
 
 To get listed sooner and see how people find the site:
 

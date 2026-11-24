@@ -1,0 +1,100 @@
+# Calendars for the Events page.
+#
+# The worker reads them every EVENTS_INTERVAL_HOURS (default 3) and keeps the
+# events of the next 90 days. Changes take effect on the next check. Try a
+# calendar (nothing is saved) with:
+#     docker compose exec worker guheadlines events --check --source <slug>
+#
+# A calendar is read from one or more inputs. Each input is a kind of address:
+#   google_calendar  a public Google Calendar's ID (it looks like an email
+#                    address). Read through Google's Calendar API, which needs
+#                    GOOGLE_CALENDAR_API_KEY in your .env file (see .env.example).
+#   ical             an iCal (.ics) address, the format calendar apps share
+#                    calendars in ("Subscribe", "Export" or "iCal feed" links).
+#   agendas          a page that lists meeting agendas (PDFs) under dated
+#                    headings, like the Legislature's session agendas.
+#   notices          a notices.guam.gov listing: GovGuam's public meeting notices.
+#   pages            a web page that lists events. Needs CSS selectors:
+#                      item         each event on the page
+#                      title        the event's name and link inside an item
+#                      when         where the item's date and time are written
+#                      description  (optional) its short description
+#
+# Other options:
+#   homepage        the calendar's own page, linked from the Events page
+#   location        where events are, when an event doesn't say
+#   organizer       who holds the events, when an event doesn't say
+#   exclude         leave out events whose title or organizer matches one of
+#                   these patterns (regular expressions, any upper/lower case)
+#   request_delay   seconds between requests to this site
+#   ignore_robots   read this site even where its robots.txt disallows it
+#   cannot_scrape   why this calendar can't be collected; it is never read, and
+#                   the Events page lists it with a link. Delete the line to try
+#                   it again.
+#   enabled         false to pause a calendar without deleting its events
+#
+# Events whose title says they were cancelled or postponed are left out.
+#
+# Looked at on 2026-11-24 but not added: the University of Guam (no events
+# calendar on its site), the Guam Daily Post's calendar (empty), the Guam
+# Department of Labor (no upcoming events, and its calendar export is turned
+# off), USO Guam (only a monthly programs flyer) and Pacific Historic Parks
+# (no Guam events listed).
+
+calendars:
+  - slug: legislature
+    name: Guam Legislature
+    homepage: https://guamlegislature.gov/calendar/
+    # The calendar on the Legislature's website is this Google Calendar.
+    google_calendar: webmaster@guamlegislature.com
+    # Session agendas are linked to the session on the calendar.
+    agendas: https://guamlegislature.gov/agendas-and-votes/
+    location: Guam Congress Building, Hagåtña
+    organizer: Guam Legislature
+    # The calendar also lists every presentation of a legislative certificate
+    # to a person or group. Delete these lines to show them too.
+    exclude:
+      - "presentation (notice )?(for|of) (legislative )?certificate"
+    # guamlegislature.gov's robots.txt asks for 20 seconds between requests.
+    request_delay: 20
+
+  - slug: govguam-meetings
+    name: GovGuam public meetings
+    homepage: https://notices.guam.gov/notices?type_id=5&view=list
+    # The government's official meeting notices (boards, commissions, agencies).
+    notices: https://notices.guam.gov/notices?type_id=5&view=list
+    # The Legislature's own calendar (above) already lists its sessions and
+    # hearings.
+    exclude:
+      - "^(guam legislature|i liheslaturan gu[aå]han)"
+      - "call to session"
+
+  - slug: gcc
+    name: Guam Community College
+    homepage: https://guamcc.edu/events/list
+    pages: https://guamcc.edu/events/list
+    item: article.post
+    title: h2.post-title a
+    when: ul.ec-directory-option li
+    description: .post-body
+    location: Guam Community College, Mangilao
+    organizer: Guam Community College
+
+  - slug: gvb
+    name: Guam Visitors Bureau events
+    homepage: https://www.visitguam.com/events/
+    cannot_scrape: >-
+      The site's firewall (Akamai) turns away automated visitors on its events
+      pages and its events feed.
+
+  - slug: fiestas
+    name: Village fiesta calendar (Guampedia)
+    homepage: https://www.guampedia.com/guam-fiesta-calendar
+    cannot_scrape: >-
+      Guampedia's firewall (Cloudflare) turns away automated visitors. Its
+      calendar lists every village's fiesta, from the Archdiocese of Agaña.
+
+  - slug: chamber
+    name: Guam Chamber of Commerce events
+    homepage: https://www.guamchamber.com.gu/events
+    cannot_scrape: The site's firewall (Cloudflare) turns away automated visitors.

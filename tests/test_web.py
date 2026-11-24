@@ -460,6 +460,7 @@ def test_sitemap_and_robots(client):
         "/source/postguam",
         "/source/kuam",
         "/jobs",
+        "/events",
         "/archive",
         f"/archive/{today.year}/{today.month}",
         f"/archive/{today.year}/{today.month}/{today.day}",
@@ -543,14 +544,14 @@ def test_site_and_scraper_do_not_mention_github(client, monkeypatch):
     from guheadlines.settings import load_settings
 
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
-    pages = ("/", "/status", "/jobs", "/category/obituaries")
+    pages = ("/", "/status", "/jobs", "/events", "/category/obituaries")
     for path in (*pages, "/robots.txt", "/sitemap.xml", "/nope"):
         assert "github" not in client.get(path).text.lower(), path
     assert "github" not in load_settings().user_agent.lower()
 
 
 def test_no_ads_until_adsense_is_set_up(client):
-    for path in ("/", "/status", "/jobs", "/category/obituaries"):
+    for path in ("/", "/status", "/jobs", "/events", "/category/obituaries"):
         page = client.get(path)
         assert "adsbygoogle" not in page.text and "google-adsense-account" not in page.text
         assert "'nonce-" not in page.headers["content-security-policy"]
@@ -558,10 +559,10 @@ def test_no_ads_until_adsense_is_set_up(client):
     assert "Mediapartners-Google" not in client.get("/robots.txt").text
 
 
-def test_ad_block_on_the_home_sources_jobs_and_obituaries_pages(client, monkeypatch):
+def test_ad_block_on_the_home_sources_jobs_events_and_obituaries_pages(client, monkeypatch):
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
     nonces = set()
-    for path in ("/", "/status", "/jobs", "/jobs?q=nurse", "/category/obituaries"):
+    for path in ("/", "/status", "/jobs", "/jobs?q=nurse", "/events", "/category/obituaries"):
         page = client.get(path)
         csp = page.headers["content-security-policy"]
         nonce = csp.split("'nonce-", 1)[1].split("'", 1)[0]
@@ -573,7 +574,7 @@ def test_ad_block_on_the_home_sources_jobs_and_obituaries_pages(client, monkeypa
         assert 'data-ad-slot="9876543210"' in sidebar
         # The AdSense code and the line that fills the slot both carry the nonce.
         assert sidebar.count(f'nonce="{nonce}"') == 2
-    assert len(nonces) == 5  # a new nonce for every page
+    assert len(nonces) == 6  # a new nonce for every page
 
     # Other pages keep the strict policy and show no ad.
     for path in ("/category/military", "/search?q=wage", "/archive"):

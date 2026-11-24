@@ -24,7 +24,7 @@ page to run GU Headlines.
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
-| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)). |
+| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)) and the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)). |
 | `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. |
 
 `web` and `worker` are the same program (`guheadlines`) started with
@@ -112,6 +112,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `backfill --source SLUG --since YYYY-MM-DD` | Import older stories from the site's sitemaps (`--limit N`, default 300). |
 | `reclassify` | Re-apply `categories.yaml` to every stored story. |
 | `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
+| `events` | Read the calendars in `events.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each calendar gives without saving anything (`--limit N`). |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
 | `alert-test` | Post a test message in the Discord channel of `DISCORD_WEBHOOK_URL` (see [Alerts in Discord](maintenance.md#alerts-in-discord)). |
 | `migrate` | Apply database upgrades (done automatically on start). |
@@ -130,6 +131,8 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `scrape_runs` | One row per site per check, for the Sources page (kept 180 days) |
 | `job_sources` | One row per job board: name, homepage, on/off, last check, last error, postings found |
 | `jobs` | The job postings: URL (unique), title, employer, pay, description, location, open and close date, closing note, PDF, first and last seen, and when the board stopped listing it |
+| `event_calendars` | One row per events calendar: name, homepage, on/off, last check, last error, upcoming events found |
+| `events` | The events: calendar and its own ID for the event (unique together), name, start and end, all-day, place, organizer, description, link, agenda PDF, first and last seen, and when the calendar stopped listing it |
 | `alerts` | News sites and job boards whose latest check failed, and whether their alert was posted, so each problem is posted once |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
@@ -145,13 +148,14 @@ Four workflows run in GitHub Actions:
   a push that changes `config/` or the scraper with `[live]` in the commit
   message. It:
   - runs `probe --all`,
-  - runs `check` on every site, and `jobs --check` on every job board
-    (*only_jobs* runs just that),
+  - runs `check` on every site, `jobs --check` on every job board and
+    `events --check` on every calendar (*only_jobs* runs just those two),
   - does a full `scrape --until-done` and a second, hourly-style scrape into
     a throwaway database,
   - prints a summary,
-  - reads the job boards into the same database,
-  - starts the website and checks every page, the Jobs page included,
+  - reads the job boards and the calendars into the same database,
+  - starts the website and checks every page, the Jobs and Events pages
+    included,
   - saves screenshots of the site as a 3-day artifact on the run page.
 
   GitHub's servers are in a US data center, so sites that block data-center

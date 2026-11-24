@@ -31,6 +31,7 @@
           {% endfor %}
           <a href="/archive" {% if active_nav == 'archive' %}aria-current="page"{% endif %}>Archive</a>
           <a href="/jobs" {% if active_nav == 'jobs' %}aria-current="page"{% endif %}>Jobs</a>
+          <a href="/events" {% if active_nav == 'events' %}aria-current="page"{% endif %}>Events</a>
           <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
         </nav>
         <form class="search" action="/search" method="get" role="search">
