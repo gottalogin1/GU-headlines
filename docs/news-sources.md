@@ -147,8 +147,17 @@ hour, mark them with `cannot_scrape` and a short reason:
 GU Headlines then never reads the site. The Sources page lists it under
 **Can't be collected**, with your reason and a link to the site, and the
 sidebar lists it below the other sources. Marianas Business Journal, Guam
-Business Magazine, Andersen Air Force Base and RNZ Pacific are set up this
-way. Their feeds and pages are kept in the file for when they work again.
+Business Magazine and RNZ Pacific are set up this way. Their feeds and pages
+are kept in the file for when they work again. RNZ Pacific is also kept out by
+its terms of use, which don't let other websites use its feeds; the notes
+above it in `sources.yaml` explain what it would take.
+
+**Before giving up on a site, look for another official copy of its
+stories.** Andersen Air Force Base is an example: its own site turns robots
+away, but its 36th Wing posts the same news releases to its page on DVIDS,
+the Defense Department's service for sharing military news, so that page is
+read instead. Don't use ways around a firewall, such as another address for
+the same server or a program that pretends to be a web browser.
 
 **To see whether one works again** (for example from a different internet
 connection), run a dry run. It tries the site even though it's marked, and

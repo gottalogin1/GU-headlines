@@ -5,6 +5,21 @@ release, see [Updating](docs/maintenance.md#updating).
 
 ## Unreleased
 
+### Changed
+- **Andersen Air Force Base is collected again.** The base's own site turns
+  automated visitors away, so it was listed under **Can't be collected**.
+  Its 36th Wing posts the same news releases, with photos, to its page on
+  DVIDS (the Defense Department's service for sharing military news), and
+  GU Headlines now reads that page. Stories that never mention Guam or
+  Andersen are skipped. Nothing to do when you update.
+- **The sites that still can't be collected were checked again** in
+  November 2026: Marianas Business Journal, Guam Business Magazine, RNZ
+  Pacific and the Guam Visitors Bureau still turn automated visitors away,
+  and none has another official copy of its stories that GU Headlines may
+  use. RNZ's terms of use also don't let other websites use its feeds, and
+  the Sources page now says so. The notes in `config/sources.yaml` list what
+  was tried.
+
 ### Removed
 - **r/guam and the Community page.** Reddit ended its public feeds on
   November 13, 2026, and stopped giving out API keys on October 31, 2026, so
