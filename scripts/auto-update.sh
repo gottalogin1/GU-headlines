@@ -25,6 +25,12 @@
 # (see .env.example). Without it, the script still updates and watches, and
 # writes what happened to its log, backups/auto-update.log.
 # More: docs/maintenance.md#automatic-updates
+
+# This script needs bash. When it is started with "sh" (on Ubuntu a smaller
+# shell, dash), start it again with bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
@@ -272,7 +278,8 @@ install_cron() {
         echo "\"docker compose ps\" does not work for this user. Run this as the user that starts the site."
         return 1
     fi
-    line="*/5 * * * * cd \"$PWD\" && ./scripts/auto-update.sh >> $LOG 2>&1"
+    # "bash" in front: it runs even if the file lost its permission to run.
+    line="*/5 * * * * cd \"$PWD\" && bash scripts/auto-update.sh >> $LOG 2>&1"
     {
         crontab -l 2>/dev/null | grep -v 'scripts/auto-update.sh'
         echo "$line"

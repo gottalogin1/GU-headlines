@@ -11,7 +11,7 @@ release, see [Updating](docs/maintenance.md#updating).
   branch. When there are some, it makes a database backup, then rebuilds
   and restarts the site by itself. If the new version doesn't start within
   5 minutes, it goes back to the version before. It also checks that the
-  site answers. See
+  site answers. Starting it with `sh` or `bash` works too. See
   [Automatic updates](docs/maintenance.md#automatic-updates).
 - **Alerts in Discord.** With `DISCORD_WEBHOOK_URL` in `.env`, GU Headlines
   posts a message in a Discord channel when a news site or job board has
