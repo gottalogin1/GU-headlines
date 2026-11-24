@@ -142,16 +142,39 @@ jobs:
             guheadlines check --source "$slug" --limit 2 || true
             echo
           done
-      - name: Full scrape, catching up every minute until loaded (at most 8 rounds)
+      - name: Full scrape, catching up every minute until loaded (at most 8 rounds or 33 minutes)
+        id: catchup
+        # The Post, PDN and Marianas Variety keep rate-limiting GitHub's
+        # network, so catching up can take longer than this check has. After
+        # 33 minutes the scrape is stopped and the check carries on with
+        # whatever was loaded: the summary, site check and screenshots still
+        # run, and the run shows a warning instead of failing. Any other error
+        # still fails the run. The scrape is stopped here rather than by
+        # timeout-minutes, which would leave it running in the background
+        # (holding the scrape lock) while the next steps run.
         timeout-minutes: 35
-        # A site that keeps rate-limiting (Marianas Variety from GitHub's
-        # network) would otherwise keep this step going for a long time.
-        run: guheadlines scrape --until-done --max-rounds 8
+        run: |
+          status=0
+          timeout --kill-after=30s 33m guheadlines scrape --until-done --max-rounds 8 || status=$?
+          # 124: stopped after 33 minutes; 137: had to be killed 30 s later.
+          if [ "$status" = 124 ] || [ "$status" = 137 ]; then
+            echo "::warning::Catching up ran out of time after 33 minutes (sites rate-limiting GitHub). The summary covers what loaded until then."
+            echo "finished=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "finished=true" >> "$GITHUB_OUTPUT"
+          exit "$status"
       - name: Re-run like the hourly worker (should fetch only new pages)
+        # Skipped when catching up ran out of time: the pages it left behind
+        # would make this a second catch-up instead of a check for new pages.
+        if: steps.catchup.outputs.finished == 'true'
         run: guheadlines scrape
       - name: Read the job boards
         run: guheadlines jobs
       - name: Summary
+        # Also runs when an earlier step failed, so a broken run still shows
+        # what was loaded.
+        if: ${{ !cancelled() }}
         run: |
           q() { psql "$DATABASE_URL" -P pager=off -c "$1"; }
           q "SELECT s.slug, count(a.id) AS stories, count(a.image_path) AS images,
