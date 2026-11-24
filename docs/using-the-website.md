@@ -7,7 +7,7 @@ A tour of every page, and how to find older stories.
 | Link | Shows |
 |---|---|
 | **Latest** | Every news story, newest first (the front page). r/guam posts and obituaries are not here; they have their own Community and Obituaries pages. |
-| **Local, Military, Business, Labor** | Only stories in that topic. A story can be in more than one topic. |
+| **Local, Military, Business, Labor, Tourism, Sports, Food, Saipan & CNMI** | Only stories in that topic. A story can be in more than one topic. |
 | **Community** | Posts from Reddit's r/guam: questions, tips and discussion from people on island. They appear only here, and in search when you choose the Community topic. New posts need the site's Reddit key; see [News sources](news-sources.md#reddit). |
 | **Obituaries** | Obituaries, death notices, rosaries and funerals from the news sites. They appear only here, not under Latest, the other topics or the archive. Search still finds them, so you can look up a name. This page can show an ad (see [Advertising](settings.md#advertising)). |
 | **Archive** | Every story collected, organized by year, month and day |

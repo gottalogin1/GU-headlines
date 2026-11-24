@@ -3,7 +3,7 @@
 What changed in each release of GU Headlines. To update to the newest
 release, see [Updating](docs/maintenance.md#updating).
 
-## Unreleased
+## 1.2.0 (2026-11-24)
 
 ### Added
 - **Port 80 and https, with Caddy.** A fourth part, `caddy`, is now the
@@ -21,6 +21,18 @@ release, see [Updating](docs/maintenance.md#updating).
   443 (Apache, nginx, or a Caddy you installed from the old guide), switch it
   off first. To get the new notes in `.env`, see
   [Changing settings](docs/settings.md#getting-the-newest-notes-in-env).
+- **Four new topics: Sports, Food, Tourism and Saipan & CNMI**, each with
+  its own page in the top menu. Tourism stories used to be filed under
+  Business. New news sites feed them: Guam Sports Network, the Guam Football
+  Association, the Guam Visitors Bureau's news releases and Isla Public Media
+  (KPRG). Pacific Daily News now also gives its sports and lifestyle stories,
+  the Guam Daily Post its lifestyle stories and Marianas Variety its sports
+  stories, and the Office of the Governor's press releases are switched on.
+  Stories about Saipan and Tinian are kept now, under Saipan & CNMI instead
+  of Local. Two new options in `config/sources.yaml` make this work:
+  `allow_sections` collects a section that is skipped by default (such as
+  Sports) on one site, and `undated` accepts story pages that show no date
+  (see [News sites](docs/news-sources.md)).
 - **An Obituaries page** (in the top menu) for obituaries, death notices,
   rosaries and funerals. They no longer appear under Latest, on the other
   topics' pages or in the archive, but search still finds them. Obituaries
@@ -33,6 +45,18 @@ release, see [Updating](docs/maintenance.md#updating).
 - **Guam News Network** (guamnewsnetwork.com) is a new news site. Its feed
   gives the latest 30 stories with photos. Opinion pieces are skipped, and
   its National, World and sports stories (all about Guam) are kept.
+- **Search engines can find and list the site.** Every page has its own
+  title and summary, and one address that search engines are told to use.
+  Links shared on social media show a picture card. `/sitemap.xml` lists the
+  home page, topics, news sites, Jobs and every archive day that has
+  stories, and `robots.txt` points to it. Pages that don't belong in search
+  results (searches, the Sources page, empty archive days, missing pages)
+  ask not to be listed, and stored copies of publishers' photos ask image
+  search to send people to the publishers instead. New settings: `SITE_URL`
+  (the site's public address) and `GOOGLE_SITE_VERIFICATION` and
+  `BING_SITE_VERIFICATION` (the codes Google Search Console and Bing
+  Webmaster Tools give you). The site also has an icon for browser tabs and
+  phone home screens. See [Search engines](docs/maintenance.md#search-engines).
 - The **Sources** page says why the site exists, and has a **Disclaimer**:
   the site writes none of the stories, their content belongs to the
   publishers, the only aim is to send readers to them, and there is no
@@ -43,6 +67,26 @@ release, see [Updating](docs/maintenance.md#updating).
   verification tag. See [Advertising](docs/settings.md#advertising).
 
 ### Changed
+- **Pages load faster.** Pages are sent compressed, browsers keep the site's
+  styles and scripts for a year (and fetch them again when they change) and
+  stored photos for 30 days, and the top story's photo loads first. Story
+  cards no longer blur the page behind them: the look is the same, and
+  scrolling is smoother.
+- **Every link in the top bar stays visible on narrow screens.** The topic
+  links wrap onto more lines instead of scrolling sideways, so Archive, Jobs
+  and Sources are never cut off. On phones the search box sits under the
+  logo.
+- **r/guam is read through Reddit's API.** Since mid-November 2026 every
+  Reddit feed answers "Not Found" to readers who aren't logged in, so the
+  Sources page showed an HTTP 404 error every hour. The API needs a free
+  Reddit app key in the new `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` and
+  `REDDIT_USERNAME` settings ([how to get one](docs/news-sources.md#reddit)).
+  Until it is set, r/guam is listed under **Can't be collected** as waiting
+  for a key, and the posts collected before stay on the Community page.
+  Removed and adult posts are left out.
+- **RNZ Pacific** was added as a news site in this release, but is listed
+  under **Can't be collected**. Its firewall answers HTTP 403 to GU
+  Headlines on every request, so it never gave a story.
 - **The settings template (`.env.example`) explains each setting** for a
   person who is new to this work. Each note tells what the setting does, if
   it is required, its default, an example, where to get a key, and if it is
@@ -51,6 +95,23 @@ release, see [Updating](docs/maintenance.md#updating).
 - The scraper's default name for itself (`SCRAPER_USER_AGENT`) no longer
   includes a link to the project's code: it is now
   `Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)`.
+
+### Security
+- Every page is sent with security headers: a Content-Security-Policy that
+  lets only the site's own scripts run (plus Google's, on pages with the ad
+  block), and headers that stop other sites from framing the site or
+  guessing file types. The site no longer says which server software runs
+  it.
+- Links and photos taken from news sites are used only when they are
+  ordinary `http://` or `https://` addresses.
+- The scraper connects only to public internet addresses, so a photo
+  address or a redirect can't make it reach your database or your local
+  network.
+- Pillow, the library that opens photos, is updated from 12.3.0 to 13.0.0,
+  which fixes its known security flaws, and it opens photos only as JPEG,
+  PNG, GIF, WebP or AVIF.
+- The website and collector containers run without extra Linux permissions
+  and can't gain new ones.
 
 ### Fixed
 - **News stories no longer land in Community**, the topic for r/guam posts.
@@ -65,18 +126,42 @@ release, see [Updating](docs/maintenance.md#updating).
 - A JavaScript challenge page answered with HTTP 202 (as AWS WAF sends) now
   shows as a bot-check error on the Sources page instead of a run that quietly
   finds nothing.
+- **Guam Visitors Bureau releases no longer name "GuamWEBZ" as the
+  writer.** That is the bureau's web designer. Website builders' credits are
+  left out of bylines (a real name next to one is kept), and stories already
+  stored are cleaned up on their own.
+- **`scripts/backup.sh` works from WSL on Windows.** It stopped with
+  `$'\r': command not found` (Windows line endings), or when `SITE_NAME` had
+  a space in it. A copy downloaded before this release needs a one-time fix:
+  see [Backups](docs/maintenance.md#backups) (under "Windows").
+- A few odd addresses no longer give a server error (500): a hidden NUL
+  character in the address, archive days that don't exist (such as February
+  30), very large page numbers and the year 1. The archive's previous and
+  next links jump to the nearest day or month that has stories, instead of
+  stepping through empty ones.
 
-### Changed
-- **r/guam is read through Reddit's API.** Since mid-November 2026 every
-  Reddit feed answers "Not Found" to readers who aren't logged in, so the
-  Sources page showed an HTTP 404 error every hour. The API needs a free
-  Reddit app key in the new `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` and
-  `REDDIT_USERNAME` settings ([how to get one](docs/news-sources.md#reddit)).
-  Until it is set, r/guam is listed under **Can't be collected** as waiting
-  for a key, and the posts collected before stay on the Community page.
-  Removed and adult posts are left out.
-- **RNZ Pacific** is listed under **Can't be collected**. Its firewall
-  answers HTTP 403 to GU Headlines on every request, so it never gave a story.
+### Also
+- The Live source check gives its scrape 70 minutes, stops the catch-up
+  scrape at 33 minutes so its summary is still written, and runs on Ubuntu
+  24.04.
+
+### Updating from 1.1.0
+1. Take a backup: `./scripts/backup.sh`.
+2. Make sure nothing else on your server uses port 80 or 443 (such as
+   Apache, nginx, or a Caddy you installed from the old guide). If something
+   does, switch it off first.
+3. `git pull`, then `docker compose up -d --build`. The site now opens at
+   `http://your-server`, with no `:8000`. There are no database changes in
+   this release.
+4. Sort the stories you already have into the new topics, and take news out
+   of Community:
+   `docker compose exec worker guheadlines reclassify`.
+5. Copy the new notes into your `.env`
+   ([how](docs/settings.md#getting-the-newest-notes-in-env)), then fill in
+   the settings you want: `SITE_DOMAIN` once you have a domain name (for
+   https), the three Reddit settings for r/guam, and `ADSENSE_CLIENT` and
+   `ADSENSE_SLOT` for ads. If your `.env` has a `WEB_PORT` line, delete it;
+   it is no longer used.
 
 ## 1.1.0 (2026-10-13)
 
