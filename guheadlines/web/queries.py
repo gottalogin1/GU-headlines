@@ -7,7 +7,19 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import Select, Text, and_, func, literal, literal_column, not_, select, text, true
+from sqlalchemy import (
+    Select,
+    Text,
+    and_,
+    func,
+    literal,
+    literal_column,
+    not_,
+    or_,
+    select,
+    text,
+    true,
+)
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -428,6 +440,8 @@ def job_boards(session: Session, today: date) -> list[dict]:
 class EventFilters:
     q: str = ""
     calendar: str | None = None
+    # One Guam day: the events on it (picked on the month calendar).
+    day: date | None = None
 
 
 def _upcoming_events(since: datetime):
@@ -446,18 +460,16 @@ def list_events(
     stmt = (
         select(
             Event,
+            EventCalendar.slug.label("slug"),
             EventCalendar.name.label("calendar_name"),
             EventCalendar.homepage.label("homepage"),
         )
         .join(EventCalendar, EventCalendar.id == Event.calendar_id)
         .where(_upcoming_events(since))
     )
-    if f.calendar:
-        stmt = stmt.where(EventCalendar.slug == f.calendar)
-    if f.q:
-        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        words = func.concat_ws(" ", Event.title, Event.location, Event.organizer, Event.description)
-        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    stmt = _filter_events(stmt, f)
+    if f.day:
+        stmt = stmt.where(_during(*local_day_bounds(f.day)))
     total = _count(session, stmt)
     stmt = (
         stmt.order_by(Event.starts_at, Event.title, Event.id)
@@ -465,10 +477,50 @@ def list_events(
         .offset((page - 1) * per_page)
     )
     items = [
-        {"event": row[0], "calendar_name": row.calendar_name, "calendar_homepage": row.homepage}
+        {
+            "event": row[0],
+            "calendar_slug": row.slug,
+            "calendar_name": row.calendar_name,
+            "calendar_homepage": row.homepage,
+        }
         for row in session.execute(stmt)
     ]
     return Page(items, total, page, per_page)
+
+
+def _during(start: datetime, end: datetime):
+    """Events on at some time from `start` to `end`."""
+    return and_(
+        Event.starts_at < end,
+        or_(Event.ends_at > start, and_(Event.ends_at.is_(None), Event.starts_at >= start)),
+    )
+
+
+def _filter_events(stmt: Select, f: EventFilters) -> Select:
+    """The calendar and word filters of the Events page."""
+    if f.calendar:
+        stmt = stmt.where(EventCalendar.slug == f.calendar)
+    if f.q:
+        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(" ", Event.title, Event.location, Event.organizer, Event.description)
+        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    return stmt
+
+
+def month_events(
+    session: Session, f: EventFilters, start: datetime, end: datetime, since: datetime
+) -> list[dict]:
+    """Upcoming events from `start` to `end`, for the month calendar."""
+    stmt = (
+        select(Event, EventCalendar.slug.label("slug"), EventCalendar.name.label("calendar_name"))
+        .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+        .where(_upcoming_events(since), _during(start, end))
+        .order_by(Event.starts_at, Event.title, Event.id)
+    )
+    return [
+        {"event": row[0], "calendar_slug": row.slug, "calendar_name": row.calendar_name}
+        for row in session.execute(_filter_events(stmt, f))
+    ]
 
 
 def event_calendars(session: Session, since: datetime) -> list[dict]:

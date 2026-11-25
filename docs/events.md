@@ -1,8 +1,10 @@
 # Events
 
 The **Events** page lists what's coming up on Guam over the next 90 days,
-collected from public calendars. Events are grouped by day (Today, Tomorrow,
-then each date), and each one shows, when its calendar gives it:
+collected from public calendars. At the top is a month calendar with the main
+events, colored by the calendar they come from. Below it, every event is
+listed, grouped by day (Today, Tomorrow, then each date), and each one shows,
+when its calendar gives it:
 
 - the event's name (linked to its page on the calendar) and who holds it,
 - when it is, in Guam time, and where,
@@ -15,6 +17,7 @@ left out. You can search the events by word and narrow them to one calendar.
 
 **Contents**
 
+- [The month calendar](#the-month-calendar)
 - [The calendars](#the-calendars)
 - [How often they are read](#how-often-they-are-read)
 - [Google Calendar key](#google-calendar-key)
@@ -22,6 +25,39 @@ left out. You can search the events by word and narrow them to one calendar.
 - [Adding or changing a calendar](#adding-or-changing-a-calendar)
 
 ---
+
+## The month calendar
+
+The calendar at the top of the page shows one month, Sunday to Saturday,
+starting with this one. The **‹** and **›** buttons step through the months
+events are collected for (the next 90 days). Each day shows its main events:
+
+- at most 3 a day, all-day events first, then by start time, with "+2 more"
+  (and so on) for the rest;
+- an event that lasts more than a week, such as an exhibition or a
+  registration period, on its first day only, so it doesn't fill every
+  square;
+- nothing on days that are over.
+
+Click a day to see everything on it in the list below, including the events
+that aren't main events. "All upcoming events" goes back to the full list.
+
+On a phone the squares are too small for names, so each event is a small
+colored square instead; tap the day to read them.
+
+**Main events.** Each calendar's `main_events` option in `config/events.yaml`
+says which of its events go on the month calendar: `all` (the default),
+`none`, or a list of patterns (only events whose title matches one). Out of
+the box, every calendar's events are main events except the GovGuam public
+meetings, which are routine board meetings. When a visitor narrows the page to
+one calendar or searches for a word, the month calendar shows every matching
+event instead.
+
+**Colors.** Each calendar's `color` option gives its events a color on the
+month calendar and a matching mark in the list: green for the University of
+Guam, red for the Guam Legislature, blue for Guam Community College. The
+others are gray. The colors are muted shades that suit both the light and the
+dark look; the legend under the calendar names them.
 
 ## The calendars
 
@@ -32,30 +68,26 @@ They are listed in `config/events.yaml`. Out of the box:
 | Guam Legislature | Sessions, public hearings and committee meetings from the Legislature's Google Calendar (the one on guamlegislature.gov/calendar), with each session's agenda from the Agendas page. Needs a free Google key (see [Google Calendar key](#google-calendar-key)); without it, only the sessions on the Agendas page are listed. |
 | GovGuam public meetings | Board, commission and agency meetings from the government's official notices site, notices.guam.gov (the newest few pages of meeting notices). |
 | Guam Community College | Events from the college's events list. |
+| University of Guam | Events, academic dates and holidays from the university's events calendar (uog.edu/calendar), read from its RSS feed (the "Add to RSS" link). The calendar's "Outlook/iCAL" link gives the same events, but it also holds every past event since 2023 (2.5 MB, against 100 KB for the feed), so the feed is read instead. |
 
-Two things are left out by default, and each can be switched back on by
-deleting a few lines in `config/events.yaml`:
+Some things are left out by default:
 
 - **Certificate presentations.** The Legislature's calendar lists every
   presentation of a legislative certificate to a person or group, which
-  would crowd out sessions and hearings.
+  would crowd out sessions and hearings. Delete its `exclude` lines in
+  `config/events.yaml` to show them.
 - **The Legislature's own notices** on notices.guam.gov, because its calendar
   already lists those hearings.
+- **Chamber of Commerce events.** The `exclude` list at the top of
+  `config/events.yaml` leaves out, from every calendar, events whose title,
+  organizer, place or description matches one of its patterns.
 
-**Listed but not collected.** These turn away automated visitors, so the
-Events page lists them with a link and the reason instead:
-
-- **Guam Visitors Bureau events** (visitguam.com). Its firewall (Akamai)
-  blocks automated visitors on the events pages and the events feed.
-- **Village fiesta calendar** (Guampedia). Its firewall (Cloudflare) blocks
-  automated visitors.
-- **Guam Chamber of Commerce events**. Its firewall (Cloudflare) blocks
-  automated visitors.
-
-Also looked at but not added: the University of Guam (no events calendar on
-its site), the Guam Daily Post's calendar (empty), the Guam Department of
-Labor (no upcoming events, and its calendar export is turned off), USO Guam
-(only a monthly programs flyer) and Pacific Historic Parks (no Guam events).
+Also looked at but not added: the Guam Daily Post's calendar (empty), the
+Guam Department of Labor (no upcoming events, and its calendar export is
+turned off), USO Guam (only a monthly programs flyer), Pacific Historic Parks
+(no Guam events), and the Guam Visitors Bureau and Guampedia fiesta calendars
+(their firewalls turn away automated visitors). Calendars that can't be
+collected are not shown on the site.
 
 ## How often they are read
 
@@ -123,6 +155,7 @@ Changes take effect at the next check; no rebuild needed.
 |---|---|
 | `google_calendar` | A public Google Calendar's ID (it looks like an email address). Needs `GOOGLE_CALENDAR_API_KEY`. |
 | `ical` | An iCal (`.ics`) address, the format calendar apps share calendars in ("Subscribe", "Export" or "iCal feed" links). Repeating events are expanded. |
+| `moderncampus` | The RSS feed of a calendar built with Modern Campus (its "Add to RSS" link), like the University of Guam's. |
 | `agendas` | A page that lists meeting agendas (PDFs) under dated headings, like the Legislature's Agendas page. |
 | `notices` | A notices.guam.gov listing. |
 | `pages` | A web page that lists events. Needs CSS selectors: `item` (each event), `title` (its name and link), `when` (its date and time) and optionally `description`. |
@@ -130,12 +163,14 @@ Changes take effect at the next check; no rebuild needed.
 Other options per calendar: `homepage` (linked from the Events page),
 `location` and `organizer` (used when an event doesn't say), `exclude` (leave
 out events whose title or organizer matches one of these patterns),
+`main_events` and `color` (see [The month calendar](#the-month-calendar)),
 `request_delay`, `ignore_robots`, `enabled: false` to pause a calendar, and
-`cannot_scrape: <reason>` to list a calendar without reading it. Delete the
-`cannot_scrape` line to try a calendar again; check it first with:
+`cannot_scrape: <reason>` to keep a calendar in the file without reading it
+(it isn't shown on the site). Try a calendar first, without saving anything,
+with:
 
 ```
-docker compose exec worker guheadlines events --check --source gvb
+docker compose exec worker guheadlines events --check --source uog
 ```
 
 Before adding a site, read its terms of use, and leave it out if they forbid

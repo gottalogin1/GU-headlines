@@ -1,7 +1,7 @@
 """Reading each kind of calendar input in config/events.yaml.
 
 Every reader returns CalendarEvents. An event's uid starts with its input
-kind ("g:", "ical:", "agenda:", "notice:", "page:"), so two inputs of one
+kind ("g:", "ical:", "mc:", "agenda:", "notice:", "page:"), so two inputs of one
 calendar never mix up their events.
 """
 
@@ -14,6 +14,7 @@ from urllib.parse import quote, urlencode, urljoin
 
 from bs4 import BeautifulSoup, Tag
 from dateutil import tz
+from lxml import etree
 
 from ..scraper.http import FetchResult, HttpClient
 from ..scraper.text import GUAM_TZ, clean_text, truncate
@@ -212,6 +213,81 @@ def read_ical(client: HttpClient, url: str, start: datetime, end: datetime) -> l
     for event in events:
         event.uid = f"ical:{event.uid}"[:500]
     return events
+
+
+# ------------------------------------------------------- Modern Campus RSS
+
+
+def _mc_time(value: str) -> tuple[datetime, bool] | None:
+    """'2026-11-26' (a date: all day) or '2026-11-25T04:00Z' (a moment, in UTC)."""
+    value = value.strip()
+    try:
+        if "T" not in value:
+            return datetime.combine(date.fromisoformat(value), time.min, tzinfo=GUAM_TZ), True
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (moment if moment.tzinfo else moment.replace(tzinfo=GUAM_TZ)), False
+
+
+def parse_moderncampus(result: FetchResult) -> list[CalendarEvent]:
+    """Events from a Modern Campus calendar's RSS feed (its "Add to RSS" link).
+    Each item gives the event's start and end in cal:start and cal:end: a date
+    for an all-day event (the end date is its last day), else a time in UTC.
+    A repeating event lists each date as its own item, with the same guid."""
+    try:
+        root = etree.fromstring(
+            result.content,
+            parser=etree.XMLParser(recover=True, resolve_entities=False, no_network=True),
+        )
+    except etree.XMLSyntaxError:
+        root = None
+    if root is None or not root.tag.endswith("rss"):
+        raise CalendarError(f"{result.url} is not an RSS feed")
+    events: list[CalendarEvent] = []
+    for item in root.iter("item"):
+        # The calendar's own fields are in its "cal:" namespace.
+        fields = {etree.QName(child).localname: (child.text or "").strip() for child in item}
+        started = _mc_time(fields.get("start", ""))
+        title = clean_text(fields.get("title"))
+        if started is None or not title or fields.get("status", "").upper() == "CANCELLED":
+            continue
+        begins, all_day = started
+        finished = _mc_time(fields.get("end", ""))
+        ends = finished[0] if finished else None
+        if all_day:
+            ends = (ends if ends and ends >= begins else begins) + DAY
+        elif ends is not None and ends <= begins:
+            ends = None
+        place = clean_text(fields.get("location"))
+        room = clean_text(fields.get("locationRoom"))
+        if place and room:
+            place = f"{place}, {'room ' if room[:1].isdigit() else ''}{room}"
+        guid = fields.get("guid") or fields.get("link") or title
+        if fields.get("recurring") == "true":
+            guid = f"{guid}@{begins.isoformat()}"
+        link = _web_link(fields.get("link"), result.url)
+        events.append(
+            CalendarEvent(
+                uid=f"mc:{guid}"[:500],
+                title=truncate(title, 300),
+                starts_at=begins,
+                ends_at=ends,
+                all_day=all_day,
+                location=place or None,
+                organizer=clean_text(fields.get("organizer")) or None,
+                description=tidy_description(fields.get("description")),
+                url=link,
+            )
+        )
+    return events
+
+
+def read_moderncampus(
+    client: HttpClient, url: str, start: datetime, end: datetime
+) -> list[CalendarEvent]:
+    result = client.get(url, accept="application/rss+xml, application/xml;q=0.9, */*;q=0.5")
+    return [e for e in parse_moderncampus(result) if _in_window(e, start, end)]
 
 
 # ------------------------------------------------------------------ agendas

@@ -32,7 +32,7 @@ needed; you will copy and paste a few commands.
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 | [Newsletter feed](docs/newsletter.md) | The feed of top stories for an email newsletter, and connecting SendFox step by step |
-| [Events](docs/events.md) | The Events page: which calendars are read, adding a free Google key for the Legislature's calendar, and calendars that can't be collected |
+| [Events](docs/events.md) | The Events page: the month calendar, which calendars are read, and adding a free Google key for the Legislature's calendar |
 
 ---
 
@@ -102,7 +102,8 @@ that is always on can do this by itself after each change; see
 - **Events page** lists what's coming up on Guam over the next 90 days: Guam
   Legislature sessions (with their agendas), hearings and committee
   meetings, GovGuam board and commission meetings, and Guam Community
-  College events. See [Events](docs/events.md).
+  College and University of Guam events. A month calendar at the top shows
+  the main events, colored by calendar. See [Events](docs/events.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Private visitor stats** (optional): page views, story clicks, the top
