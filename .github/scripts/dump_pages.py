@@ -38,7 +38,7 @@ def robots(url):
         print(f"--- robots.txt {origin}: error {exc}")
 
 
-def report(url, dump=False, follow=False, depth=0):
+def report(url, dump=False, follow=False, depth=0, text_mode=False):
     pad = "  " * depth
     robots(url)
     print(f"{pad}=== {url}  (robots permits: {client.robots_permits(url)})")
@@ -74,6 +74,11 @@ def report(url, dump=False, follow=False, depth=0):
     print(f"{pad}    {len(uniq)} matching links:")
     for t, h in uniq[:70]:
         print(f"{pad}      - {t!r} -> {h}")
+    if text_mode:
+        for t in soup(["script", "style", "nav", "header", "footer"]):
+            t.decompose()
+        body = " ".join((soup.select_one("main") or soup.body or soup).get_text(" ").split())
+        print("TEXT " + body[:12000])
     if dump:
         data = base64.b64encode(gzip.compress(r.content)).decode()
         print(f"BEGIN-DUMP {url}")
@@ -88,9 +93,10 @@ def report(url, dump=False, follow=False, depth=0):
 
 
 for arg in sys.argv[1:]:
-    dump = follow = False
-    while arg[:1] in "+>":
+    dump = follow = text_mode = False
+    while arg[:1] in "+>!":
         dump |= arg[0] == "+"
         follow |= arg[0] == ">"
+        text_mode |= arg[0] == "!"
         arg = arg[1:]
-    report(arg, dump=dump, follow=follow)
+    report(arg, dump=dump, follow=follow, text_mode=text_mode)
