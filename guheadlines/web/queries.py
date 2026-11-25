@@ -557,6 +557,40 @@ def month_events(
     ]
 
 
+def upcoming_event(session: Session, event_id: int, since: datetime) -> dict | None:
+    """One upcoming event and its calendar, for the event's own page."""
+    row = session.execute(
+        select(
+            Event,
+            EventCalendar.slug.label("slug"),
+            EventCalendar.name.label("calendar_name"),
+            EventCalendar.homepage.label("homepage"),
+        )
+        .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+        .where(Event.id == event_id, _upcoming_events(since))
+    ).first()
+    if row is None:
+        return None
+    return {
+        "event": row[0],
+        "calendar_slug": row.slug,
+        "calendar_name": row.calendar_name,
+        "calendar_homepage": row.homepage,
+    }
+
+
+def upcoming_event_ids(session: Session, since: datetime) -> list[int]:
+    """Every upcoming event, for the sitemap."""
+    return list(
+        session.scalars(
+            select(Event.id)
+            .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+            .where(_upcoming_events(since))
+            .order_by(Event.starts_at, Event.id)
+        )
+    )
+
+
 def event_calendars(session: Session, since: datetime) -> list[dict]:
     """Each calendar with its upcoming events, for the Events page's calendar list."""
     rows = session.execute(

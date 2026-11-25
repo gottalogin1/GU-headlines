@@ -248,7 +248,7 @@ def cmd_worker(args, settings: Settings) -> None:
             log.exception("events check failed")
 
     def check_alerts() -> None:
-        """Alerts for news sites and job boards that stopped working."""
+        """Alerts for sources that stopped working or went quiet."""
         if not settings.discord_webhook_url:
             return
         from .alerts import check_sources
@@ -258,13 +258,41 @@ def cmd_worker(args, settings: Settings) -> None:
         except ConfigError:
             boards = []
         try:
+            calendars = load_events_config(settings.config_dir)
+        except ConfigError:
+            calendars = []
+        try:
             check_sources(
                 settings,
                 [s.slug for s in config.sources if s.collected],
                 [b.slug for b in boards if b.collected],
+                [c.slug for c in calendars if c.collected],
             )
         except Exception:
             log.exception("alert check failed")
+
+    def check_keywords() -> None:
+        """Alerts for new stories that mention the words in ALERT_KEYWORDS."""
+        if not (settings.discord_webhook_url and settings.alert_keywords):
+            return
+        from .alerts import check_keywords as check
+
+        try:
+            check(settings, config.muted)
+        except Exception:
+            log.exception("keyword alert check failed")
+
+    def look_after_photos() -> None:
+        """Small copies of older photos, and the IMAGE_STORAGE_GB limit (photos.py)."""
+        from .photos import tidy_photos
+
+        try:
+            report = tidy_photos(settings)
+        except Exception:
+            log.exception("photo tidy-up failed")
+            return
+        if report.changed:
+            log.info("saved photos: %s", report.summary(settings.image_storage_gb))
 
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
@@ -290,9 +318,12 @@ def cmd_worker(args, settings: Settings) -> None:
     )
     if settings.discord_webhook_url:
         log.info(
-            "alerts on: a news site or job board that has not worked for %d hours is reported",
+            "alerts on: a source that has not worked for %d hours, or a news site that went "
+            "quiet, is reported",
             settings.alert_after_hours,
         )
+        if settings.alert_keywords:
+            log.info("keyword alerts on for: %s", ", ".join(settings.alert_keywords))
     if settings.weather_interval_minutes:
         threading.Thread(
             target=_weather_loop, args=(settings, stop), name="weather", daemon=True
@@ -313,9 +344,11 @@ def cmd_worker(args, settings: Settings) -> None:
         ).start()
     if settings.scrape_on_start:
         run_once()
+        check_keywords()
         run_jobs_if_due()
         run_events_if_due()
         check_alerts()
+        look_after_photos()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -326,10 +359,12 @@ def cmd_worker(args, settings: Settings) -> None:
         if stop.wait(delay):
             break
         run_once(catch_up=kind == "catch-up")
+        check_keywords()
         if kind == "regular":
             run_jobs_if_due()
             run_events_if_due()
             check_alerts()
+            look_after_photos()
     log.info("worker stopped")
 
 
@@ -413,6 +448,22 @@ def cmd_outages(args, settings: Settings) -> None:
         print(f"{name:<4} {len(notices)} notices")
         for notice in notices[:5]:
             print(f"     {notice.get('day') or '?':<10} {notice['title'][:90]}")
+
+
+def cmd_photos(args, settings: Settings) -> None:
+    """Show the space the saved photos use, and tidy them up now (the worker
+    does this after each news check; see photos.py)."""
+    from .photos import tidy_photos
+
+    wait_for_db()
+    migrate()
+    report = tidy_photos(settings, max_small=None)
+    limit = f"{settings.image_storage_gb:g} GB" if settings.image_storage_gb else "no limit"
+    print(f"Saved photos: {report.files:,} files, {report.size}")
+    print(f"Space allowed (IMAGE_STORAGE_GB): {limit}")
+    print(f"Small copies made just now: {report.small_made:,}")
+    print(f"Unused files deleted just now: {report.unused_deleted:,}")
+    print(f"Oldest stories whose photos were deleted just now: {report.stories_pruned:,}")
 
 
 def cmd_check(args, settings: Settings) -> None:
@@ -824,6 +875,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("outages", help="read the power and water outage notices now")
+    sub.add_parser("photos", help="show the space the saved photos use, and tidy them up now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -853,6 +905,7 @@ def main(argv: list[str] | None = None) -> None:
         "alert-test": cmd_alert_test,
         "weather": cmd_weather,
         "outages": cmd_outages,
+        "photos": cmd_photos,
     }[args.command]
     handler(args, settings)
 

@@ -298,7 +298,9 @@ message as a notification. These alerts come:
 
 | Message | Posted by | When |
 |---|---|---|
-| ⚠️ *Name* has stopped working, ✅ *Name* works again | the worker | A news site or job board has failed for a day (`ALERT_AFTER_HOURS`), and when it works again. |
+| ⚠️ *Name* has stopped working, ✅ *Name* works again | the worker | A news site, job board or event calendar has failed for a day (`ALERT_AFTER_HOURS`), and when it works again. |
+| ⚠️ *Name* has gone quiet, ✅ *Name* has new stories again | the worker | A news site still answers, but has had no new story for much longer than usual ([Source health](#source-health)), and when a new story comes. |
+| 🔔 A new story mentions *word* | the worker | A new story's headline or intro has one of your words ([Keyword alerts](#keyword-alerts)). |
 | 🚨 *site* is not answering, ✅ *site* is back | the server ([automatic updates](#automatic-updates)) | The site didn't answer for about 10 minutes, and when it answers again. |
 | ⚠️ news not checked for *N* hours, ✅ news checked again | the server | The worker hasn't checked the news for 3 hours. |
 | 🚀 updated, ⚠️ update failed, ⚠️ automatic update stopped | the server | After each [automatic update](#automatic-updates). |
@@ -306,6 +308,65 @@ message as a notification. These alerts come:
 
 Each problem is posted once, not every hour. Nothing is posted while all is
 well.
+
+### Source health
+
+The private [stats page](settings.md#visitor-stats) (`/stats`, while
+`STATS_PASSWORD` is set) ends with **Source health**: a table of the news
+sites the worker reads, and one of the job boards and event calendars. A
+note at the top of the stats page names the sources that need a look. Each
+source is:
+
+- **Working**: its latest check worked.
+- **Failing**: its latest check went wrong. The table shows the error, and
+  when the source last worked. After `ALERT_AFTER_HOURS` (a day), Discord
+  gets an alert.
+- **Quiet** (news sites only): its checks work, but it has had no new story
+  for longer than its **Quiet after** time. Discord gets an alert at once,
+  and one more when a new story comes. A quiet site's feed or pages may have
+  changed, so the worker no longer finds the stories (open the site and look
+  for new stories there), or the site may have stopped posting.
+- **Not checked yet**: just added.
+
+Sites post at different speeds, so each site gets its own **Quiet after**
+time: twice the longest wait between two of its stories in the two months
+before its newest story, and at least 2 days. A busy newspaper is quiet
+after 2 days; a site that posts once a week, and once waited 10 days, is
+quiet after 20 days. A site with fewer than 5 stories in those two months
+posts too rarely to tell, so it gets at least 30 days. There's nothing to
+set.
+
+### Keyword alerts
+
+Discord can also tell you about news: when a new story mentions a word you
+choose, such as `typhoon` or `shooting`. Put the words in `.env`, with a
+comma between them, and apply it:
+
+```
+ALERT_KEYWORDS=typhoon, shooting, power outage
+```
+
+```sh
+docker compose up -d
+```
+
+- The worker looks at each new story's headline and intro (the first lines),
+  after every check. One message lists the new stories that mention your
+  words, with the news site, the words found and the link. A story is never
+  posted twice.
+- Upper and lower case don't matter, and neither do accents (`Hagatna` finds
+  `Hagåtña`). Only whole words count, also with `s` or `es` after them:
+  `shooting` finds `shootings`, but `fire` doesn't find `firefighters`.
+- End a word with `*` to find every word that starts with it: `evacuat*`
+  finds `evacuate`, `evacuated` and `evacuation`.
+- A phrase of several words, such as `power outage`, must be found in that
+  order.
+- Muted stories (`muted:` in `config/sources.yaml`) are left out, like on
+  the site.
+- Only news from the last 2 days counts. When you add a news site, its older
+  stories are not posted.
+- `docker compose exec worker guheadlines alert-test` sends a test message
+  that names your words, and the stats page names them too.
 
 ### Getting the webhook link
 
@@ -401,7 +462,15 @@ Good to know:
 ## Disk space
 
 The collection grows by roughly **2 to 4 GB a year**, almost all of it
-photos. To see how much Docker uses:
+photos. The photos stop growing at `IMAGE_STORAGE_GB` (5 GB unless you change
+it): above it, the worker deletes the photos of the oldest stories, which then
+show the news site's own photo. To see how much space the photos use:
+
+```sh
+docker compose exec worker guheadlines photos
+```
+
+To see how much Docker uses in all:
 
 ```sh
 docker system df
@@ -413,8 +482,9 @@ Old versions of the program pile up after updates. Remove unused ones with:
 docker image prune
 ```
 
-(This never touches your stories or photos.) If disk space gets tight, you
-can set `STORE_IMAGES=false` in `.env`; see [Changing settings](settings.md#photos).
+(This never touches your stories or photos.) If disk space gets tight, lower
+`IMAGE_STORAGE_GB` in `.env`, or set `STORE_IMAGES=false` to save no photos
+at all; see [Changing settings](settings.md#photos).
 
 ---
 
@@ -532,8 +602,10 @@ Before making the site public, read the [note on content](../README.md#a-note-on
 The site is ready for Google and Bing: every page has a title, a summary,
 one canonical address and a link preview card, and
 `https://news.example.com/sitemap.xml` lists every page worth finding (the
-home page, each topic and news site, the Jobs, Events and Sources pages, and
-the archive down to each day). Search engines find it through `robots.txt`.
+home page, each topic and news site, the Jobs, Events and Sources pages, each
+upcoming event's own page, and the archive down to each day). The event pages
+describe their event in the form Google reads for its event results (see
+[Each event's page](events.md#each-events-page)). Search engines find it through `robots.txt`.
 
 To get listed sooner and see how people find the site:
 

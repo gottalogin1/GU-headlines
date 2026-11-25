@@ -1,10 +1,13 @@
-"""Reading iCalendar (.ics) feeds, the format calendar apps share calendars in.
+"""Reading and writing iCalendar (.ics) feeds, the format calendar apps share calendars in.
 
 A public Google Calendar, an Outlook calendar and most website calendar
 plugins can all be read through their iCal address. This reader covers what
 those feeds use: folded lines, time zones, all-day events, repeating events
 (RRULE, RDATE, EXDATE), changed or cancelled single dates of a repeating event
 (RECURRENCE-ID) and DURATION. Events marked private or cancelled are left out.
+
+write_calendar makes the feed of the site's own events that visitors add to
+their calendar apps (see /events.ics in web/app.py).
 """
 
 from __future__ import annotations
@@ -425,3 +428,93 @@ def read_calendar(
 
     events.sort(key=lambda e: (e.starts_at, e.title))
     return name, events
+
+
+# ------------------------------------------------------------------ writing
+
+# Control characters are not allowed in iCal text; tabs and line breaks are
+# written as spaces and \n.
+_CONTROL_RE = re.compile("[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def _escape(text: str) -> str:
+    text = _CONTROL_RE.sub("", text.replace("\r\n", "\n").replace("\t", " "))
+    for char in ("\\", ";", ","):
+        text = text.replace(char, "\\" + char)
+    return text.replace("\n", "\\n")
+
+
+def _fold(line: str) -> list[str]:
+    """A line as lines of at most 75 bytes (RFC 5545 3.1); each one after the
+    first starts with a space. A character is never split."""
+    lines, current, size = [], "", 0
+    for char in line:
+        width = len(char.encode("utf-8"))
+        if size + width > 75:
+            lines.append(current)
+            current, size = " ", 1
+        current += char
+        size += width
+    lines.append(current)
+    return lines
+
+
+def ical_times(event) -> tuple[str, str | None]:
+    """An event's start and end as iCal writes them: 20261201T000000Z (UTC),
+    or 20261205 for an all-day event, whose end is the day after its last."""
+    if event.all_day:
+        start = event.starts_at.astimezone(GUAM_TZ).date()
+        end = event.ends_at.astimezone(GUAM_TZ).date() if event.ends_at else start
+        return f"{start:%Y%m%d}", f"{max(end, start + timedelta(days=1)):%Y%m%d}"
+    return _key(event.starts_at), (_key(event.ends_at) if event.ends_at else None)
+
+
+def write_calendar(
+    items: list[dict],
+    *,
+    product: str,
+    host: str,
+    name: str | None = None,
+    refresh: timedelta | None = None,
+) -> str:
+    """An iCal file of stored events. Each of `items` is {"event": models.Event,
+    "calendar_name": the calendar that lists it}. With `name` and `refresh`, it
+    is a calendar that apps subscribe to and check again after `refresh`;
+    without them, a file of events to add once."""
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        f"PRODID:-//{_escape(product)}//Events//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    if name:
+        lines += [f"X-WR-CALNAME:{_escape(name)}", "X-WR-TIMEZONE:Pacific/Guam"]
+    if refresh:
+        hours = max(1, int(refresh.total_seconds() // 3600))
+        lines += [f"REFRESH-INTERVAL;VALUE=DURATION:PT{hours}H", f"X-PUBLISHED-TTL:PT{hours}H"]
+    for item in items:
+        event = item["event"]
+        start, end = ical_times(event)
+        kind = ";VALUE=DATE" if event.all_day else ""
+        url = _web_link(event.url)
+        agenda = _web_link(event.agenda_url)
+        links = [f"Details: {url}" if url else "", f"Agenda: {agenda}" if agenda else ""]
+        links.append(f"Calendar: {item['calendar_name']}")
+        organizer = event.organizer if event.organizer != item["calendar_name"] else None
+        parts = [organizer, event.description, "\n".join(line for line in links if line)]
+        description = "\n\n".join(part for part in parts if part)
+        lines += [
+            "BEGIN:VEVENT",
+            f"UID:{event.id}@{host}",
+            f"DTSTAMP:{_key(event.last_seen_at)}",
+            f"DTSTART{kind}:{start}",
+            *([f"DTEND{kind}:{end}"] if end else []),
+            f"SUMMARY:{_escape(event.title)}",
+            *([f"LOCATION:{_escape(event.location)}"] if event.location else []),
+            f"DESCRIPTION:{_escape(description)}",
+            *([f"URL:{url}"] if url else []),
+            "END:VEVENT",
+        ]
+    lines.append("END:VCALENDAR")
+    return "".join(part + "\r\n" for line in lines for part in _fold(line))

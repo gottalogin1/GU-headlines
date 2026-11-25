@@ -68,6 +68,10 @@ class Settings:
     respect_robots: bool = True
     store_images: bool = True
     image_max_width: int = 720
+    # The most disk space the saved photos may use, in GB. Above it, the
+    # photos of the oldest stories are deleted (they then show the news
+    # site's own photo). 0: no limit. See photos.py.
+    image_storage_gb: float = 5.0
     page_size: int = 30
     log_level: str = "INFO"
     # How often the worker reads the job boards in config/jobs.yaml.
@@ -84,8 +88,13 @@ class Settings:
     # Alerts are posted to the Discord channel of this webhook link
     # (https://discord.com/api/webhooks/...). Empty: no alerts. See alerts.py.
     discord_webhook_url: str = ""
-    # A news site or job board that has not worked for this many hours gets an alert.
+    # A news site, job board or event calendar that has not worked for this
+    # many hours gets an alert.
     alert_after_hours: int = 24
+    # Words and phrases: a new story whose headline or intro mentions one of
+    # them is posted in Discord (see alerts.check_keywords). Empty: no
+    # keyword alerts.
+    alert_keywords: tuple[str, ...] = ()
     # How often the worker reads the weather (NWS alerts, forecast and airport
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
@@ -179,6 +188,14 @@ def _tide_station(value: str | None, default: str) -> str:
     return value if re.fullmatch(r"[A-Za-z0-9]{1,16}", value) else ""
 
 
+def _words(value: str | None) -> tuple[str, ...]:
+    """ALERT_KEYWORDS "typhoon, shooting, power outage" -> ("typhoon",
+    "shooting", "power outage"). Commas separate the words; quotes around one
+    are dropped, and so are repeats."""
+    words = (part.strip().strip("\"'").strip() for part in (value or "").split(","))
+    return tuple(dict.fromkeys(word for word in words if word.strip("*")))
+
+
 DAY_NAMES = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
@@ -252,6 +269,7 @@ def load_settings() -> Settings:
         respect_robots=_bool(env.get("RESPECT_ROBOTS_TXT"), True),
         store_images=_bool(env.get("STORE_IMAGES"), True),
         image_max_width=_int(env.get("IMAGE_MAX_WIDTH"), defaults.image_max_width),
+        image_storage_gb=max(0.0, _float(env.get("IMAGE_STORAGE_GB"), defaults.image_storage_gb)),
         page_size=max(5, min(100, _int(env.get("PAGE_SIZE"), defaults.page_size))),
         log_level=env.get("LOG_LEVEL", "INFO").upper(),
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),
@@ -261,6 +279,7 @@ def load_settings() -> Settings:
         google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
+        alert_keywords=_words(env.get("ALERT_KEYWORDS")),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         outages_interval_minutes=max(5, outage_minutes) if outage_minutes > 0 else 0,
         gas_price_days=max(0, min(365, _int(env.get("GAS_PRICE_DAYS"), defaults.gas_price_days))),

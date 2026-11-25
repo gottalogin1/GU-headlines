@@ -6,18 +6,24 @@ events, colored by the calendar they come from. Below it, every event is
 listed, grouped by day (Today, Tomorrow, then each date), and each one shows,
 when its calendar gives it:
 
-- the event's name (linked to its page on the calendar) and who holds it,
+- the event's name (linked to [its own page](#each-events-page) on this
+  site) and who holds it,
 - when it is, in Guam time, and where,
 - the start of its description,
+- a link to the event on the calendar that published it,
 - for Guam Legislature sessions, a link to the session agenda (PDF).
 
 Events leave the page once they are over, or when their calendar stops
 listing them. Events whose title says they were cancelled or postponed are
 left out. You can search the events by word and narrow them to one calendar.
+Visitors can [add the events to their own calendar app](#adding-the-events-to-a-calendar-app),
+on their phone or computer.
 
 **Contents**
 
 - [The month calendar](#the-month-calendar)
+- [Each event's page](#each-events-page)
+- [Adding the events to a calendar app](#adding-the-events-to-a-calendar-app)
 - [The calendars](#the-calendars)
 - [How often they are read](#how-often-they-are-read)
 - [Google Calendar key](#google-calendar-key)
@@ -58,6 +64,65 @@ month calendar and a matching mark in the list: green for the University of
 Guam, red for the Guam Legislature, blue for Guam Community College. The
 others are gray. The colors are muted shades that suit both the light and the
 dark look; the legend under the calendar names them.
+
+## Each event's page
+
+Every upcoming event has a page of its own on the site, at
+`/events/<number>`: its name, who holds it, when and where it is, its whole
+description, the links to its calendar and agenda, and two buttons that add
+that one event to a calendar app:
+
+- **Google Calendar** opens Google Calendar with the event filled in, ready
+  to save.
+- **Apple Calendar, Outlook or another app** gives a calendar file
+  (`/events/<number>.ics`). A phone or computer opens it in its calendar
+  app, ready to save.
+
+The page goes away (it answers "not found") once the event is over, or when
+its calendar stops listing it.
+
+**In Google's event results.** Google lists events in its search results
+(the "Events" box) only when each event has a page of its own that describes
+it in a form Google reads (Event structured data). Each event page has that
+description, and the [sitemap](maintenance.md#search-engines) lists every
+upcoming event's page, so Google finds them. Google only lists events held at
+a place, so an event whose calendar gives no place, or only an online one
+(such as Zoom), gets a page but no description for Google. Google decides by
+itself which events it shows, and it can take a few weeks after the pages
+are found.
+
+## Adding the events to a calendar app
+
+Under the month calendar, **Get these events in your calendar** lets a
+visitor subscribe to the events in their calendar app. The app then checks
+for changes by itself, so new, moved and cancelled events show up without
+anything to do:
+
+- **Google Calendar** opens Google Calendar, which asks to add the calendar.
+  On a phone, it may be easier on a computer; the calendar then shows on the
+  phone too (in the Google Calendar app, and on an iPhone that has the Google
+  account).
+- **Apple Calendar or Outlook** opens the calendar app on an iPhone, iPad or
+  Mac (and Outlook on Windows), which asks to subscribe.
+- Any other app: subscribe to the address shown under the buttons
+  (`https://your-site/events.ics`). On many phones, one tap selects it for
+  copying.
+
+What the calendar holds:
+
+- Without a calendar picked on the page: the **main events** of every
+  calendar, the same as the month calendar (see [Main events](#the-month-calendar)).
+- With a calendar picked in **Calendar** (`/events?calendar=legislature`),
+  the buttons subscribe to **every** event of that one calendar
+  (`/events.ics?calendar=legislature`).
+- The next 90 days, and the past 30 days, so the app keeps what happened
+  recently. Each phone shows the times in its own time zone (Guam time on a
+  phone on Guam).
+
+Calendar apps check the address on their own schedule, from every few hours
+to about once a day (Google Calendar). The feed asks for a check every
+`EVENTS_INTERVAL_HOURS` hours, and some apps follow that. The address is not
+in the sitemap, and search engines are asked not to list it.
 
 ## The calendars
 
