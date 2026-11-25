@@ -89,6 +89,9 @@ class Settings:
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
     weather_interval_minutes: int = 10
+    # The password of the private visitor stats page (/stats). Empty: no
+    # counting, no stats page, and story links go straight to the news sites.
+    stats_password: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -195,6 +198,7 @@ def load_settings() -> Settings:
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
+        stats_password=env.get("STATS_PASSWORD", "").strip(),
     )
 
 

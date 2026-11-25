@@ -234,6 +234,65 @@ Open `https://your-domain/ads.txt` in a browser (put your own domain in).
   regulations** in AdSense. Google shows the message, and the site needs no
   change.
 
+## Visitor stats
+
+GU Headlines can count page views and story clicks, and show them on a private
+page of your site, `/stats`, behind a password. The page shows the totals for
+today, the last 7, 30 or 90 days or the last year, a chart for each day, the
+stories readers opened most, the clicks for each news source, the views and
+clicks for each topic, and the most viewed pages. Until you set a password,
+nothing is counted.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `STATS_PASSWORD` | *(empty)* | The password of the stats page. A password here also turns the counting on. Make a long random one with `openssl rand -hex 16`, and use only letters and digits. Empty: nothing is counted, there is no `/stats` page, and story links go straight to the news sites. |
+
+**How to open the stats page**
+
+1. Put the password in `.env` as `STATS_PASSWORD` and run `docker compose up -d`.
+2. Open your domain followed by `/stats`, for example
+   `https://guamheadlines.com/stats`.
+3. The browser asks for a user name and a password. Type any user name (for
+   example `stats`) and your password. The browser remembers it until you
+   close the browser.
+
+Open the page only over https (with `SITE_DOMAIN` set, see
+[Web address and https](#web-address-and-https)). Over plain http the password
+travels without protection.
+
+**What is counted**
+
+- A **page view** each time a person opens a page of the site. All the pages
+  of a list count as one: page 2 of Latest counts as Latest. A search counts
+  as Search, and the words searched for are not kept. Pages that are not found
+  and the stats page itself are not counted.
+- A **story click** each time a person follows a story's link (the headline,
+  the photo or "Read the full story") to the news site.
+- Search engines, link previews (Facebook, Discord, iMessage and others),
+  speed tests such as PageSpeed, other robots, and pages that the browser
+  loads before the person opens them are not counted. Your own visits are
+  counted, like any other reader's.
+
+**How it works, and what it keeps**
+
+- The counting happens on your own server, so no script runs in the
+  visitor's browser and the pages are as fast as before. No cookie is set,
+  no outside service is used, and no API key is needed.
+- The site keeps only totals: one number for each page, and one for each
+  story, for each Guam day. It stores no IP address, no browser name and no
+  other personal detail.
+- While the stats are on, each story link first opens a short address on your
+  own site, `/go/<number>`. It counts the click and sends the reader on to the
+  story at once. It works only for stories that are in the database, so
+  nobody can use it to send people to another site. `robots.txt` and
+  `rel="nofollow"` tell search engines not to follow these links. The news
+  sites still see your site as the place that sent the reader.
+- The website adds up the counts in memory and writes them to the database
+  every 30 seconds, and when it stops. A new view or click can take up to a
+  minute to show on the stats page.
+- The disclaimer on the Sources page gets a short paragraph that tells
+  visitors about the counts.
+
 ## Checking for news
 
 | Setting | Default | What it does |

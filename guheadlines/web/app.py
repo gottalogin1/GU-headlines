@@ -8,12 +8,20 @@ import logging
 import secrets
 import time
 from collections.abc import Callable
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
@@ -30,11 +38,11 @@ from ..config import (
     load_jobs_config,
 )
 from ..db import session_scope
-from ..models import CATCH_UP_NOTE, Source
+from ..models import CATCH_UP_NOTE, Article, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
 from ..weather import JTWC_URL, NWS_GUAM_URL, for_page
-from . import queries, seo
+from . import queries, seo, stats
 from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -200,7 +208,16 @@ class RejectNulMiddleware:
         await self.app(scope, receive, send)
 
 
-app = FastAPI(title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Counts that this worker has not written to the database yet.
+    stats.counts.flush()
+
+
+app = FastAPI(
+    title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
+)
 app.add_middleware(RejectNulMiddleware)
 # Pages are mostly text and shrink to a fraction of their size; photos are
 # already compressed and left alone.
@@ -444,6 +461,14 @@ def safe_url(url: str | None) -> str:
     return url if scheme in ("http", "https") else ""
 
 
+def story_link(article) -> str:
+    """Where a story's links lead: through /go/<id>, which counts the click,
+    while visitor stats are on (STATS_PASSWORD); else straight to the story."""
+    if settings.stats_password:
+        return f"/go/{article.id}"
+    return safe_url(article.url)
+
+
 def domain(url: str | None) -> str:
     """https://www.guampdn.com/news/... -> guampdn.com"""
     host = (urlsplit(url or "").hostname or "").lower()
@@ -470,6 +495,7 @@ templates.env.globals.update(
     event_time=event_time,
     months=MONTHS,
     static_url=static_url,
+    story_link=story_link,
     theme_script=Markup(THEME_SCRIPT),
     nws_guam_url=NWS_GUAM_URL,
     jtwc_url=JTWC_URL,
@@ -537,6 +563,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             return queries.weather_reports(session)
 
     context.setdefault("title", None)
+    count_view = context.pop("count_view", True)
     # The ad block, on the pages that ask for it, once AdSense is set up.
     show_ad = context.pop("show_ad", False) and bool(
         settings.adsense_client and settings.adsense_slot
@@ -576,6 +603,8 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
     if nonce:
         # SecurityHeadersMiddleware keeps a policy that is already set.
         response.headers["Content-Security-Policy"] = ad_page_policy(nonce)
+    if count_view and status_code == 200 and settings.stats_password and stats.is_reader(request):
+        stats.counts.view(request.url.path)
     return response
 
 
@@ -937,6 +966,112 @@ def _jobs_description(boards: list[str]) -> str:
     return text + ". Every posting links to the board that published it."
 
 
+@app.get("/go/{article_id}")
+def go(request: Request, article_id: int):
+    """Count a click on a story's link, then send the reader on to the story.
+    Only a stored story's own address is used, so nobody can make a link here
+    that leads to another site."""
+    if not 1 <= article_id < 2**63:
+        raise HTTPException(404)
+    with session_scope() as session:
+        link = safe_url(session.scalar(select(Article.url).where(Article.id == article_id)))
+    if not link:
+        raise HTTPException(404)
+    if settings.stats_password and stats.is_reader(request):
+        stats.counts.click(article_id)
+    return RedirectResponse(
+        link, status_code=302, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
+    )
+
+
+STATS_PERIODS = {1: "Today", 7: "7 days", 30: "30 days", 90: "90 days", 365: "1 year"}
+
+
+def _stats_password_ok(request: Request) -> bool:
+    """The browser's own login box (HTTP Basic): any user name, and the
+    password in STATS_PASSWORD."""
+    scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "basic":
+        return False
+    try:
+        login = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except ValueError:  # not base64, or not UTF-8
+        return False
+    password = login.partition(":")[2]
+    return secrets.compare_digest(password.encode(), settings.stats_password.encode())
+
+
+@app.get("/stats", response_class=HTMLResponse)
+def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return PlainTextResponse(
+            "This page needs a password.",
+            status_code=401,
+            headers={
+                "WWW-Authenticate": 'Basic realm="Visitor stats", charset="UTF-8"',
+                "Cache-Control": "no-store",
+                "X-Robots-Tag": "noindex",
+            },
+        )
+    if days not in STATS_PERIODS:
+        days = 7
+    # This worker's newest counts. The other worker writes its own within 30 seconds.
+    stats.counts.flush()
+    config = config_cache.get()
+    since = datetime.now(GUAM_TZ).date() - timedelta(days=days - 1)
+    with session_scope() as session:
+        data = queries.visitor_stats(session, since)
+    daily = [
+        {
+            "day": day,
+            "views": data["views_by_day"].get(day, 0),
+            "clicks": data["clicks_by_day"].get(day, 0),
+        }
+        for day in (since + timedelta(days=n) for n in range(days))
+    ]
+    page_views = dict(data["pages"])
+    topics = [
+        {
+            "name": c.name,
+            "views": page_views.get(f"/category/{c.slug}", 0),
+            "clicks": data["topics"].get(c.slug, 0),
+        }
+        for c in config.categories
+    ]
+    page_names = {
+        "/": "Home (Latest)",
+        "/archive": "Archive",
+        "/jobs": "Jobs",
+        "/events": "Events",
+        "/status": "Sources",
+        "/search": "Search",
+        **{f"/category/{c.slug}": c.name for c in config.categories},
+        **{f"/source/{s.slug}": s.name for s in config.sources},
+    }
+    response = render(
+        request,
+        "stats.html",
+        title="Visitor stats",
+        robots="noindex, nofollow",
+        count_view=False,
+        periods=STATS_PERIODS,
+        days=days,
+        daily=daily,
+        views=sum(d["views"] for d in daily),
+        clicks=sum(d["clicks"] for d in daily),
+        pages=data["pages"][:20],
+        page_names=page_names,
+        stories=data["stories"],
+        sources=data["sources"],
+        topics=sorted(topics, key=lambda t: (-t["clicks"], -t["views"])),
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
 @app.get("/healthz")
 def healthz():
     try:
@@ -961,6 +1096,8 @@ def robots(request: Request):
         "User-agent: *\n"
         "Disallow: /search\n"
         "Disallow: /healthz\n"
+        # The counting stop in front of each story link (/go/<id>).
+        "Disallow: /go/\n"
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
     )

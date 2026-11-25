@@ -2,12 +2,15 @@
    thing drawn first, so it is fetched right away instead of lazily. #}
 {% macro card(item, category_names, show_snippet=false, first=false) %}
 {% set a = item.article %}
-{% set link = a.url|safe_url %}
+{# While visitor stats are on, the links pass through /go/<id>, which counts
+   the click; search engines are asked not to follow them. #}
+{% set link = story_link(a) %}
+{% set rel = "nofollow noopener" if link.startswith("/go/") else "noopener" %}
 {% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url|safe_url %}
 {% set loading %}{% if first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}{% endset %}
 <article class="story{% if not photo %} no-photo{% endif %}">
   {% if photo %}
-  <a class="thumb" href="{{ link }}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+  <a class="thumb" href="{{ link }}" target="_blank" rel="{{ rel }}" tabindex="-1" aria-hidden="true">
     {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest. #}
     <img class="thumb-fill" src="{{ photo }}" alt="" {{ loading }}>
     <img class="thumb-img" src="{{ photo }}" alt="" {{ loading }}
@@ -20,7 +23,7 @@
       {% for c in a.categories %}<a class="tag tag-{{ c }}" href="/category/{{ c }}">{{ category_names.get(c, c) }}</a>{% endfor %}
     </div>
     {% endif %}
-    <h3 class="headline"><a href="{{ link }}" target="_blank" rel="noopener" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
+    <h3 class="headline"><a href="{{ link }}" target="_blank" rel="{{ rel }}" title="Read on {{ a.url|domain }}">{% if show_snippet and item.title_marked %}{{ item.title_marked|highlight }}{% else %}{{ a.title }}{% endif %}</a></h3>
     {% if show_snippet and item.snippet %}
       {% for p in item.snippet|paragraphs %}<p class="intro">{{ p|highlight }}</p>{% endfor %}
     {% elif a.intro %}
@@ -34,7 +37,7 @@
       <time datetime="{{ a.published_at.isoformat() }}" title="{{ a.published_at|fmt_datetime }}">{{ a.published_at|rel_time }}</time>
       {% if a.author %}<span aria-hidden="true">·</span> <span class="author">{{ a.author }}</span>{% endif %}
     </p>
-    <a class="read-link" href="{{ link }}" target="_blank" rel="noopener">
+    <a class="read-link" href="{{ link }}" target="_blank" rel="{{ rel }}">
       Read the full story at <span class="read-domain">{{ a.url|domain }}</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>

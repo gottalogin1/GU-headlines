@@ -512,6 +512,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .status-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .status-table.compact td { padding: 8px 16px; }
 .status-table tr.disabled td { color: var(--muted); }
+/* Room between a source's name and its address, so each is easy to tap (24px apart). */
+.status-table .site-link { margin-top: 6px; }
 .badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; background: var(--well); color: var(--muted); margin-left: 6px; font-weight: 650; }
 .error { color: var(--error); }
 
@@ -566,3 +568,14 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   .story.event { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .story.event .story-body { padding-left: 8px; }
 }
+
+/* ---------- visitor stats (/stats) ---------- */
+.stats-totals { margin: 18px 0 0; }
+.stats-totals dd { font-size: 1.4rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.stats-chart { margin: 14px 0 0; padding: 14px 16px 10px; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); }
+.stats-chart figcaption { margin: 0 0 10px; font-weight: 650; }
+.stats-chart svg { display: block; width: 100%; height: 120px; }
+.stats-chart rect { fill: var(--accent); }
+.stats-axis { display: flex; justify-content: space-between; margin-top: 6px; }
+.stats-days { margin: 14px 0 0; }
+.stats-days summary { margin: 0 4px 10px; color: var(--link); cursor: pointer; }

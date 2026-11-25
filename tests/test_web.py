@@ -684,3 +684,221 @@ def test_adsense_settings_must_be_ids():
     assert _adsense_slot(" 9876543210 ") == "9876543210"
     for bad in ("", None, "slot", "98765 43210", '9876543210"'):
         assert _adsense_slot(bad) == ""
+
+
+# A person in a browser. Over https, browsers also send Sec-Fetch-Mode.
+BROWSER = {
+    "user-agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "sec-fetch-mode": "navigate",
+}
+
+
+@pytest.fixture()
+def counting(client, monkeypatch):
+    """Visitor stats on, with nothing counted yet."""
+    from guheadlines.web import stats
+
+    _set(monkeypatch, stats_password="a long stats password")
+    monkeypatch.setattr(stats, "counts", stats.Counts())
+    client.base_url = "https://testserver"
+    return client
+
+
+def _article_id(url_part: str) -> int:
+    with session_scope() as session:
+        return session.query(Article.id).filter(Article.url.contains(url_part)).scalar()
+
+
+def _counted() -> tuple[dict, dict]:
+    from guheadlines.models import PageViews, StoryClicks
+    from guheadlines.web import stats
+
+    stats.counts.flush()
+    with session_scope() as session:
+        views = {row.path: row.views for row in session.query(PageViews)}
+        clicks = {row.article_id: row.clicks for row in session.query(StoryClicks)}
+    return views, clicks
+
+
+def test_story_links_go_through_the_counting_stop(counting):
+    story = "https://www.postguam.com/news/local/a/article_1.html"
+    story_id = _article_id("article_1")
+    html = counting.get("/").text
+    # Headline, photo and "read the full story" open /go/<id>, which search
+    # engines are asked not to follow; the outlet's name still opens its site.
+    assert html.count(f'href="/go/{story_id}" target="_blank" rel="nofollow noopener"') == 3
+    assert f'href="{story}"' not in html
+    assert '<a class="source" href="https://www.postguam.com/"' in html
+    assert f'href="/go/{story_id}"' in counting.get("/search?q=Andersen").text
+    go = counting.get(f"/go/{story_id}", follow_redirects=False)
+    assert go.status_code == 302 and go.headers["location"] == story
+    assert go.headers["cache-control"] == "no-store"
+    # Only stored stories: no address can be passed in, so no open redirect.
+    assert counting.get("/go/999999", follow_redirects=False).status_code == 404
+    assert counting.get(f"/go/{2**63}", follow_redirects=False).status_code == 404
+    assert counting.get("/go/https://example.com", follow_redirects=False).status_code == 404
+    assert counting.get("/go/abc", follow_redirects=False).status_code == 422
+    assert "Disallow: /go/\n" in counting.get("/robots.txt").text
+
+
+def test_readers_are_counted_and_robots_are_not(counting):
+    story_id = _article_id("article_1")
+    for path in ("/", "/?page=1", "/category/labor", "/search?q=secret+words", "/nope"):
+        counting.get(path, headers=BROWSER)
+    counting.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
+    counting.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
+    # Not counted: robots, link previews, PageSpeed, pages the browser loads
+    # ahead, and programs that leave out what browsers send over https.
+    for headers in (
+        {"user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"},
+        {"user-agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"},
+        {"user-agent": BROWSER["user-agent"] + " Chrome-Lighthouse"},
+        {**BROWSER, "sec-purpose": "prefetch;prerender"},
+        {**BROWSER, "sec-fetch-mode": "no-cors"},
+        {"user-agent": BROWSER["user-agent"]},
+        {"user-agent": "python-httpx/0.28.1"},
+    ):
+        counting.get("/", headers=headers)
+        counting.get(f"/go/{story_id}", headers=headers, follow_redirects=False)
+    views, clicks = _counted()
+    # Search words are never stored; 404 pages are not counted.
+    assert views == {"/": 2, "/category/labor": 1, "/search": 1}
+    assert clicks == {story_id: 2}
+    # Totals add up across writes.
+    counting.get("/", headers=BROWSER)
+    assert _counted()[0]["/"] == 3
+
+
+def test_over_plain_http_browsers_are_counted_without_sec_fetch(counting):
+    counting.base_url = "http://testserver"
+    counting.get("/", headers={"user-agent": BROWSER["user-agent"]})
+    assert _counted()[0] == {"/": 1}
+
+
+def test_nothing_is_counted_while_stats_are_off(client):
+    from guheadlines.web import stats
+
+    story_id = _article_id("article_1")
+    client.get("/", headers=BROWSER)
+    client.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
+    assert stats.counts._views == {} and stats.counts._clicks == {}
+    # Old links still lead to the story.
+    go = client.get(f"/go/{story_id}", follow_redirects=False)
+    assert go.headers["location"] == "https://www.postguam.com/news/local/a/article_1.html"
+    assert client.get("/stats").status_code == 404
+    assert "Visitor counts" not in client.get("/status").text
+
+
+def test_counts_are_kept_when_the_database_cannot_be_reached(counting, monkeypatch):
+    from guheadlines.web import stats
+
+    story_id = _article_id("article_1")
+    counting.get("/", headers=BROWSER)
+    counting.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
+
+    def broken():
+        raise RuntimeError("database down")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(stats, "session_scope", broken)
+        stats.counts.flush()
+    # A click on a story that was deleted before the write is left out.
+    with session_scope() as session:
+        session.query(Article).filter(Article.id == story_id).delete()
+    assert _counted() == ({"/": 1}, {})
+
+
+def test_counts_are_written_when_the_website_stops(counting):
+    from guheadlines.web.app import app
+
+    with TestClient(app, base_url="https://testserver") as running:
+        running.get("/", headers=BROWSER)
+    from guheadlines.models import PageViews
+
+    with session_scope() as session:
+        assert session.query(PageViews.views).filter(PageViews.path == "/").scalar() == 1
+
+
+def test_stats_page_needs_the_password(counting):
+    import base64
+
+    def login(password: str) -> dict:
+        return {"authorization": "Basic " + base64.b64encode(password.encode()).decode()}
+
+    page = counting.get("/stats")
+    assert page.status_code == 401
+    assert page.headers["www-authenticate"].startswith("Basic ")
+    assert counting.get("/stats", headers=login("anyone:wrong")).status_code == 401
+    assert counting.get("/stats", headers={"authorization": "Basic %%%"}).status_code == 401
+    assert counting.get("/stats", headers={"authorization": "Bearer x"}).status_code == 401
+
+    story_id = _article_id("article_1")
+    counting.get("/", headers=BROWSER)
+    counting.get("/category/military", headers=BROWSER)
+    counting.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
+    page = counting.get("/stats", headers={**BROWSER, **login("stats:a long stats password")})
+    assert page.status_code == 200
+    # Private: never stored by a browser or a proxy, and kept out of search.
+    assert page.headers["cache-control"] == "private, no-store"
+    assert page.headers["x-robots-tag"] == "noindex, nofollow"
+    assert '<meta name="robots" content="noindex, nofollow">' in _head(page.text)
+    html = page.text
+    assert "<dt>Page views</dt><dd>2</dd>" in html and "<dt>Story clicks</dt><dd>1</dd>" in html
+    top = html.split("Top stories", 1)[1].split("Topics", 1)[0]
+    assert "Andersen to host Cope North exercise" in top and "The Guam Daily Post" in top
+    topics = html.split("<th>Topic</th>", 1)[1].split("</table>", 1)[0]
+    assert '<tr><td>Military</td><td class="num">1</td><td class="num">1</td></tr>' in topics
+    assert "Home (Latest)" in html and "github" not in html.lower()
+    # The stats page does not count itself, and the other periods work.
+    assert "/stats" not in _counted()[0]
+    for days in (1, 30, 90, 365, 12):
+        page = counting.get(f"/stats?days={days}", headers=login(":a long stats password"))
+        assert page.status_code == 200, days
+    assert counting.get("/stats?days=0", headers=login(":a long stats password")).status_code == 422
+
+
+def test_sources_page_says_that_visits_are_counted(counting):
+    disclaimer = counting.get("/status").text.split('id="disclaimer"', 1)[1]
+    assert "Visitor counts." in disclaimer and "no IP address" in disclaimer
+
+
+def test_reader_check():
+    from starlette.requests import Request
+
+    from guheadlines.web.stats import is_reader
+
+    def request(headers: dict, method: str = "GET", scheme: str = "https") -> Request:
+        raw = [(k.encode(), v.encode()) for k, v in headers.items()]
+        return Request(
+            {
+                "type": "http",
+                "method": method,
+                "scheme": scheme,
+                "path": "/",
+                "query_string": b"",
+                "headers": raw,
+                "server": ("x", 443),
+            }
+        )
+
+    assert is_reader(request(BROWSER))
+    assert not is_reader(request(BROWSER, method="HEAD"))
+    iphone = (
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/490.0.0.38.109]"
+    )
+    assert is_reader(request({"user-agent": iphone, "sec-fetch-mode": "navigate"}))
+    for robot in (
+        "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+        "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2)",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 HeadlessChrome/131.0.0.0",
+        "Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)",
+        "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
+        "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)",
+        "curl/8.5.0",
+        "",
+    ):
+        assert not is_reader(request({"user-agent": robot, "sec-fetch-mode": "navigate"})), robot

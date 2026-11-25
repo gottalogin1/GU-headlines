@@ -16,8 +16,10 @@ from ..models import (
     EventCalendar,
     Job,
     JobSource,
+    PageViews,
     ScrapeRun,
     Source,
+    StoryClicks,
     WeatherReport,
 )
 from ..scraper.text import GUAM_TZ
@@ -479,3 +481,64 @@ def event_calendars(session: Session, since: datetime) -> list[dict]:
         .order_by(EventCalendar.name)
     ).all()
     return [{"calendar": r[0], "upcoming": r.upcoming} for r in rows]
+
+
+# ------------------------------------------------------------ visitor stats
+
+
+def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
+    """Page views and story clicks from the Guam day `since` to today, for the
+    stats page (see web/stats.py)."""
+    viewed = PageViews.day >= since
+    clicked = StoryClicks.day >= since
+    views = func.sum(PageViews.views).label("views")
+    clicks = func.sum(StoryClicks.clicks).label("clicks")
+    by_story = (
+        select(Article, Source.name.label("source_name"), clicks)
+        .join(StoryClicks, StoryClicks.article_id == Article.id)
+        .join(Source, Source.id == Article.source_id)
+        .where(clicked)
+        .group_by(Article.id, Source.name)
+        .order_by(clicks.desc(), Article.id.desc())
+        .limit(top)
+    )
+    by_source = (
+        select(Source.name, clicks)
+        .join(Article, Article.source_id == Source.id)
+        .join(StoryClicks, StoryClicks.article_id == Article.id)
+        .where(clicked)
+        .group_by(Source.id, Source.name)
+        .order_by(clicks.desc(), Source.name)
+    )
+    # A story with two topics counts for both.
+    tagged = (
+        select(func.unnest(Article.categories).label("topic"), StoryClicks.clicks)
+        .join(Article, Article.id == StoryClicks.article_id)
+        .where(clicked)
+        .subquery()
+    )
+    return {
+        "views_by_day": dict(
+            session.execute(
+                select(PageViews.day, views).where(viewed).group_by(PageViews.day)
+            ).all()
+        ),
+        "clicks_by_day": dict(
+            session.execute(
+                select(StoryClicks.day, clicks).where(clicked).group_by(StoryClicks.day)
+            ).all()
+        ),
+        "pages": session.execute(
+            select(PageViews.path, views)
+            .where(viewed)
+            .group_by(PageViews.path)
+            .order_by(views.desc(), PageViews.path)
+        ).all(),
+        "stories": session.execute(by_story).all(),
+        "sources": session.execute(by_source).all(),
+        "topics": dict(
+            session.execute(
+                select(tagged.c.topic, func.sum(tagged.c.clicks)).group_by(tagged.c.topic)
+            ).all()
+        ),
+    }
