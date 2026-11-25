@@ -284,3 +284,27 @@ class WeatherReport(Base):
     kind: Mapped[str] = mapped_column(Text, primary_key=True)
     data = mapped_column(JSONB, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PageViews(Base):
+    """How many times readers opened each page on one Guam day (see web/stats.py)."""
+
+    __tablename__ = "page_views"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    # The page's address without its query: every page of a topic counts as one.
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    views: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class StoryClicks(Base):
+    """How many times readers followed a story's link to its news site on one
+    Guam day (see web/stats.py)."""
+
+    __tablename__ = "story_clicks"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    article_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
+    )
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False)

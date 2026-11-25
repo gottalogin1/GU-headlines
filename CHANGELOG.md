@@ -6,6 +6,18 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Private visitor stats.** With `STATS_PASSWORD` in `.env`, the site counts
+  page views and story clicks, and shows them on a private page, `/stats`,
+  behind that password: totals, a chart for each day, the top stories, the
+  clicks for each news source, the views and clicks for each topic, and the
+  most viewed pages. The counting happens on the server: no script in the
+  visitor's browser (the PageSpeed scores stay the same), no cookies, no
+  outside service, no API key and no stored IP addresses. Robots and link
+  previews are not counted. While the stats are on, story links pass through
+  a short counting address on the site (`/go/<number>`). See
+  [Visitor stats](docs/settings.md#visitor-stats). When you update, the
+  database gets two small new tables, by itself. Without the setting, nothing
+  changes.
 - **A Weather page and the tides.** A new **Weather** link in the top bar
   opens a page with the airport reading, sunrise, sunset and the moon, the
   watches, warnings and advisories, the next 24 hours, the week's forecast,

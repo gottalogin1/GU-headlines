@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{# The private visitor stats page (/stats). See web/stats.py for what is counted. #}
+
+{% macro day_chart(daily, key, label) %}
+{% set peak = daily|map(attribute=key)|max %}
+<figure class="stats-chart">
+  <figcaption>{{ label }} per day{% if peak %} <span class="muted">(highest: {{ "{:,}".format(peak) }})</span>{% endif %}</figcaption>
+  <svg viewBox="0 0 {{ daily|length * 10 }} 100" preserveAspectRatio="none" role="img" aria-label="{{ label }} per day. The numbers are in the table below.">
+    {% for d in daily %}{% set height = (d[key] * 100 / peak) if peak else 0 %}
+    <rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 100 - height }}" width="8" height="{{ height }}"><title>{{ d.day|fmt_day }}: {{ "{:,}".format(d[key]) }}</title></rect>
+    {% endfor %}
+  </svg>
+  <div class="stats-axis muted small"><span>{{ daily[0].day|fmt_day }}</span><span>{{ daily[-1].day|fmt_day }}</span></div>
+</figure>
+{% endmacro %}
+
+{% block main %}
+<header class="page-head">
+  <h1>Visitor stats</h1>
+  <p class="muted">Counted on this server, as totals for each Guam day: no cookies, no IP addresses.
+    Search engines, link previews and other robots are left out. The newest counts can take a
+    minute to show.</p>
+</header>
+
+<nav class="pagination" aria-label="Period">
+  <span class="pages">
+  {% for n, label in periods.items() %}
+    {% if n == days %}<span class="current" aria-current="page">{{ label }}</span>
+    {% else %}<a href="/stats?days={{ n }}">{{ label }}</a>{% endif %}
+  {% endfor %}
+  </span>
+</nav>
+
+<dl class="job-facts stats-totals">
+  <div><dt>Page views</dt><dd>{{ "{:,}".format(views) }}</dd></div>
+  <div><dt>Story clicks</dt><dd>{{ "{:,}".format(clicks) }}</dd></div>
+  <div><dt>Clicks per 100 views</dt><dd>{{ "%.1f"|format(clicks * 100 / views) if views else "–" }}</dd></div>
+</dl>
+
+{% if days > 1 %}
+{{ day_chart(daily, "views", "Page views") }}
+{{ day_chart(daily, "clicks", "Story clicks") }}
+<details class="stats-days">
+  <summary>Day by day</summary>
+  <div class="table-wrap">
+  <table class="status-table compact">
+    <thead><tr><th>Day</th><th class="num">Page views</th><th class="num">Story clicks</th></tr></thead>
+    <tbody>
+    {% for d in daily|reverse %}
+    <tr><td>{{ d.day|fmt_day }}</td><td class="num">{{ "{:,}".format(d.views) }}</td><td class="num">{{ "{:,}".format(d.clicks) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+{% endif %}
+
+<h2 class="section-title">Top stories</h2>
+<p class="muted section-note">The stories readers opened most, counted when they follow a story's link to its news site.</p>
+{% if stories %}
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Story</th><th>Source</th><th class="num">Clicks</th></tr></thead>
+  <tbody>
+  {% for row in stories %}
+  {% set a = row.Article %}
+  <tr>
+    <td><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener">{{ a.title }}</a>
+      <div class="muted small">{{ a.published_at|fmt_day }}{% for c in a.categories %} · {{ category_names.get(c, c) }}{% endfor %}</div></td>
+    <td>{{ row.source_name }}</td>
+    <td class="num">{{ "{:,}".format(row.clicks) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted section-note">No story clicks yet in this period.</p>{% endif %}
+
+<h2 class="section-title">Topics</h2>
+<p class="muted section-note">Views of each topic's page, and clicks on its stories. A story with two topics counts for both.</p>
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Topic</th><th class="num">Page views</th><th class="num">Story clicks</th></tr></thead>
+  <tbody>
+  {% for t in topics %}
+  <tr><td>{{ t.name }}</td><td class="num">{{ "{:,}".format(t.views) }}</td><td class="num">{{ "{:,}".format(t.clicks) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="section-title">News sources</h2>
+<p class="muted section-note">Clicks on each news site's stories: the readers this site sent to it.</p>
+{% if sources %}
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Source</th><th class="num">Story clicks</th><th class="num">Share</th></tr></thead>
+  <tbody>
+  {% for row in sources %}
+  <tr><td>{{ row.name }}</td><td class="num">{{ "{:,}".format(row.clicks) }}</td><td class="num">{{ (row.clicks * 100 / clicks)|round|int if clicks else 0 }}%</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted section-note">No story clicks yet in this period.</p>{% endif %}
+
+<h2 class="section-title">Most viewed pages</h2>
+<p class="muted section-note">Every page of a list counts as one (page 2 of Latest counts as Latest). Searches count as Search, without the words searched for.</p>
+{% if pages %}
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Page</th><th class="num">Views</th></tr></thead>
+  <tbody>
+  {% for row in pages %}
+  <tr><td><a href="{{ row.path }}">{{ page_names.get(row.path, row.path) }}</a>{% if row.path in page_names %} <span class="muted small">{{ row.path }}</span>{% endif %}</td><td class="num">{{ "{:,}".format(row.views) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted section-note">No page views yet in this period.</p>{% endif %}
+{% endblock %}

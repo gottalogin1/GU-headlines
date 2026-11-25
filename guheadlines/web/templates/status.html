@@ -86,6 +86,12 @@
     that results from the use of this site or from reliance on its content.</p>
   <p><strong>Links to other websites.</strong> Links lead to websites that {{ site }} does not
     control. {{ site }} is not responsible for their content, availability or privacy practices.</p>
+  {% if settings.stats_password %}
+  <p><strong>Visitor counts.</strong> To learn which pages and stories readers find useful,
+    {{ site }} counts how many times each page is opened and each story link is followed. The
+    counts are made on this site's own server and kept only as daily totals. No cookie is set for
+    them, and no IP address or other personal detail is stored.</p>
+  {% endif %}
   {% if settings.adsense_client %}
   <p><strong>Advertising and cookies.</strong> This site shows ads served by Google AdSense. Ads
     are marked "Advertisement", are chosen by Google, and do not imply an endorsement by

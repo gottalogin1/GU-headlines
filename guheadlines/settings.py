@@ -92,6 +92,9 @@ class Settings:
     # The NOAA tide station whose high and low tides the weather box shows.
     # 1630000 is Apra Harbor. Empty: no tides.
     tide_station: str = "1630000"
+    # The password of the private visitor stats page (/stats). Empty: no
+    # counting, no stats page, and story links go straight to the news sites.
+    stats_password: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -209,6 +212,7 @@ def load_settings() -> Settings:
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
+        stats_password=env.get("STATS_PASSWORD", "").strip(),
     )
 
 
