@@ -206,14 +206,15 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .search input::placeholder { color: var(--muted); }
 .btn,
 .search button,
-.search-form button {
+.search-form button,
+.signup-form button {
   border: 0; cursor: pointer; border-radius: 999px;
   padding: 9px 18px; font: 650 .9rem var(--font); color: var(--on-fill);
   background: var(--fill);
   transition: filter .15s ease, transform .15s ease;
 }
-.search button:hover, .search-form button:hover { filter: brightness(1.08); }
-.search button:active, .search-form button:active { transform: translateY(1px); }
+.search button:hover, .search-form button:hover, .signup-form button:hover { filter: brightness(1.08); }
+.search button:active, .search-form button:active, .signup-form button:active { transform: translateY(1px); }
 
 /* The tagline is in the footer; the bar needs the room for the menu. */
 .bar .brand-tagline { display: none; }
@@ -353,6 +354,26 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
    ad to show. */
 .ad-slot ins.adsbygoogle { display: block; min-height: 250px; }
 .ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }
+/* The sponsor spot (_sponsor.html): the picture is as wide as the column, or
+   its own width if it is smaller. */
+.sponsor a { display: block; }
+.sponsor img { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: var(--r-sm); }
+/* The newsletter box (_signup_box.html) and the newsletter page. */
+.signup-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
+.signup-form input[type="email"] {
+  flex: 1 1 170px; min-width: 0; padding: 9px 14px; border-radius: 999px;
+  font: inherit; font-size: .95rem; color: var(--text);
+  background: var(--input-bg); border: 1px solid var(--line);
+}
+.signup-form input[type="email"]::placeholder { color: var(--muted); }
+.signup-form input[type="email"]:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.signup-form button { flex: none; }
+/* The field that only robots fill in: out of sight, and skipped by keyboards
+   and screen readers. */
+.signup-trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.signup-page .signup-form { max-width: 460px; }
+.signup-result { margin: 0 0 22px; padding: 14px 20px; border-radius: var(--r-xl); border: 1px solid var(--line); background: var(--surface); }
+.signup-result.error { color: var(--error); }
 .facets { list-style: none; margin: 0; padding: 0; }
 .facets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }
 .facet-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }

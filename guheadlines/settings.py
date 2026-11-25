@@ -112,6 +112,17 @@ class Settings:
     newsletter_time: time = time(10, 0)
     # The number of stories in each edition.
     newsletter_stories: int = 12
+    # The newsletter sign-up box (see sendfox.py): a SendFox API token, and
+    # the name or number of the SendFox list that new subscribers join. No
+    # token: no sign-up box. No list: the account's only list.
+    sendfox_api_token: str = ""
+    sendfox_list: str = ""
+    # The sponsor spot (see web/sponsor.py): a picture in config/sponsor/, the
+    # web address it opens, and its words for people who cannot see it. No
+    # picture: no sponsor spot.
+    sponsor_image: str = ""
+    sponsor_link: str = ""
+    sponsor_alt: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -168,6 +179,28 @@ def _adsense_client(value: str | None) -> str:
 def _adsense_slot(value: str | None) -> str:
     value = (value or "").strip()
     return value if re.fullmatch(r"\d{5,20}", value) else ""
+
+
+def _web_address(value: str | None) -> str:
+    """SPONSOR_LINK: an http(s) address as it is, or "" if it is not one."""
+    value = (value or "").strip()
+    try:
+        parts = urlsplit(value)
+    except ValueError:  # such as "https://[" (a broken IPv6 address)
+        return ""
+    if parts.scheme not in ("http", "https") or not parts.netloc or re.search(r"\s", value):
+        return ""
+    return value
+
+
+def _file_name(value: str | None) -> str:
+    """SPONSOR_IMAGE "ad.jpg" -> "ad.jpg": only the name of the file, without
+    a folder in front of it ("config/sponsor/ad.jpg" also gives "ad.jpg").
+    "" when it is not the name of a picture (.jpg, .jpeg, .png, .webp, .gif)."""
+    name = re.split(r"[\\/]", (value or "").strip())[-1]
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\.(jpe?g|png|webp|gif)", name, re.I):
+        return name
+    return ""
 
 
 def _tide_station(value: str | None, default: str) -> str:
@@ -279,6 +312,11 @@ def load_settings() -> Settings:
         newsletter_stories=max(
             1, min(50, _int(env.get("NEWSLETTER_STORIES"), defaults.newsletter_stories))
         ),
+        sendfox_api_token=env.get("SENDFOX_API_TOKEN", "").strip(),
+        sendfox_list=env.get("SENDFOX_LIST", "").strip(),
+        sponsor_image=_file_name(env.get("SPONSOR_IMAGE")),
+        sponsor_link=_web_address(env.get("SPONSOR_LINK")),
+        sponsor_alt=" ".join(env.get("SPONSOR_ALT", "").split())[:200],
     )
 
 

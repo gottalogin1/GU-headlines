@@ -93,6 +93,16 @@
     site's own server and kept only as daily totals, with only the name of a website that led to
     a visit. No cookie is set for them, and no IP address or other personal detail is stored.</p>
   {% endif %}
+  {% if signup %}
+  <p><strong>Newsletter.</strong> If you sign up for the newsletter, your email address is sent to
+    SendFox, the service that sends the emails, and is used only for the newsletter. Every email has
+    a link to unsubscribe.</p>
+  {% endif %}
+  {% if sponsor %}
+  <p><strong>Sponsor.</strong> The picture marked "Sponsor" is a paid ad from a local business. It
+    does not imply an endorsement by {{ site }} or by the news outlets listed, and {{ site }} is not
+    responsible for the sponsor's website, products or services.</p>
+  {% endif %}
   {% if settings.adsense_client %}
   <p><strong>Advertising and cookies.</strong> This site shows ads served by Google AdSense. Ads
     are marked "Advertisement", are chosen by Google, and do not imply an endorsement by
