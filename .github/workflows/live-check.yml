@@ -18,7 +18,7 @@ on:
         type: boolean
         default: false
       only_jobs:
-        description: "Only check the job boards and event calendars (config/jobs.yaml, config/events.yaml), not the news sites"
+        description: "Only check the job boards, event calendars and bid lists (config/jobs.yaml, events.yaml, bids.yaml), not the news sites"
         type: boolean
         default: false
   push:
@@ -26,6 +26,7 @@ on:
       - "config/**"
       - "guheadlines/scraper/**"
       - "guheadlines/events/**"
+      - "guheadlines/bids/**"
       - ".github/workflows/live-check.yml"
 
 permissions:
@@ -93,7 +94,7 @@ jobs:
           done
 
   jobs:
-    name: Check job boards and calendars
+    name: Check job boards, calendars and bid lists
     if: >-
       (github.event_name != 'push' && inputs.urls == '') ||
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[live]'))
@@ -117,6 +118,11 @@ jobs:
         env:
           LOG_LEVEL: DEBUG
         run: guheadlines events --check --limit 5
+      - name: What each bid list gives (nothing is saved)
+        if: ${{ !cancelled() }}
+        env:
+          LOG_LEVEL: DEBUG
+        run: guheadlines bids --check --limit 8
 
   scrape:
     name: Check and scrape sources
@@ -184,6 +190,8 @@ jobs:
         run: guheadlines jobs
       - name: Read the event calendars
         run: guheadlines events
+      - name: Read the bid lists
+        run: guheadlines bids
       - name: Summary
         # Also runs when an earlier step failed, so a broken run still shows
         # what was loaded.
@@ -209,6 +217,11 @@ jobs:
                     min(e.starts_at) AS first, max(e.starts_at) AS last, left(c.last_error, 120) AS error
              FROM event_calendars c LEFT JOIN events e ON e.calendar_id = c.id AND e.removed_at IS NULL
              GROUP BY c.slug, c.last_error ORDER BY events DESC"
+          q "SELECT s.slug, count(b.id) AS bids, count(b.due_at) AS due, count(b.number) AS numbers,
+                    count(b.document_url) AS pdfs, min(b.due_at) AS first_due,
+                    left(s.last_error, 120) AS error
+             FROM bid_sources s LEFT JOIN bids b ON b.source_id = s.id AND b.removed_at IS NULL
+             GROUP BY s.slug, s.last_error ORDER BY bids DESC"
           q "SELECT slug, day, title, categories, img, intro FROM (
                SELECT s.slug, a.published_at::date AS day, left(a.title, 70) AS title,
                       a.categories, a.image_path IS NOT NULL AS img, left(a.intro, 90) AS intro,
@@ -220,7 +233,7 @@ jobs:
           guheadlines web --port 8000 --workers 1 > web.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS localhost:8000/healthz && break; sleep 1; done
           echo
-          for path in / /category/local /category/military /category/business /category/labor /category/tourism /category/sports /category/food /category/cnmi /category/obituaries "/search?q=guam" "/search?q=hagatna" /archive /status /jobs /events; do
+          for path in / /category/local /category/military /category/business /category/labor /category/tourism /category/sports /category/food /category/cnmi /category/obituaries "/search?q=guam" "/search?q=hagatna" /archive /status /jobs /events /bids; do
             code=$(curl -s -o page.html -w "%{http_code}" "localhost:8000$path")
             echo "$path -> HTTP $code, $(grep -c 'class="story' page.html) stories, $(grep -c 'class="thumb-img"' page.html) with photos"
             test "$code" = 200

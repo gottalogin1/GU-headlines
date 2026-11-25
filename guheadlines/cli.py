@@ -13,7 +13,14 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, text, update
 
-from .config import AppConfig, ConfigError, load_config, load_events_config, load_jobs_config
+from .config import (
+    AppConfig,
+    ConfigError,
+    load_bids_config,
+    load_config,
+    load_events_config,
+    load_jobs_config,
+)
 from .db import MIGRATION_LOCK_KEY, advisory_lock, get_engine, session_scope
 from .models import Article
 from .settings import PACKAGE_DIR, Settings, get_settings
@@ -209,6 +216,7 @@ def cmd_worker(args, settings: Settings) -> None:
     pending: dict = {}
     next_jobs = 0.0  # when the job boards are due (time.monotonic); 0: on the first run
     next_events = 0.0  # when the event calendars are due
+    next_bids = 0.0  # when the bid lists are due
 
     def run_jobs_if_due() -> None:
         """Job boards change more slowly than news: read them every JOBS_INTERVAL_HOURS."""
@@ -246,6 +254,24 @@ def cmd_worker(args, settings: Settings) -> None:
             _run_events(settings, calendars)
         except Exception:
             log.exception("events check failed")
+
+    def run_bids_if_due() -> None:
+        """Bid lists are read every BIDS_INTERVAL_HOURS."""
+        nonlocal next_bids
+        if time.monotonic() < next_bids:
+            return
+        next_bids = time.monotonic() + settings.bids_interval_hours * 3600 - 60
+        try:
+            sources = load_bids_config(settings.config_dir)
+        except ConfigError as exc:
+            log.error("bids.yaml error, bid lists not read: %s", exc)
+            return
+        if not any(s.collected for s in sources):
+            return
+        try:
+            _run_bids(settings, sources)
+        except Exception:
+            log.exception("bids check failed")
 
     def check_alerts() -> None:
         """Alerts for news sites and job boards that stopped working."""
@@ -311,6 +337,7 @@ def cmd_worker(args, settings: Settings) -> None:
         run_once()
         run_jobs_if_due()
         run_events_if_due()
+        run_bids_if_due()
         check_alerts()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
@@ -325,6 +352,7 @@ def cmd_worker(args, settings: Settings) -> None:
         if kind == "regular":
             run_jobs_if_due()
             run_events_if_due()
+            run_bids_if_due()
             check_alerts()
     log.info("worker stopped")
 
@@ -666,6 +694,83 @@ def cmd_events(args, settings: Settings) -> None:
         checker.close()
 
 
+def _bids_config(settings: Settings):
+    try:
+        return load_bids_config(settings.config_dir)
+    except ConfigError as exc:
+        raise SystemExit(f"config error: {exc}") from None
+
+
+def _run_bids(settings: Settings, sources, only: list[str] | None = None):
+    from .bids.pipeline import BidChecker
+
+    checker = BidChecker(settings, sources)
+    try:
+        return checker.run(only=only)
+    finally:
+        checker.close()
+
+
+def cmd_bids(args, settings: Settings) -> None:
+    """Read the bid lists in config/bids.yaml now (or, with --check, only show
+    what each source gives, without a database)."""
+    sources = _bids_config(settings)
+    known = {s.slug for s in sources}
+    for slug in args.source or []:
+        if slug not in known:
+            raise SystemExit(f"unknown bid source {slug!r}; see config/bids.yaml")
+    if not args.check:
+        wait_for_db()
+        migrate()
+        results = _run_bids(settings, sources, only=args.source)
+        if results is None:
+            raise SystemExit("another bids check is running")
+        for r in results:
+            note = f"  ERROR: {r.error}" if r.error else ""
+            counts = f"{r.found:>4} open  {r.new:>4} new  {r.removed:>4} removed"
+            print(f"{r.slug:<18} {counts}{note}")
+        return
+
+    from .bids.pipeline import BidChecker
+    from .bids.readers import BidError
+    from .scraper.http import FetchError
+    from .scraper.text import GUAM_TZ
+
+    checker = BidChecker(settings, sources)
+    try:
+        for source in sources:
+            if args.source and source.slug not in args.source:
+                continue
+            print(f"### {source.slug}: {source.name}")
+            if source.cannot_scrape:
+                print(f"  not collected: {source.cannot_scrape}\n")
+                continue
+            if not source.enabled:
+                print("  paused (enabled: false)\n")
+                continue
+            try:
+                bids, errors, _ = checker.collect(source)
+            except (FetchError, BidError) as exc:
+                print(f"  ERROR: {exc}\n")
+                continue
+            for error in errors:
+                print(f"  ERROR (other inputs still read): {error}")
+            print(f"  {len(bids)} open bids")
+            for b in bids[: args.limit]:
+                if b.due_at:
+                    due = b.due_at.astimezone(GUAM_TZ)
+                    when = f"due {due:%a %Y-%m-%d}" + (f" {due:%H:%M}" if b.due_time else "")
+                else:
+                    when = "no due date"
+                print(f"  - {when}  {b.number or '(no number)'}  {b.title}")
+                for name in ("kind", "agency", "posted_on", "url", "document_url"):
+                    if getattr(b, name):
+                        print(f"    {name}: {getattr(b, name)}")
+            print()
+    finally:
+        checker.close()
+
+
 def cmd_probe(args, settings: Settings) -> None:
     """Describe pages/feeds (no database needed) to help write sources.yaml."""
     from .scraper.http import HttpClient
@@ -787,6 +892,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     events.add_argument("--limit", type=int, default=6, help="with --check: events to show")
 
+    bids = sub.add_parser("bids", help="read the bid and proposal lists in config/bids.yaml now")
+    bids.add_argument("--source", action="append", help="only this source (repeatable)")
+    bids.add_argument(
+        "--check", action="store_true", help="only show what each source gives; save nothing"
+    )
+    bids.add_argument("--limit", type=int, default=8, help="with --check: bids to show")
+
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
@@ -815,6 +927,7 @@ def main(argv: list[str] | None = None) -> None:
         "probe": cmd_probe,
         "jobs": cmd_jobs,
         "events": cmd_events,
+        "bids": cmd_bids,
         "alert-test": cmd_alert_test,
         "weather": cmd_weather,
     }[args.command]

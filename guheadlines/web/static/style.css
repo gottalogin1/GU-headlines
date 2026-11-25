@@ -689,6 +689,19 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   .job-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* ---------- bids ---------- */
+.bid-filter .bid-words { grid-column: span 2; }
+.bid-kind {
+  margin: 0 0 4px; font-size: .72rem; font-weight: 750; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.bid-number { font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.due-in { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.due-in.due-soon { color: var(--text-soft); font-weight: 700; }
+@media (max-width: 640px) {
+  .bid-filter .bid-words { grid-column: 1 / -1; }
+}
+
 /* ---------- events ---------- */
 .event-filter .event-words { grid-column: span 2; }
 /* The time sits in its own column beside the event, like a printed program. */

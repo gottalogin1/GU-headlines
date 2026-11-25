@@ -12,6 +12,7 @@ A tour of every page, and how to find older stories.
 | **Archive** | Every story collected, organized by year, month and day |
 | **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
 | **Events** | What's coming up on Guam: sessions, hearings, public meetings and more (see [The Events page](#the-events-page)) |
+| **Bids** | Open Government of Guam bids and requests for proposals (see [The Bids page](#the-bids-page)) |
 | **Weather** | The weather, the sea and the tides on Guam (see [The Weather page](#the-weather-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
@@ -161,6 +162,20 @@ sessions a link to the agenda. Use **Words** and **Calendar** to narrow the
 list. The sidebar lists each calendar with its number of upcoming events, a
 red **⚠** when its last check failed, and the calendars that can't be
 collected. More in [Events](events.md).
+
+## The Bids page
+
+The **Bids** link lists the Government of Guam's open bids and requests for
+proposals (RFPs), from the lists in `config/bids.yaml`, soonest due first.
+Each bid shows its kind and number, what it is for (click to open it at the
+agency or portal that posted it), the agency, when offers are due in Guam
+time with the days left, the day it was posted, the start of its text and a
+link to the notice (PDF) when there is one. A bid posted in two places is
+shown once, with "also on" and a link to the other listing. Bids leave the
+page once their due date has passed. Use **Words**, **Agency** and
+**Source** to narrow the list. The sidebar lists each source with its number
+of open bids and a red **⚠** when its last check failed. More in
+[Bids and RFPs](bids.md).
 
 ## The Sources page
 

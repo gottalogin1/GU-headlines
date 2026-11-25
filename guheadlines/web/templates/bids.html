@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block main %}
+{% set blank %}<span class="not-given" title="Not given in the notice">—</span>{% endset %}
+{% set arrow %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>{% endset %}
+<header class="page-head">
+  <h1>Bids and RFPs</h1>
+  <p class="muted">Open Government of Guam bids and requests for proposals from {{ sources|length }} {{ "source" if sources|length == 1 else "sources" }}, checked every {{ settings.bids_interval_hours }} hours. A bid leaves this page once its due date has passed. Every bid links to the agency or portal that posted it.</p>
+</header>
+
+<form class="search-form bid-filter" action="/bids" method="get">
+  <div class="field bid-words">
+    <label for="bq">Words</label>
+    <input id="bq" type="search" name="q" value="{{ bid_filters.q }}" placeholder="e.g. vehicle, audit, construction" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="bagency">Agency</label>
+    <select id="bagency" name="agency">
+      <option value="">All agencies</option>
+      {% for name, count in agencies %}<option value="{{ name }}" {% if bid_filters.agency == name %}selected{% endif %}>{{ name }} ({{ count }})</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="bsource">Source</label>
+    <select id="bsource" name="source">
+      <option value="">All sources</option>
+      {% for s in sources %}<option value="{{ s.source.slug }}" {% if bid_filters.source == s.source.slug %}selected{% endif %}>{{ s.source.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if bid_filters.q or bid_filters.source or bid_filters.agency %}<a class="reset" href="/bids">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(bids|length) }} open {{ "bid" if bids|length == 1 else "bids" }}{% if bid_filters.q %} matching “{{ bid_filters.q }}”{% endif %}{% if bid_filters.agency %} from {{ bid_filters.agency }}{% endif %}</h2>
+
+{% if not bids %}
+<div class="empty">
+  <h2>No open bids here yet</h2>
+  <p>The bid lists are read every {{ settings.bids_interval_hours }} hours, starting when the worker boots. Each source's state is listed {% if sources %}beside this list{% else %}here once it has been read{% endif %}.</p>
+</div>
+{% endif %}
+
+{% for item in bids %}
+{% set b = item.bid %}
+<article class="story no-photo bid">
+  <div class="story-body">
+  <p class="bid-kind">{% if b.kind %}{{ b.kind }}{% endif %}{% if b.kind and b.number %} · {% endif %}{% if b.number %}<span class="bid-number">{{ b.number }}</span>{% endif %}</p>
+  <h3 class="headline"><a href="{{ b.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ b.url|domain }}">{{ b.title }}</a></h3>
+  <p class="job-employer">{% if b.agency %}<strong>{{ b.agency }}</strong> · {% endif %}{% if item.source_homepage %}<a href="{{ item.source_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
+  <dl class="job-facts">
+    <div><dt>Due</dt><dd>{% if b.due_at %}<time datetime="{{ (b.due_at|to_local).isoformat() }}">{{ bid_due(b) }}</time> <span class="due-in{% if (b.due_at - now).days < 3 %} due-soon{% endif %}">({{ due_in(b.due_at) }})</span>{% else %}<span class="not-given">See the notice</span>{% endif %}</dd></div>
+    <div><dt>Posted</dt><dd>{% if b.posted_on %}<time datetime="{{ b.posted_on.isoformat() }}">{{ b.posted_on|fmt_day }}</time>{% else %}{{ blank }}{% endif %}</dd></div>
+  </dl>
+  {% if b.description %}<p class="intro">{{ b.description|truncate(320) }}</p>{% endif %}
+  <p class="meta">
+    <span title="{{ b.last_seen_at|fmt_datetime }}">Scraped {{ b.last_seen_at|fmt_day }}</span>
+    {% for also in item.also %}<span aria-hidden="true">·</span> <span>also on <a href="{{ also.url|safe_url }}" target="_blank" rel="noopener">{{ also.name }}</a></span>{% endfor %}
+  </p>
+  <p class="job-links">
+    <a class="read-link" href="{{ b.url|safe_url }}" target="_blank" rel="noopener">
+      View the bid at <span class="read-domain">{{ b.url|domain }}</span>
+      {{ arrow }}
+    </a>
+    {% if item.document_url and item.document_url != b.url %}
+    <a class="read-link" href="{{ item.document_url|safe_url }}" target="_blank" rel="noopener">Notice (PDF)
+      {{ arrow }}
+    </a>
+    {% endif %}
+  </p>
+  </div>
+</article>
+{% endfor %}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>Sources</h2>
+  {% if sources %}
+  <ul class="facets">
+    {% for row in sources %}
+    {% set s = row.source %}
+    <li>
+      <span class="facet-name">
+        <a href="/bids?source={{ s.slug }}">{{ s.name }}</a>
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.last_run_at %}<span class="muted small" title="{{ s.last_run_at|fmt_datetime }}">checked {{ s.last_run_at|rel_time }}</span>{% endif %}
+        {% if s.last_error %}<span class="error small" title="{{ s.last_error }}">⚠ {{ s.last_error|truncate(140) }}</span>{% endif %}
+      </span>
+      <span class="count">{{ row.open }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Open bids per source. ⚠ marks a source that couldn't be read on its last check; its earlier bids stay listed until they're due.</p>
+  {% else %}
+  <p class="muted">Waiting for the first check.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>About these listings</h2>
+  <p class="small">An <strong>invitation for bid</strong> asks companies for prices on something the agency has described exactly; the lowest qualified bid wins. A <strong>request for proposals</strong> describes a need and picks the best proposal, not only the cheapest.</p>
+  <p class="small">Due dates and times are Guam time (ChST). When a notice gives no due date here, it is in the agency's documents; such a bid stays listed for 30 days after it was posted. A bid posted in two places is shown once.</p>
+  <p class="small">Bid packets, registration and any changes (amendments) come from the agency. Always check the details with the agency before you bid.</p>
+</section>
+{% endblock %}

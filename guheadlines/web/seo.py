@@ -166,7 +166,7 @@ def sitemap_xml(entries: Iterable[tuple[str, datetime | None]]) -> str:
 def sitemap_entries(
     request: Request, data: dict, categories, sources, weather: bool = False
 ) -> list[tuple[str, datetime | None]]:
-    """Every page worth finding in a search: home, topics, news sources, jobs, events,
+    """Every page worth finding in a search: home, topics, news sources, jobs, events, bids,
     the Weather page (when `weather` is on), the Sources page, and the archive down to
     each day that has stories. `data` comes from queries.sitemap_data; `sources` are the
     slugs of news sources to list."""
@@ -181,6 +181,7 @@ def sitemap_entries(
             entries.append((url(f"/source/{slug}"), data["sources"][slug]))
     entries.append((url("/jobs"), None))
     entries.append((url("/events"), None))
+    entries.append((url("/bids"), None))
     if weather:
         entries.append((url("/weather"), None))
     entries.append((url("/status"), None))

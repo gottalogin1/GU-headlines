@@ -33,6 +33,7 @@ needed; you will copy and paste a few commands.
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 | [Newsletter feed](docs/newsletter.md) | The feed of top stories for an email newsletter, and connecting SendFox step by step |
 | [Events](docs/events.md) | The Events page: the month calendar, which calendars are read, and adding a free Google key for the Legislature's calendar |
+| [Bids and RFPs](docs/bids.md) | The Bids page: open Government of Guam bids and requests for proposals, which lists are read, and which bids are shown |
 
 ---
 
@@ -104,6 +105,11 @@ that is always on can do this by itself after each change; see
   meetings, GovGuam board and commission meetings, and Guam Community
   College and University of Guam events. A month calendar at the top shows
   the main events, colored by calendar. See [Events](docs/events.md).
+- **Bids page** lists the Government of Guam's open bids and requests for
+  proposals, soonest due first, from notices.guam.gov and the bid lists of
+  the Power Authority, GHURA, the hospital, Waterworks and the Port: what
+  each is for, the agency, the due date and time, and links to the notice.
+  Closed bids leave by themselves. See [Bids and RFPs](docs/bids.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Private visitor stats** (optional): page views, story clicks, the top
@@ -166,6 +172,7 @@ GU-headlines/
 │   ├── sources.yaml    the list of news sites
 │   ├── jobs.yaml       the job boards for the Jobs page
 │   ├── events.yaml     the calendars for the Events page
+│   ├── bids.yaml       the bid lists for the Bids page
 │   └── categories.yaml the topics and their keywords
 ├── docs/               the guides linked above
 ├── docker-compose.yml  tells Docker how to run everything

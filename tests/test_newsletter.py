@@ -268,7 +268,7 @@ def test_feed_links_count_clicks_while_stats_are_on(client, monkeypatch):
 
 
 def test_feed_stays_unlisted(client, monkeypatch):
-    for path in ("/", "/status", "/jobs", "/events", "/robots.txt", "/sitemap.xml"):
+    for path in ("/", "/status", "/jobs", "/events", "/bids", "/robots.txt", "/sitemap.xml"):
         assert "feed.xml" not in client.get(path).text, path
     assert "github" not in client.get("/feed.xml").text.lower()
     _set(monkeypatch, newsletter_days=())

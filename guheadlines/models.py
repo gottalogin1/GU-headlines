@@ -262,6 +262,65 @@ class Event(Base):
     calendar: Mapped[EventCalendar] = relationship(back_populates="events")
 
 
+class BidSource(Base):
+    """One row per source in bids.yaml; powers the source list on /bids."""
+
+    __tablename__ = "bid_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    homepage: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    # Open bids found on the last successful check.
+    last_count: Mapped[int | None] = mapped_column(Integer)
+
+    bids: Mapped[list[Bid]] = relationship(back_populates="source")
+
+
+class Bid(Base):
+    """A government bid, request for proposals or other solicitation. Fields a
+    source does not give are left empty."""
+
+    __tablename__ = "bids"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("bid_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    # The source's own ID for the solicitation, so an edited one is updated
+    # rather than added again.
+    uid: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    # The solicitation's number, such as "GSA-031-26" or "RFP-BIB-2027-001".
+    number: Mapped[str | None] = mapped_column(Text)
+    # What kind of solicitation it is: "Invitation for Bid", "Request for Proposals"...
+    kind: Mapped[str | None] = mapped_column(Text)
+    # The government agency asking for the bids.
+    agency: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    # The solicitation's own page, and its main document (PDF) when there is one.
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    document_url: Mapped[str | None] = mapped_column(Text)
+    posted_on: Mapped[date | None] = mapped_column(Date)
+    # When bids or proposals are due. due_time is False when only the day is known.
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_time: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set when the source no longer lists the solicitation.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    source: Mapped[BidSource] = relationship(back_populates="bids")
+
+
 class AlertState(Base):
     """A news site or job board whose latest check failed. The row goes away
     when it works again; `notified_at` is set once its alert was sent."""
