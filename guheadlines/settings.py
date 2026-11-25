@@ -68,6 +68,10 @@ class Settings:
     respect_robots: bool = True
     store_images: bool = True
     image_max_width: int = 720
+    # The most disk space the saved photos may use, in GB. Above it, the
+    # photos of the oldest stories are deleted (they then show the news
+    # site's own photo). 0: no limit. See photos.py.
+    image_storage_gb: float = 5.0
     page_size: int = 30
     log_level: str = "INFO"
     # How often the worker reads the job boards in config/jobs.yaml.
@@ -243,6 +247,7 @@ def load_settings() -> Settings:
         respect_robots=_bool(env.get("RESPECT_ROBOTS_TXT"), True),
         store_images=_bool(env.get("STORE_IMAGES"), True),
         image_max_width=_int(env.get("IMAGE_MAX_WIDTH"), defaults.image_max_width),
+        image_storage_gb=max(0.0, _float(env.get("IMAGE_STORAGE_GB"), defaults.image_storage_gb)),
         page_size=max(5, min(100, _int(env.get("PAGE_SIZE"), defaults.page_size))),
         log_level=env.get("LOG_LEVEL", "INFO").upper(),
         jobs_interval_hours=max(1, _int(env.get("JOBS_INTERVAL_HOURS"), 6)),

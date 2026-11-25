@@ -44,6 +44,7 @@ from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..newsletter import schedule_text
+from ..scraper.images import SMALL_WIDTH, small_image_path
 from ..scraper.text import GUAM_TZ, truncate
 from ..settings import get_settings
 from ..weather import (
@@ -498,6 +499,30 @@ def story_link(article) -> str:
     return safe_url(article.url)
 
 
+# How wide story photos are drawn (style.css, .story and .thumb): across the
+# card on phones, 228 pixels beside the story on larger screens. The browser
+# uses it to pick the small or the full copy.
+PHOTO_SIZES = "(max-width: 640px) calc(100vw - 46px), 228px"
+
+
+def story_photo(article) -> dict | None:
+    """The photo of a story card: our saved copy, with its small copy for
+    larger screens once that is made; the news site's own photo when we have
+    no copy (never saved, deleted by IMAGE_STORAGE_GB, or the media folder
+    was not moved with the database); None without a photo."""
+    path = article.image_path
+    if path:
+        size = {"width": article.image_width, "height": article.image_height}
+        small = small_image_path(path)
+        if (article.image_width or 0) > SMALL_WIDTH and (settings.media_dir / small).is_file():
+            srcset = f"/media/{small} {SMALL_WIDTH}w, /media/{path} {article.image_width}w"
+            return {"src": f"/media/{path}", "srcset": srcset, **size}
+        if (settings.media_dir / path).is_file():
+            return {"src": f"/media/{path}", **size}
+    url = safe_url(article.image_url)
+    return {"src": url, "remote": True} if url else None
+
+
 def domain(url: str | None) -> str:
     """https://www.guampdn.com/news/... -> guampdn.com"""
     host = (urlsplit(url or "").hostname or "").lower()
@@ -527,6 +552,8 @@ templates.env.globals.update(
     months=MONTHS,
     static_url=static_url,
     story_link=story_link,
+    story_photo=story_photo,
+    photo_sizes=PHOTO_SIZES,
     theme_script=Markup(THEME_SCRIPT),
     nws_guam_url=NWS_GUAM_URL,
     jtwc_url=JTWC_URL,

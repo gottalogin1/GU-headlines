@@ -401,7 +401,15 @@ Good to know:
 ## Disk space
 
 The collection grows by roughly **2 to 4 GB a year**, almost all of it
-photos. To see how much Docker uses:
+photos. The photos stop growing at `IMAGE_STORAGE_GB` (5 GB unless you change
+it): above it, the worker deletes the photos of the oldest stories, which then
+show the news site's own photo. To see how much space the photos use:
+
+```sh
+docker compose exec worker guheadlines photos
+```
+
+To see how much Docker uses in all:
 
 ```sh
 docker system df
@@ -413,8 +421,9 @@ Old versions of the program pile up after updates. Remove unused ones with:
 docker image prune
 ```
 
-(This never touches your stories or photos.) If disk space gets tight, you
-can set `STORE_IMAGES=false` in `.env`; see [Changing settings](settings.md#photos).
+(This never touches your stories or photos.) If disk space gets tight, lower
+`IMAGE_STORAGE_GB` in `.env`, or set `STORE_IMAGES=false` to save no photos
+at all; see [Changing settings](settings.md#photos).
 
 ---
 

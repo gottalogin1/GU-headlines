@@ -257,6 +257,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   border-radius: 999px; font-size: .74rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-soft);
 }
+/* PHOTO_SIZES in web/app.py tells browsers these photo widths (228px here,
+   the card's width on phones below): change it with them. */
 .story {
   display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 20px;
   padding: 14px; margin-bottom: 14px; border-radius: var(--r-xl);
