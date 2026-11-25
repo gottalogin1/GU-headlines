@@ -2,10 +2,12 @@
    SPONSOR_IMAGE, SPONSOR_LINK and SPONSOR_ALT (docs/settings.md#sponsor-spot).
    The picture is served from this site (web/sponsor.py): no outside script,
    cookie or request. While the visitor stats are on, the link passes through
-   /go/sponsor, which counts the click for the stats page. #}
+   /go/sponsor, which counts the click for the stats page. The picture loads
+   lazily: on a phone the column is below the stories, and a browser loads a
+   lazy picture at once when it is in view (on a computer screen). #}
 <section class="panel sponsor" aria-label="Sponsor">
   <h2>Sponsor</h2>
-  {% set img %}<img src="{{ sponsor.src }}" width="{{ sponsor.width }}" height="{{ sponsor.height }}" alt="{{ sponsor.alt }}" decoding="async">{% endset %}
+  {% set img %}<img src="{{ sponsor.src }}" width="{{ sponsor.width }}" height="{{ sponsor.height }}" alt="{{ sponsor.alt }}" loading="lazy" decoding="async">{% endset %}
   {% if sponsor.href %}
   <a href="{{ sponsor.href }}" target="_blank" rel="{{ sponsor.rel }}">{{ img }}</a>
   {% else %}
