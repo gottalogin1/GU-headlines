@@ -6,10 +6,17 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from guheadlines.db import session_scope
 from guheadlines.models import Article, Source
 from guheadlines.scraper.text import GUAM_TZ
+
+
+def _media(path: str):
+    from guheadlines.settings import get_settings
+
+    return get_settings().media_dir / path
 
 
 @pytest.fixture()
@@ -18,6 +25,10 @@ def client(clean_db):
 
     sidebar_cache._data.clear()
     sitemap_cache._data.clear()
+    # The saved copy of the first story's photo, and its small copy.
+    for path in ("images/2026/09/example.webp", "images/2026/09/example-sm.webp"):
+        _media(path).parent.mkdir(parents=True, exist_ok=True)
+        _media(path).write_bytes(b"RIFF0000WEBP")
     now = datetime.now(timezone.utc)
     with session_scope() as session:
         post = Source(
@@ -59,7 +70,7 @@ def test_home_lists_latest(client):
     assert page.status_code == 200
     html = page.text
     assert "Andersen to host Cope North exercise" in html
-    assert "/media/images/2026/09/example.webp" in html
+    assert 'src="/media/images/2026/09/example.webp"' in html
     assert "Today" in html
     # Intros are escaped, never rendered as HTML.
     assert "<script>x</script>" not in html and "&lt;script&gt;" in html
@@ -407,6 +418,42 @@ def test_https_visits_get_hsts(client):
     client.base_url = "https://testserver"
     for path in ("/", "/static/style.css", "/nope"):
         assert client.get(path).headers["strict-transport-security"] == "max-age=31536000"
+
+
+def _photo_tags(html: str) -> list[str]:
+    return [tag.split(">")[0] for tag in html.split('<img class="thumb-img" ')[1:]]
+
+
+def test_larger_screens_get_the_small_photo(client):
+    (tag,) = _photo_tags(client.get("/").text)
+    assert (
+        'srcset="/media/images/2026/09/example-sm.webp 360w, '
+        '/media/images/2026/09/example.webp 720w"'
+    ) in tag
+    assert 'sizes="(max-width: 640px) calc(100vw - 46px), 228px"' in tag
+    assert 'width="720" height="480"' in tag
+    assert "referrerpolicy" not in tag
+
+
+def test_photo_falls_back_when_a_copy_is_missing(client):
+    # No small copy yet (made by the worker): the saved photo alone.
+    _media("images/2026/09/example-sm.webp").unlink()
+    (tag,) = _photo_tags(client.get("/").text)
+    assert 'src="/media/images/2026/09/example.webp"' in tag and "srcset" not in tag
+    # No saved copy at all: the news site's own photo, as for stories saved
+    # without one.
+    _media("images/2026/09/example.webp").unlink()
+    html = client.get("/").text
+    assert "/media/" not in html and _photo_tags(html) == []
+    with session_scope() as session:
+        session.execute(
+            update(Article)
+            .where(Article.image_path.isnot(None))
+            .values(image_url="https://www.postguam.com/photo.jpg")
+        )
+    (tag,) = _photo_tags(client.get("/").text)
+    assert 'src="https://www.postguam.com/photo.jpg"' in tag
+    assert 'referrerpolicy="no-referrer"' in tag and "srcset" not in tag
 
 
 def test_top_photo_loads_first(client):
