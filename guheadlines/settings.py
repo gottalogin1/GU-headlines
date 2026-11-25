@@ -133,6 +133,12 @@ class Settings:
     sponsor_image: str = ""
     sponsor_link: str = ""
     sponsor_alt: str = ""
+    # PayPal (see paypal.py): the Client ID and Secret of an app in the PayPal
+    # developer dashboard, and which PayPal they belong to: "sandbox" (test
+    # payments with pretend money) or "live" (real payments).
+    paypal_client_id: str = ""
+    paypal_client_secret: str = ""
+    paypal_mode: str = "sandbox"
 
     @property
     def sources_file(self) -> Path:
@@ -265,6 +271,11 @@ def _clock(value: str | None, default: time) -> time:
     return time(hour, minute)
 
 
+def _paypal_mode(value: str | None) -> str:
+    """PAYPAL_MODE: "live" for real payments; anything else is "sandbox"."""
+    return "live" if (value or "").strip().lower() in ("live", "production") else "sandbox"
+
+
 def load_settings() -> Settings:
     env = os.environ
     db_url = env.get("DATABASE_URL")
@@ -331,6 +342,9 @@ def load_settings() -> Settings:
         sponsor_image=_file_name(env.get("SPONSOR_IMAGE")),
         sponsor_link=_web_address(env.get("SPONSOR_LINK")),
         sponsor_alt=" ".join(env.get("SPONSOR_ALT", "").split())[:200],
+        paypal_client_id=env.get("PAYPAL_CLIENT_ID", "").strip(),
+        paypal_client_secret=env.get("PAYPAL_CLIENT_SECRET", "").strip(),
+        paypal_mode=_paypal_mode(env.get("PAYPAL_MODE")),
     )
 
 

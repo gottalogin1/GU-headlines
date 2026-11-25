@@ -400,6 +400,35 @@ connecting SendFox step by step.
 | `SENDFOX_API_TOKEN` | *(empty)* | A SendFox API token. With it, every page has a newsletter sign-up box, and the site has a newsletter page (`/newsletter`). See [The sign-up box](newsletter.md#the-sign-up-box). Secret. |
 | `SENDFOX_LIST` | *(empty)* | The SendFox list that new readers join: its name or number. Empty: the account's only list. |
 
+## PayPal
+
+The parts of the site that sell something take the money through PayPal. The
+buyer pays on PayPal's own page (with a PayPal account, or with a card as a
+guest), and PayPal then sends the buyer back to your site. The site shows no
+PayPal button and loads no PayPal script: a plain link opens PayPal's page, so
+the pages stay as fast and as strict as before.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PAYPAL_CLIENT_ID` | *(empty)* | The Client ID of your app on [developer.paypal.com](https://developer.paypal.com) (Apps & Credentials). Empty: the site takes no payments. |
+| `PAYPAL_CLIENT_SECRET` | *(empty)* | The Secret of the same app. Secret. |
+| `PAYPAL_MODE` | `sandbox` | `sandbox` for test payments with pretend money, `live` for real payments. Sandbox and Live apps have different Client IDs and Secrets. |
+
+The steps to make the app, to test with a pretend buyer, and to switch to real
+payments are in `.env.example`, in the PayPal part. After a change, run
+`docker compose up -d`, then check the values with:
+
+```
+docker compose exec web guheadlines paypal-check
+```
+
+**How a payment works.** The server makes a PayPal "order" for the price and
+sends the buyer to PayPal's page with a link. After the buyer approves, PayPal
+sends the buyer back to your site, and the server takes the money (it
+"captures" the order). An order that is approved but never captured costs the
+buyer nothing. Each step can be done again safely: the server asks PayPal to
+do the same request only once. A refund gives all of a payment back.
+
 ## Checking for news
 
 | Setting | Default | What it does |
