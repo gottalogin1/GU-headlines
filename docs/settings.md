@@ -169,6 +169,7 @@ and no ad code.
 |---|---|---|
 | `ADSENSE_CLIENT` | *(empty)* | Your AdSense publisher ID, such as `ca-pub-1234567890123456` (`pub-1234567890123456` also works). You can also paste the ads.txt line or the verification code from AdSense: the site takes the ID out of it. With only this setting, the site can be verified, but it shows no ad. |
 | `ADSENSE_SLOT` | *(empty)* | The ad unit's number, such as `9876543210`. With `ADSENSE_CLIENT`, the ad block is shown. |
+| `ADSENSE_STORIES_SLOT` | *(empty)* | The number of a second ad unit, such as `1122334455`, shown between the stories (see [The ad between the stories](#the-ad-between-the-stories)). It needs `ADSENSE_CLIENT` and `ADSENSE_SLOT` too. |
 
 **How to set it up**
 
@@ -197,6 +198,29 @@ and no ad code.
 
    A new ad unit can stay empty for up to an hour. When Google has no ad to
    show, the block folds away.
+
+**The ad between the stories**
+
+The home page and the Obituaries page can show a second ad, between the
+stories: after the fifth story, when more stories follow. On a phone, the
+right-hand column comes after all the stories, so this is the ad that phone
+readers see first. It uses its own ad unit, so the AdSense reports show how
+much each spot earns (**Reports** › **By ad unit**).
+
+1. In AdSense, go to **Ads** › **By ad unit** › **Display ads**. Name the new
+   unit, for example *Between stories*, keep **Responsive**, and click
+   **Create**.
+2. Copy only the number after `data-ad-slot=` from the ad code.
+3. Add it to `.env` and run `docker compose up -d`:
+
+   ```
+   ADSENSE_STORIES_SLOT=1122334455
+   ```
+
+The page queues this ad unit, and the AdSense code that the right-hand column
+loads on the first scroll, tap, key press or mouse move fills both units. So
+the PageSpeed scores do not change. The block keeps room for the ad, and folds
+away when Google has no ad to show or an ad blocker stops the code.
 
 **If AdSense says that it found no ads.txt file**
 
@@ -314,6 +338,104 @@ No line at all: check that `SPONSOR_IMAGE` has only the file name (with
   as Google asks for paid links).
 - The disclaimer on the Sources page gets a paragraph that says that the
   picture is a paid ad and not an endorsement.
+
+## Coffee donations
+
+Readers who like the site can send you a little money, "a coffee", through
+PayPal. With `PAYPAL_DONATE_LINK` set, every page shows a **Support this
+site** box in the right-hand column, under the newsletter box, with a **Buy me
+a coffee** button. The button opens your PayPal page in a new tab, where the
+reader picks the amount and pays with PayPal or a card. Until you set it up,
+there is no box.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PAYPAL_DONATE_LINK` | *(empty)* | Your PayPal.Me link (such as `https://paypal.me/GuamHeadlines`) or PayPal Donate button link (`https://www.paypal.com/donate/?hosted_button_id=...`). Only links on paypal.me or paypal.com are used, and `https://` can be left out. A link with an email address in it is not used. Empty: no box. |
+
+**How to set it up**
+
+Use a PayPal.Me link if you are not sure. It works with a personal account.
+
+1. Open [paypal.com/paypalme](https://www.paypal.com/paypalme), log in, and
+   choose a name for your link, such as *GuamHeadlines*. Readers see this name
+   and the name and picture of your PayPal account, but not your email
+   address.
+2. Copy the link that PayPal shows, such as `https://paypal.me/GuamHeadlines`.
+3. Add it to `.env` and run `docker compose up -d`:
+
+   ```
+   PAYPAL_DONATE_LINK=https://paypal.me/GuamHeadlines
+   ```
+
+4. Open your site and click **Buy me a coffee**: your PayPal page opens.
+
+A Donate button link also works: make a button at
+[paypal.com/donate/buttons](https://www.paypal.com/donate/buttons) and copy
+only its link, not its button code. With a personal account, PayPal can put
+your email address in that link (`business=you@example.com`). The site does
+not use such a link, because it never shows an email address: use PayPal.Me
+then.
+
+**What it does**
+- The button is a plain link: no PayPal script, cookie or request on the site.
+  The security rules and the PageSpeed scores do not change.
+- The disclaimer on the Sources page gets a paragraph that says that the money
+  is a personal gift to the person who runs the site, not a donation to a
+  charity, so it is not tax-deductible.
+- PayPal keeps a small fee from each payment. The money is income. Ask a tax
+  preparer if you must report it.
+
+## Affiliate links
+
+An affiliate link is a link to a booking website with your partner ID in it.
+When a reader books through it, the booking website pays you a commission, and
+the reader pays the same price. With one or more of the settings below, the
+Weather page, the Events page and each event's own page show a **Plan a
+trip** box in the right-hand column, with one line for each link that you set.
+Until you set one, there is no box.
+
+| Setting | Default | Shown as |
+|---|---|---|
+| `AFFILIATE_HOTELS_LINK` | *(empty)* | Hotels |
+| `AFFILIATE_FLIGHTS_LINK` | *(empty)* | Flights |
+| `AFFILIATE_TOURS_LINK` | *(empty)* | Tours and activities |
+| `AFFILIATE_CARS_LINK` | *(empty)* | Car rentals |
+
+Each value is a full link that starts with `https://`. A value that is not a
+link is not used.
+
+**How to set it up**
+
+1. Join an affiliate program that pays through PayPal (Stripe does not work
+   for Guam addresses). For example,
+   [Travelpayouts](https://www.travelpayouts.com) has hotels, flights, tours
+   and car rentals in one account, and pays to PayPal once a month from 50 US
+   dollars. [Viator](https://partnerresources.viator.com) has tours and pays to
+   PayPal every week. Read their current terms first: terms change. Sign up
+   with the same email address as your PayPal account.
+2. In the program's dashboard, make a link (a "deep link" or "tracking link")
+   to the page that readers must see, such as the hotels in Guam. Copy the
+   full link. Do not copy a banner code or a script: the security rules block
+   code that is pasted in.
+3. Add the links to `.env` and run `docker compose up -d`:
+
+   ```
+   AFFILIATE_HOTELS_LINK=https://www.example.com/hotels/guam?aid=123456
+   AFFILIATE_TOURS_LINK=https://www.example.com/guam/tours?pid=123456
+   ```
+
+4. Open `/weather` on your site and click each line in the **Plan a trip**
+   box. The program's dashboard shows the clicks and bookings.
+
+**What it does**
+- Under the links, a short note tells readers that they are affiliate links
+  and that the site can earn a commission. The US Federal Trade Commission
+  requires this note. The disclaimer on the Sources page gets a paragraph
+  about them too.
+- The links have `rel="sponsored"`, which tells search engines that they are
+  paid links, as Google asks.
+- They are plain links: no script from the booking website. The security rules
+  and the PageSpeed scores do not change.
 
 ## Visitor stats
 

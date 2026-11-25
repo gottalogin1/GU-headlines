@@ -3,6 +3,7 @@ events check against a fake site, and the Events page."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, time, timedelta, timezone
 
 import httpx
@@ -1155,3 +1156,40 @@ def test_build_month():
     march = build_month(date(2027, 3, 1), today, last_day, [], calendars)
     assert (march.previous, march.next) == (date(2027, 2, 1), None)
     assert [d.upcoming for w in march.weeks for d in w if d.day][9:11] == [True, False]
+
+
+def test_plan_a_trip_box_on_the_weather_and_events_pages(web, monkeypatch):
+    import dataclasses
+
+    from guheadlines.web import app as site
+
+    def configure(**links):
+        changed = dataclasses.replace(site.settings, **links)
+        monkeypatch.setattr(site, "settings", changed)
+        monkeypatch.setitem(site.templates.env.globals, "settings", changed)
+
+    event = f"/events/{_event_ids()['Regular Session']}"
+    for path in ("/weather", "/events", event, "/status"):
+        assert "panel travel" not in web.get(path).text, path
+    assert "Affiliate links." not in web.get("/status").text
+
+    configure(
+        affiliate_hotels_link="https://hotels.example.com/guam?aid=12345",
+        affiliate_tours_link="https://tours.example.com/guam?partner=abc",
+    )
+    for path in ("/weather", "/events", event):
+        page = web.get(path)
+        sidebar = page.text.split('<aside class="sidebar">', 1)[1].split("</aside>", 1)[0]
+        box = sidebar.split('<section class="panel travel" aria-labelledby="travel-title">', 1)[1]
+        box = box.split("</section>", 1)[0]
+        link = r'<a href="([^"]+)" target="_blank" rel="sponsored noopener">([^<]+)</a>'
+        links = re.findall(link, box)
+        assert links == [
+            ("https://hotels.example.com/guam?aid=12345", "Hotels ↗"),
+            ("https://tours.example.com/guam?partner=abc", "Tours and activities ↗"),
+        ], path
+        assert "Affiliate links: if you book through one" in " ".join(box.split())
+    # Only on those pages, and the disclaimer says what the links are.
+    for path in ("/", "/jobs", "/bids"):
+        assert "panel travel" not in web.get(path).text, path
+    assert "Affiliate links." in web.get("/status").text

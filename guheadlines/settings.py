@@ -55,6 +55,19 @@ class Settings:
     # shown beside the stories on the home, Sources and Jobs pages.
     adsense_client: str = ""
     adsense_slot: str = ""
+    # A second ad unit, shown between the stories of the pages with the ad
+    # block. It needs adsense_client and adsense_slot too.
+    adsense_stories_slot: str = ""
+    # The "Buy me a coffee" box: a PayPal.Me or PayPal donate link. Empty:
+    # no box.
+    paypal_donate_link: str = ""
+    # Affiliate links (a booking site's links with your partner ID in them)
+    # for the "Plan a trip" box on the Weather and Events pages. Empty: that
+    # line is left out; all empty: no box.
+    affiliate_hotels_link: str = ""
+    affiliate_flights_link: str = ""
+    affiliate_tours_link: str = ""
+    affiliate_cars_link: str = ""
     user_agent: str = "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"
     scrape_interval_minutes: int = 60
     # When a run leaves pages behind (site rate-limited us, or the per-run cap
@@ -203,6 +216,22 @@ def _web_address(value: str | None) -> str:
     return value
 
 
+def _paypal_link(value: str | None) -> str:
+    """PAYPAL_DONATE_LINK: a https address on paypal.com or paypal.me ("https://"
+    is added when it is missing), or "" if it is not one. A link with an email
+    address in it (a donate link with business=you@example.com) is refused
+    too: the site never shows an email address."""
+    value = (value or "").strip()
+    if value.lower().startswith(("paypal.", "www.paypal.")):
+        value = "https://" + value
+    address = _web_address(value)
+    host = (urlsplit(address).hostname or "") if address else ""
+    paypal = any(host == name or host.endswith("." + name) for name in ("paypal.com", "paypal.me"))
+    if not paypal or not address.startswith("https://") or re.search("@|%40", address, re.I):
+        return ""
+    return address
+
+
 def _file_name(value: str | None) -> str:
     """SPONSOR_IMAGE "ad.jpg" -> "ad.jpg": only the name of the file, without
     a folder in front of it ("config/sponsor/ad.jpg" also gives "ad.jpg").
@@ -293,6 +322,12 @@ def load_settings() -> Settings:
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
         adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),
         adsense_slot=_adsense_slot(env.get("ADSENSE_SLOT")),
+        adsense_stories_slot=_adsense_slot(env.get("ADSENSE_STORIES_SLOT")),
+        paypal_donate_link=_paypal_link(env.get("PAYPAL_DONATE_LINK")),
+        affiliate_hotels_link=_web_address(env.get("AFFILIATE_HOTELS_LINK")),
+        affiliate_flights_link=_web_address(env.get("AFFILIATE_FLIGHTS_LINK")),
+        affiliate_tours_link=_web_address(env.get("AFFILIATE_TOURS_LINK")),
+        affiliate_cars_link=_web_address(env.get("AFFILIATE_CARS_LINK")),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),
