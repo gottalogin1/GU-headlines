@@ -223,12 +223,13 @@ def sitemap_entries(
     sources,
     weather: bool = False,
     events: Iterable[int] = (),
+    outages: bool = False,
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events
     and each upcoming event's page (`events`: their IDs), the Weather page (when
-    `weather` is on), the Sources page, and the archive down to each day that has
-    stories. `data` comes from queries.sitemap_data; `sources` are the slugs of news
-    sources to list."""
+    `weather` is on), the Outages page (when `outages` is on), the Sources page, and
+    the archive down to each day that has stories. `data` comes from
+    queries.sitemap_data; `sources` are the slugs of news sources to list."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
     latest = data["latest"]
     entries: list[tuple[str, datetime | None]] = [(url("/"), latest)]
@@ -243,6 +244,8 @@ def sitemap_entries(
     entries.extend((url(f"/events/{event_id}"), None) for event_id in events)
     if weather:
         entries.append((url("/weather"), None))
+    if outages:
+        entries.append((url("/outages"), None))
     entries.append((url("/status"), None))
     if data["days"]:
         entries.append((url("/archive"), latest))

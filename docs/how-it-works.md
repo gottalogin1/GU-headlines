@@ -24,7 +24,7 @@ page to run GU Headlines.
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
-| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)), the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)), makes each newsletter edition on `NEWSLETTER_DAYS` at `NEWSLETTER_TIME` in another thread (see [Newsletter feed](newsletter.md)), and after each news check tidies the saved photos: small copies of older photos, files no story uses, and the `IMAGE_STORAGE_GB` limit (see [Photos](settings.md#photos)). |
+| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)), the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)), the power and water outage notices every `OUTAGES_INTERVAL_MINUTES` in another (see [Outages and gas prices](settings.md#outages-and-gas-prices)), makes each newsletter edition on `NEWSLETTER_DAYS` at `NEWSLETTER_TIME` in another thread (see [Newsletter feed](newsletter.md)), and after each news check tidies the saved photos: small copies of older photos, files no story uses, and the `IMAGE_STORAGE_GB` limit (see [Photos](settings.md#photos)). |
 | `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. |
 
 `web` and `worker` are the same program (`guheadlines`) started with
@@ -115,6 +115,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
 | `events` | Read the calendars in `events.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each calendar gives without saving anything (`--limit N`). |
 | `weather` | Read the weather now (NWS alerts, the airport reading, the forecasts, the surf and coastal waters forecasts, the JTWC storm list, NOAA's tides) and save it. Prints what each part gave, or the error. |
+| `outages` | Read the outage notices now (GPA on GuamALERTS, GWA's outage updates, Guam EPA's boil-water notices) and save them. Prints how many notices each page gave and the first few titles, or the error. |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
 | `alert-test` | Post a test message in the Discord channel of `DISCORD_WEBHOOK_URL` (see [Alerts in Discord](maintenance.md#alerts-in-discord)). |
 | `migrate` | Apply database upgrades (done automatically on start). |
@@ -136,7 +137,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `event_calendars` | One row per events calendar: name, homepage, on/off, last check, last error, upcoming events found |
 | `events` | The events: calendar and its own ID for the event (unique together), name, start and end, all-day, place, organizer, description, link, agenda PDF, first and last seen, and when the calendar stopped listing it |
 | `alerts` | News sites and job boards whose latest check failed, and whether their alert was posted, so each problem is posted once |
-| `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `hourly`, `surf`, `marine`, `storms`, `tides`) as JSON, with the time it was read |
+| `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `hourly`, `surf`, `marine`, `storms`, `tides`) and of the outage notices (`outages_gpa`, `outages_gwa`, `outages_epa`) as JSON, with the time it was read |
 | `newsletter_editions` | One row per newsletter edition: its scheduled time and the IDs of its stories, in order (see [Newsletter feed](newsletter.md)) |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.

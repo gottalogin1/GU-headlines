@@ -476,6 +476,47 @@ To read the weather and the tides now and see what each service gave:
 docker compose exec worker guheadlines weather
 ```
 
+## Outages and gas prices
+
+The **Outages page** (`/outages`, the **Outages** link in the top bar) lists
+power and water outages and boil-water notices (see
+[The Outages page](using-the-website.md#the-outages-page)). The worker reads
+three public pages. None needs a key:
+
+- **Power**: the Guam Power Authority's outage notices on GuamALERTS
+  ([web.guamalerts.com/notification/gpa](https://web.guamalerts.com/notification/gpa)),
+  the island's official alert service, which GPA's website links to.
+- **Water**: the Guam Waterworks Authority's outage updates
+  ([bloggwapio.blogspot.com](https://bloggwapio.blogspot.com/)), which GWA's
+  website links to as "Current Outages". The site reads its RSS feed.
+- **Boil-water notices**: from GWA's updates and from Guam EPA's news feed
+  ([epa.guam.gov](https://epa.guam.gov/)).
+
+If a page cannot be reached, the site keeps the notices it already has, and
+after 6 hours says when it last reached that agency.
+
+**Gas prices** in the sidebar come from the news. No agency or company
+publishes Guam's pump prices in a form a program may read (the Guam Energy
+Office stopped its price survey in 2024, and GasBuddy does not allow automated
+collection), and prices are the same at every station. So the site reads the
+regular, premium and diesel prices from the headlines and intros of the news
+stories it already collects, such as "Gas prices up again: $5.94 a gallon of
+regular", and links each price to its story. It reads a price only when it is
+next to its grade's name, and skips sentences about other places (the
+mainland, Saipan, Hawaii) and old prices ("up from $4.88"). If no recent story
+gives a price, the sidebar shows none.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `OUTAGES_INTERVAL_MINUTES` | `15` | How often to read the outage notices, in minutes. The minimum is 5. `0` turns the Outages page and its link off. |
+| `GAS_PRICE_DAYS` | `45` | How many days back to look for a news story that gives the gas prices. Older prices are not shown. `0` turns the gas prices off. The maximum is 365. |
+
+To read the outage notices now and see what each page gave:
+
+```
+docker compose exec worker guheadlines outages
+```
+
 ## Being a good visitor
 
 | Setting | Default | What it does |

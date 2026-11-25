@@ -385,6 +385,13 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   color: var(--muted); font-variant-numeric: tabular-nums; font-size: .8rem;
   padding: 1px 9px; border-radius: 999px; background: var(--well);
 }
+/* Gas prices in the sidebar (_sidebar.html) */
+.facets.gas-prices li { padding: 5px 0; }
+.gas-grade { color: var(--text-soft); }
+.gas-from { font-size: .78rem; color: var(--muted); }
+.gas-from a { display: inline-flex; min-height: 24px; color: var(--muted); }
+.gas-from a:hover { color: var(--link); }
+.gas-price { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 9px; background: currentColor; }
 .dot.tag-local { background: var(--tag-local); }
 .dot.tag-military { background: var(--tag-military); }
@@ -606,6 +613,42 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .tide-table td { padding: 7px 0; }
 .tide-table tr + tr > * { border-top: 1px solid var(--line); }
 .tide-table .weather-tide { display: inline-block; margin-right: 18px; white-space: nowrap; }
+/* ---------- the Outages page (outages.html) ---------- */
+/* One block per notice: where, what kind, when, the streets, a link to the
+   agency's own notice. Uses the Weather page's cards (.wx, .wx-card). */
+.outage-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.outage { padding: 10px 0; border-top: 1px solid var(--line); }
+.outage:first-child { border-top: 0; padding-top: 2px; }
+.outage p { margin: 0; }
+.outage-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.outage-where { font-size: 1.02rem; line-height: 1.3; }
+.outage-kind {
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 1px 8px; border-radius: 999px;
+  color: var(--text-soft); background: var(--well);
+}
+.outage-kind.is-emergency { color: var(--watch-text); background: var(--watch-bg); }
+.outage.is-boil {
+  padding: 10px 12px; border: 1px solid var(--warning-line); border-radius: var(--r-md);
+  color: var(--warning-text); background: var(--warning-bg);
+}
+.outage.is-boil + .outage { margin-top: 8px; }
+.outage.is-boil .outage-kind { color: var(--warning-text); background: transparent; border: 1px solid var(--warning-line); }
+.outage-when { font-weight: 650; font-size: .92rem; margin-top: 2px; }
+.outage-areas, .outage-note { font-size: .9rem; color: var(--text-soft); max-width: 75ch; }
+.outage.is-boil .outage-areas, .outage.is-boil .outage-note { color: inherit; }
+.outage-title { font-size: .8rem; margin-top: 2px; }
+.outage-links { display: flex; flex-wrap: wrap; gap: 0 16px; margin-top: 2px; font-size: .88rem; }
+.outage-links a {
+  display: inline-flex; align-items: center; min-height: 24px; font-weight: 650;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.outage.is-boil .outage-links a { color: inherit; }
+.outage-earlier { margin: 4px 0 0; }
+.outage-earlier summary {
+  cursor: pointer; display: inline-flex; align-items: center; min-height: 24px; font-weight: 650;
+  color: var(--link); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.outage-earlier .outage-list { margin-top: 6px; }
 @media (max-width: 640px) {
   .wx-card { padding: 14px; border-radius: var(--r-lg); }
   .wx-big { font-size: 2.2rem; }

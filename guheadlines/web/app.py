@@ -34,7 +34,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import health, sendfox
+from .. import gas, health, sendfox
 from ..config import (
     AppConfig,
     CalendarConfig,
@@ -48,6 +48,7 @@ from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..newsletter import schedule_text
+from ..outages import EPA_URL, GPA_TROUBLE_PHONE, GPA_URL, GWA_DISPATCH_PHONE, GWA_URL, outages_page
 from ..scraper.images import SMALL_WIDTH, small_image_path
 from ..scraper.text import GUAM_TZ, truncate
 from ..settings import DAY_NAMES, get_settings
@@ -339,12 +340,13 @@ class _TTLCache:
 # shared between requests for two minutes.
 sidebar_cache = _TTLCache(ttl=120)
 # The weather is read on every page, for the warning banner; the worker
-# updates it every few minutes.
+# updates it every few minutes. The outage notices (outages.py) are kept in
+# the same table and come with it.
 weather_cache = _TTLCache(ttl=60)
 
 
 def weather_reports() -> dict[str, tuple]:
-    """The saved weather (see weather.py)."""
+    """The saved weather (see weather.py) and outage notices (outages.py)."""
 
     def load():
         with session_scope() as session:
@@ -602,6 +604,23 @@ def page_url(request: Request, **changes) -> str:
     return f"{request.url.path}?{query}" if query else request.url.path
 
 
+def gas_prices(config) -> list[gas.Price]:
+    """Guam's newest regular, premium and diesel prices, read from the news
+    (gas.py). Empty when GAS_PRICE_DAYS is 0 or no recent story gives one."""
+    if not settings.gas_price_days:
+        return []
+    since = datetime.now(timezone.utc) - timedelta(days=settings.gas_price_days)
+    with session_scope() as session:
+        rows = queries.gas_price_stories(
+            session,
+            since,
+            hide_sources=config.hidden_sources(),
+            hide_topics=config.separate_topics(),
+            mute=config.muted,
+        )
+    return gas.latest_prices([gas.Story(**row) for row in rows])
+
+
 def sponsor_ad() -> dict | None:
     """The sponsor spot (_sponsor.html), or None while SPONSOR_IMAGE has no picture."""
     picture = sponsor.picture(settings)
@@ -661,6 +680,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "facets_week": facets,
             "last_updated": last_updated,
             "uncollectable": [s for s in config.uncollectable_sources if s.slug not in hidden],
+            "gas": gas_prices(config),
         }
 
     context.setdefault("title", None)
@@ -1016,6 +1036,33 @@ def weather_view(request: Request):
         active_nav="weather",
         canonical={},
         breadcrumbs=[("Weather", None)],
+    )
+
+
+@app.get("/outages", response_class=HTMLResponse)
+def outages_view(request: Request):
+    if not settings.outages_interval_minutes:
+        raise HTTPException(404)
+    return render(
+        request,
+        "outages.html",
+        outages=outages_page(weather_reports(), datetime.now(timezone.utc)),
+        sources={
+            "gpa": GPA_URL,
+            "gwa": GWA_URL,
+            "epa": EPA_URL,
+            "gpa_phone": GPA_TROUBLE_PHONE,
+            "gwa_phone": GWA_DISPATCH_PHONE,
+        },
+        title="Guam power and water outages",
+        description=(
+            "Power outages from the Guam Power Authority and water outages and boil-water"
+            " notices from the Guam Waterworks Authority and Guam EPA: today, coming up and"
+            " the last few days, by village."
+        ),
+        active_nav="outages",
+        canonical={},
+        breadcrumbs=[("Outages", None)],
     )
 
 
@@ -1414,6 +1461,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/jobs": "Jobs",
         "/events": "Events",
         "/weather": "Weather",
+        "/outages": "Outages",
         "/status": "Sources",
         "/search": "Search",
         **{f"/category/{c.slug}": c.name for c in config.categories},
@@ -1516,6 +1564,7 @@ def sitemap(request: Request):
         config.categories,
         news_sources,
         weather=bool(settings.weather_interval_minutes),
+        outages=bool(settings.outages_interval_minutes),
         events=found["events"],
     )
     return Response(

@@ -6,6 +6,24 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **An Outages page.** The new **Outages** link in the top bar opens a page
+  of the power outages that the Guam Power Authority announces (from
+  GuamALERTS), the water outages that the Guam Waterworks Authority
+  announces, and the boil-water notices of the last 30 days (from GWA and
+  Guam EPA). Power and water are sorted into Today, Coming up and Earlier.
+  Each notice shows the villages, the day and hours and the areas, and links
+  to the agency's notice; each part has the number to call to report an
+  outage. Outages are only on this page, not in the warning banner or on the
+  home page. The worker reads the notices every 15 minutes
+  (`OUTAGES_INTERVAL_MINUTES`; `0` turns the page off). Run
+  `guheadlines outages` to read them now. No database change. See
+  [Outages and gas prices](docs/settings.md#outages-and-gas-prices).
+- **Gas prices in the sidebar.** Regular, premium and diesel, for a gallon,
+  read from the headlines and intros of the local news stories the site
+  already collects ("Gas prices up again: $5.94 a gallon of regular"), each
+  with the day of its story and a link to it. Only stories from the last 45
+  days count (`GAS_PRICE_DAYS`; `0` turns the prices off); with none, the
+  sidebar shows no prices.
 - **A newsletter sign-up box.** With `SENDFOX_API_TOKEN` set, every page has
   a small Newsletter box in the right-hand column, and the site gets a
   newsletter page (`/newsletter`, linked from the footer). Readers type their
