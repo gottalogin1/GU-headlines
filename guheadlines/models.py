@@ -263,16 +263,31 @@ class Event(Base):
 
 
 class AlertState(Base):
-    """A news site or job board whose latest check failed. The row goes away
-    when it works again; `notified_at` is set once its alert was sent."""
+    """A news site, job board or event calendar whose latest check failed, or
+    a news site that went quiet (see alerts.py). The row goes away when it
+    works again; `notified_at` is set once its alert was sent."""
 
     __tablename__ = "alerts"
 
-    # "news:<slug>" or "jobs:<slug>"
+    # "news:<slug>", "jobs:<slug>" or "events:<slug>" (failing), or
+    # "quiet:<slug>" (a news site that went quiet)
     key: Mapped[str] = mapped_column(Text, primary_key=True)
-    # When a failed check was first seen (used when it never worked at all).
+    # When a failed check was first seen (used when it never worked at all),
+    # or since when the site has been quiet.
     failing_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class KeywordAlert(Base):
+    """A story that was in a keyword alert (ALERT_KEYWORDS, see alerts.py), so
+    it is never sent again. Rows older than a day are deleted."""
+
+    __tablename__ = "keyword_alerts"
+
+    article_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
+    )
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class WeatherReport(Base):

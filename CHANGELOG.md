@@ -22,6 +22,57 @@ release, see [Updating](docs/maintenance.md#updating).
   WebP copy of it itself, with no outside script or cookie. With the visitor
   stats on, the stats page shows the sponsor clicks. See
   [Sponsor spot](docs/settings.md#sponsor-spot).
+- **Source health on the stats page, and an alert when a news site goes
+  quiet.** The private stats page (`/stats`) now ends with **Source health**:
+  for each news site, whether it is working, failing (with the error) or
+  quiet, its newest story, its new stories in the last 7 days and when it was
+  last checked; and the same for the job boards and event calendars. A note
+  at the top of the page names the sources that need a look. A news site is
+  **quiet** when its checks work but it has had no new story for twice its
+  longest wait between stories in the two months before (at least 2 days):
+  its feed may have changed so that the stories are no longer found. Discord
+  gets one alert when a site goes quiet and one when it has new stories
+  again. Event calendars that stop working now get alerts too, like news
+  sites and job boards. See [Source health](docs/maintenance.md#source-health).
+- **Keyword alerts in Discord.** Put words in the new `ALERT_KEYWORDS`
+  setting, such as `typhoon, shooting, power outage`, and a message comes in
+  your Discord channel when a new story's headline or intro mentions one,
+  with the headline, the news site and the link. Each story comes once;
+  several at once come in one message. Case and accents don't matter, only
+  whole words count (`shooting` also finds `shootings`), and `evacuat*` finds
+  every word that starts with `evacuat`. See
+  [Keyword alerts](docs/maintenance.md#keyword-alerts). When you update, the
+  database gets one small new table, by itself.
+- **Events in Google and in phone calendars.** Each upcoming event now has a
+  page of its own on the site (click its name on the Events page), with the
+  whole description, its links, and two buttons that add the event to Google
+  Calendar or to another calendar app (Apple Calendar, Outlook...). Each page
+  describes its event in the form Google reads for its event results (Event
+  structured data), and the sitemap lists every upcoming event's page. Under
+  the month calendar, **Get these events in your calendar** subscribes a
+  visitor's Google Calendar, Apple Calendar or Outlook to the events: the
+  main events of every calendar, or every event of the calendar picked on the
+  page. The app keeps them up to date by itself. The calendar address is
+  `/events.ics`. No setting to change, and no script is added. See
+  [Each event's page](docs/events.md#each-events-page) and
+  [Adding the events to a calendar app](docs/events.md#adding-the-events-to-a-calendar-app).
+- **Faster photos on computers and tablets.** Each story's photo is now saved
+  twice on your server: the copy for phones, and a small copy 360 pixels wide
+  for larger screens, where the photo is drawn 228 pixels wide. Browsers load
+  only the copy they need, so on a computer a page of stories loads roughly
+  a quarter to a third of the photo bytes it did. Photos saved before this get their small copy
+  from the worker, a few thousand after each news check, newest first; until
+  then they show as before. When a story has no saved copy (for example the
+  `media` storage was not moved with the database), the site shows the news
+  site's own photo instead of a broken picture.
+- **A limit on the disk space for photos.** The new setting
+  `IMAGE_STORAGE_GB` (5 unless you change it; 0 for no limit) is the most
+  space the saved photos may use. Above it, the worker deletes the photos of
+  the oldest stories until they use 90% of it; those stories then show the
+  news site's own photo. The worker also deletes saved photos that no story
+  uses any more. `docker compose exec worker guheadlines photos` shows the
+  space used. No change to `.env` is needed, and the database is not
+  changed. See [Photos](docs/settings.md#photos).
 - **A month calendar on the Events page.** Above the list of upcoming events,
   a calendar shows the month's main events, at most 3 a day (with "+2 more"
   and so on), all-day events first. Events are colored by their calendar:
