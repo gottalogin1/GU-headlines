@@ -13,6 +13,7 @@ A tour of every page, and how to find older stories.
 | **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
 | **Events** | What's coming up on Guam: sessions, hearings, public meetings and more (see [The Events page](#the-events-page)) |
 | **Weather** | The weather, the sea and the tides on Guam (see [The Weather page](#the-weather-page)) |
+| **Outages** | Power and water outages, and boil-water notices (see [The Outages page](#the-outages-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
 
@@ -65,6 +66,31 @@ See [Weather](settings.md#weather) for where the weather comes from.
 
 See [Weather](settings.md#weather) for where the weather comes from.
 
+## The Outages page
+
+The power and water outages that the island's utilities announce, and
+boil-water notices, on one page. Outages are only here: they are not in the
+warning banner or on the home page. All times are Chamorro Standard Time.
+
+- **Boil-water notices**: the notices of the last 30 days from the Guam
+  Waterworks Authority (GWA) and Guam EPA. A notice that is still in force
+  has a red frame; one that has been lifted says **Lifted**.
+- **Power (GPA)**: the Guam Power Authority's outage notices (planned work
+  and emergencies), from GuamALERTS. Each shows the villages, the day and
+  hours, the areas, and links to GPA's notice and its PDF (often a map).
+- **Water (GWA)**: GWA's outage updates: emergency, scheduled and extended
+  outages, with the villages, the day, the start and end times and the
+  areas, linked to GWA's notice.
+
+Power and water are each sorted into **Today** and **Coming up**, with the
+last 3 days under **Earlier** (click to open). Each part ends with where its
+notices come from, a phone number to report an outage, and when the site last
+checked. If the site could not reach an agency for more than 6 hours, it says
+so and links to that agency's page for the latest.
+
+See [Outages and gas prices](settings.md#outages-and-gas-prices) for where the
+notices come from.
+
 ## A story card
 
 Each story shows:
@@ -90,6 +116,11 @@ times are **Chamorro Standard Time (ChST)**.
 - **Updated** shows when the news was last checked. If this says more than
   about 1 hour 15 minutes ago, something may be wrong; see
   [Looking after it](maintenance.md#is-it-healthy).
+- **Gas prices** shows the price of a gallon of regular, premium and diesel
+  on Guam (the same at every station), with the day of the news story each
+  price comes from and a link to it. It appears only when a news story from
+  the last 45 days gave a price (see
+  [Outages and gas prices](settings.md#outages-and-gas-prices)).
 - **This week** shows how many stories each topic got in the last 7 days.
 - **Sources** lists the news sites with this week's story counts. Click a
   **name** to see only that site's stories on your site. Click the **web

@@ -8,6 +8,33 @@
   {% endif %}
 </section>
 
+{% if sidebar.gas %}
+{# Guam's pump prices, read from the local news (gas.py). Each price links
+   the story it came from; one link when all three come from one story. #}
+{% set gas_stories = sidebar.gas|map(attribute="story")|unique(attribute="id")|list %}
+{% macro gas_link(story) -%}
+{%- set link = story_link(story) -%}
+<a href="{{ link }}" target="_blank" rel="{{ 'nofollow noopener' if link.startswith('/go/') else 'noopener' }}">{{ story.source }} ↗</a>
+{%- endmacro %}
+<section class="panel" aria-labelledby="gas-title">
+  <h2 id="gas-title">Gas prices</h2>
+  <ul class="facets gas-prices">
+    {% for p in sidebar.gas %}
+    <li>
+      <span class="facet-name">
+        <span class="gas-grade">{{ p.grade|capitalize }}</span>
+        {% if gas_stories|length > 1 %}<span class="gas-from">{{ p.story.published_at|fmt_day }} · {{ gas_link(p.story) }}</span>{% endif %}
+      </span>
+      <strong class="gas-price">{{ p.text }}</strong>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">A gallon, the same all over the island.
+    {%- if gas_stories|length == 1 %} Reported {{ gas_stories[0].published_at|fmt_day }} by {{ gas_link(gas_stories[0]) }}.{% endif %}
+    From the local news, so a price changes when the news reports a new one.</p>
+</section>
+{% endif %}
+
 <section class="panel">
   <h2>This week</h2>
   <ul class="facets">

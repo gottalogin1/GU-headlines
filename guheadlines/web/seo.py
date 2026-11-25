@@ -164,10 +164,16 @@ def sitemap_xml(entries: Iterable[tuple[str, datetime | None]]) -> str:
 
 
 def sitemap_entries(
-    request: Request, data: dict, categories, sources, weather: bool = False
+    request: Request,
+    data: dict,
+    categories,
+    sources,
+    weather: bool = False,
+    outages: bool = False,
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events,
-    the Weather page (when `weather` is on), the Sources page, and the archive down to
+    the Weather page (when `weather` is on), the Outages page (when `outages` is on),
+    the Sources page, and the archive down to
     each day that has stories. `data` comes from queries.sitemap_data; `sources` are the
     slugs of news sources to list."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
@@ -183,6 +189,8 @@ def sitemap_entries(
     entries.append((url("/events"), None))
     if weather:
         entries.append((url("/weather"), None))
+    if outages:
+        entries.append((url("/outages"), None))
     entries.append((url("/status"), None))
     if data["days"]:
         entries.append((url("/archive"), latest))

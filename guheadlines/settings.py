@@ -90,6 +90,14 @@ class Settings:
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
     weather_interval_minutes: int = 10
+    # How often the worker reads the power and water outage notices (GPA,
+    # GWA and Guam EPA's boil-water notices, see outages.py), in minutes.
+    # 0 turns the Outages page off.
+    outages_interval_minutes: int = 15
+    # How many days back the sidebar looks for news stories that give Guam's
+    # gas prices (see gas.py). A price older than this is not shown. 0 turns
+    # the gas prices off.
+    gas_price_days: int = 45
     # The NOAA tide station whose high and low tides the weather box shows.
     # 1630000 is Apra Harbor. Empty: no tides.
     tide_station: str = "1630000"
@@ -221,6 +229,7 @@ def load_settings() -> Settings:
 
     defaults = Settings(database_url="", config_dir=Path(), media_dir=Path())
     weather_minutes = _int(env.get("WEATHER_INTERVAL_MINUTES"), defaults.weather_interval_minutes)
+    outage_minutes = _int(env.get("OUTAGES_INTERVAL_MINUTES"), defaults.outages_interval_minutes)
     return Settings(
         database_url=_normalize_db_url(db_url),
         config_dir=Path(env.get("CONFIG_DIR", PROJECT_DIR / "config")),
@@ -253,6 +262,8 @@ def load_settings() -> Settings:
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
+        outages_interval_minutes=max(5, outage_minutes) if outage_minutes > 0 else 0,
+        gas_price_days=max(0, min(365, _int(env.get("GAS_PRICE_DAYS"), defaults.gas_price_days))),
         tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
         stats_password=env.get("STATS_PASSWORD", "").strip(),
         newsletter_days=_days(env.get("NEWSLETTER_DAYS"), defaults.newsletter_days),
