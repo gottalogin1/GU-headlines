@@ -634,6 +634,9 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         response.headers["Content-Security-Policy"] = ad_page_policy(nonce)
     if count_view and status_code == 200 and settings.stats_password and stats.is_reader(request):
         stats.counts.view(request.url.path)
+        site = stats.came_from(request)
+        if site is not None:  # a visit that started here, not a move between pages
+            stats.counts.referrer(site)
     return response
 
 
@@ -1116,6 +1119,8 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         page_names=page_names,
         stories=data["stories"],
         sources=data["sources"],
+        referrers=data["referrers"][:20],
+        visits=sum(row.visits for row in data["referrers"]),
         topics=sorted(topics, key=lambda t: (-t["clicks"], -t["views"])),
     )
     response.headers["Cache-Control"] = "private, no-store"

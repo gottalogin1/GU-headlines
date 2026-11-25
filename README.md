@@ -105,7 +105,8 @@ that is always on can do this by itself after each change; see
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Private visitor stats** (optional): page views, story clicks, the top
-  stories, sources and topics, on a page only you can open. Counted on your
+  stories, sources and topics, and the websites readers come from, on a page
+  only you can open. Counted on your
   own server, with no cookies, no tracking script and no stored IP
   addresses. See [Visitor stats](docs/settings.md#visitor-stats).
 - **Ready for search engines**: every page has its own title and summary,

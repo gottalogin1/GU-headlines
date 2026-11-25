@@ -308,3 +308,15 @@ class StoryClicks(Base):
         BigInteger, ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
     )
     clicks: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class Referrers(Base):
+    """How many visits came from each other website on one Guam day (see
+    web/stats.py). Only the site's name is kept, such as google.com; "" is a
+    visit that came from no site (typed, a bookmark, or an app)."""
+
+    __tablename__ = "referrers"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    site: Mapped[str] = mapped_column(Text, primary_key=True)
+    visits: Mapped[int] = mapped_column(Integer, nullable=False)

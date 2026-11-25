@@ -76,7 +76,7 @@ def clean_db(database):
             text(
                 "TRUNCATE articles, seen_urls, ignored_images, http_cache, scrape_runs, sources, "
                 "jobs, job_sources, events, event_calendars, alerts, weather, page_views, "
-                "story_clicks "
+                "story_clicks, referrers "
                 "RESTART IDENTITY CASCADE"
             )
         )

@@ -55,6 +55,21 @@
 </details>
 {% endif %}
 
+<h2 class="section-title">Where readers come from</h2>
+<p class="muted section-note">The website each visit started from, such as a search engine or Facebook. Only the site's name is kept. "No website" is someone who typed the address, used a bookmark, or opened a link in an app that doesn't say where it came from.</p>
+{% if referrers %}
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Came from</th><th class="num">Visits</th><th class="num">Share</th></tr></thead>
+  <tbody>
+  {% for row in referrers %}
+  <tr><td>{% if row.site %}{{ row.site }}{% else %}<span class="muted">No website</span>{% endif %}</td><td class="num">{{ "{:,}".format(row.visits) }}</td><td class="num">{{ (row.visits * 100 / visits)|round|int }}%</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted section-note">No visits counted yet in this period.</p>{% endif %}
+
 <h2 class="section-title">Top stories</h2>
 <p class="muted section-note">The stories readers opened most, counted when they follow a story's link to its news site.</p>
 {% if stories %}

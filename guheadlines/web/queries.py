@@ -17,6 +17,7 @@ from ..models import (
     Job,
     JobSource,
     PageViews,
+    Referrers,
     ScrapeRun,
     Source,
     StoryClicks,
@@ -493,6 +494,7 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
     clicked = StoryClicks.day >= since
     views = func.sum(PageViews.views).label("views")
     clicks = func.sum(StoryClicks.clicks).label("clicks")
+    visits = func.sum(Referrers.visits).label("visits")
     by_story = (
         select(Article, Source.name.label("source_name"), clicks)
         .join(StoryClicks, StoryClicks.article_id == Article.id)
@@ -533,6 +535,12 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
             .where(viewed)
             .group_by(PageViews.path)
             .order_by(views.desc(), PageViews.path)
+        ).all(),
+        "referrers": session.execute(
+            select(Referrers.site, visits)
+            .where(Referrers.day >= since)
+            .group_by(Referrers.site)
+            .order_by(visits.desc(), Referrers.site)
         ).all(),
         "stories": session.execute(by_story).all(),
         "sources": session.execute(by_source).all(),
