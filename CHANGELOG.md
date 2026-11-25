@@ -6,6 +6,20 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **A newsletter feed for SendFox.** The site now has a feed of its top
+  stories at `/feed.xml`, for an email service such as SendFox. Every
+  Tuesday and Friday at 10:00 AM (Guam time), the worker makes a new
+  edition: the stories it found since the edition before, the ones readers
+  clicked most first, at most 3 from one news site. The feed keeps the
+  edition until the next one, so the email service sees new stories only
+  twice a week. Each story has its headline, photo, news site, the first
+  lines of its intro and a link (through the click counter while the visitor
+  stats are on). No page links to the feed, and search engines are told not
+  to list it. The new settings `NEWSLETTER_DAYS`, `NEWSLETTER_TIME` and
+  `NEWSLETTER_STORIES` change the schedule and the size. See
+  [Newsletter feed](docs/newsletter.md), which also has the SendFox steps.
+  When you update, the database gets one small new table, by itself, and the
+  feed works without a change to `.env`.
 - **Private visitor stats.** With `STATS_PASSWORD` in `.env`, the site counts
   page views and story clicks, and shows them on a private page, `/stats`,
   behind that password: totals, a chart for each day, the websites readers

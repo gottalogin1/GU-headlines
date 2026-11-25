@@ -31,6 +31,7 @@ needed; you will copy and paste a few commands.
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates (also automatic ones), alerts in Discord when something stops working, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
+| [Newsletter feed](docs/newsletter.md) | The feed of top stories for an email newsletter, and connecting SendFox step by step |
 | [Events](docs/events.md) | The Events page: which calendars are read, adding a free Google key for the Legislature's calendar, and calendars that can't be collected |
 
 ---
@@ -109,6 +110,10 @@ that is always on can do this by itself after each change; see
   only you can open. Counted on your
   own server, with no cookies, no tracking script and no stored IP
   addresses. See [Visitor stats](docs/settings.md#visitor-stats).
+- **Newsletter feed** for an email service such as SendFox: twice a week
+  (Tuesday and Friday at 10:00 AM by default), the worker picks the top
+  stories since the last time, and the feed keeps them until the next time.
+  The site does not link to it. See [Newsletter feed](docs/newsletter.md).
 - **Ready for search engines**: every page has its own title and summary,
   a sitemap lists every page worth finding, and links shared on social media
   show a preview card. See [Search engines](docs/maintenance.md#search-engines).

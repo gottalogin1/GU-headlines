@@ -5,11 +5,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import re
 import secrets
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from email.utils import format_datetime
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -39,7 +41,8 @@ from ..config import (
 )
 from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Article, Source
-from ..scraper.text import GUAM_TZ
+from ..newsletter import schedule_text
+from ..scraper.text import GUAM_TZ, truncate
 from ..settings import get_settings
 from ..weather import (
     GUAM_RADAR_URL,
@@ -1197,6 +1200,63 @@ def sitemap(request: Request):
         seo.sitemap_xml(entries),
         media_type="application/xml",
         headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+# Characters that XML 1.0 does not allow. One of them in a scraped headline
+# would make the whole feed unreadable.
+_NOT_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+
+
+def _xml_text(text: str | None) -> str:
+    return _NOT_XML.sub("", text or "")
+
+
+@app.get("/feed.xml")
+def newsletter_feed(request: Request):
+    """The newsletter feed that an email service such as SendFox reads (see
+    newsletter.py): the stories of the newest edition. No page links to it,
+    and search engines are asked to leave it out."""
+    if not settings.newsletter_days:
+        raise HTTPException(404)
+    with session_scope() as session:
+        formed_at, rows = queries.newsletter_edition(session) or (None, [])
+    base = seo.base_url(request)
+    items = []
+    for row in rows:
+        a = row["article"]
+        link = story_link(a)  # /go/<id> while visitor stats are on
+        if not link:
+            continue
+        photo = f"{base}/media/{a.image_path}" if a.image_path else safe_url(a.image_url)
+        items.append(
+            {
+                "title": _xml_text(a.title),
+                "link": base + link if link.startswith("/") else link,
+                "guid": safe_url(a.url),
+                "summary": _xml_text(truncate(a.intro or "", 280)),
+                "source": _xml_text(row["source_name"]),
+                "source_homepage": safe_url(row["source_homepage"]),
+                "domain": domain(a.url),
+                "photo": photo,
+                # Stored copies are WebP (see scraper/images.py).
+                "photo_type": "image/webp" if a.image_path else None,
+                "width": a.image_width if a.image_path else None,
+                "height": a.image_height if a.image_path else None,
+            }
+        )
+    xml = templates.get_template("feed.xml").render(
+        settings=settings,
+        home=base + "/",
+        self_url=base + "/feed.xml",
+        schedule=schedule_text(settings.newsletter_days, settings.newsletter_time),
+        formed=format_datetime(formed_at.astimezone(GUAM_TZ)) if formed_at else None,
+        items=items,
+    )
+    return Response(
+        xml,
+        media_type="application/rss+xml; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600", "X-Robots-Tag": "noindex"},
     )
 
 

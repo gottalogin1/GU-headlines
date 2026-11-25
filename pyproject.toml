@@ -41,6 +41,7 @@ guheadlines = [
     "migrations/*.mako",
     "migrations/versions/*.py",
     "web/templates/*.html",
+    "web/templates/*.xml",
     "web/static/*",
 ]
 

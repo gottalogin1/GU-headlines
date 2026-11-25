@@ -320,3 +320,14 @@ class Referrers(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     site: Mapped[str] = mapped_column(Text, primary_key=True)
     visits: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class NewsletterEdition(Base):
+    """One edition of the newsletter feed (see newsletter.py): the stories
+    that /feed.xml shows from `formed_at` until the next edition, in order."""
+
+    __tablename__ = "newsletter_editions"
+
+    # The scheduled time of the edition (NEWSLETTER_DAYS at NEWSLETTER_TIME).
+    formed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    article_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False)
