@@ -63,6 +63,14 @@
     {% if legend|length < calendars|length %}<span><span class="cal-dot" aria-hidden="true"></span>Other calendars</span>{% endif %}
   </p>
   <p class="muted small cal-note">{% if event_filters.q or event_filters.calendar %}Every matching event{% else %}Main events{% endif %}, at most 3 a day. Pick a day to see everything on it.</p>
+  <div class="cal-subscribe">
+    <h3 class="cal-subscribe-title">{% if feed_calendar %}Get every {{ feed_calendar.name }} event in your calendar{% else %}Get these events in your calendar{% endif %}</h3>
+    <p class="job-links">
+      <a class="read-link" href="{{ feed.google }}" target="_blank" rel="noopener">Google Calendar</a>
+      <a class="read-link" href="{{ feed.webcal }}">Apple Calendar or Outlook</a>
+    </p>
+    <p class="muted small">Your calendar app subscribes{% if not feed_calendar %} to the main events above{% endif %} and keeps them up to date by itself. For another app, subscribe to this address: <span class="feed-address">{{ feed.address }}</span></p>
+  </div>
 </section>
 
 <div id="events-list">
@@ -92,7 +100,7 @@
   <article class="story no-photo event">
     <p class="event-time">{{ event_time(e, day) }}</p>
     <div class="story-body">
-      <h3 class="headline">{% if e.url %}<a href="{{ e.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ e.url|domain }}">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}</h3>
+      <h3 class="headline"><a href="/events/{{ e.id }}">{{ e.title }}</a></h3>
       <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}<span class="cal-dot{% if colors.get(item.calendar_slug) %} cal-{{ colors[item.calendar_slug] }}{% endif %}" aria-hidden="true"></span>{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
       <dl class="job-facts event-facts">
         <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
