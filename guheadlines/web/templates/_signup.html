@@ -1,0 +1,14 @@
+{# The newsletter sign-up form. The browser sends it to this site
+   (POST /newsletter), and the server adds the address to the SendFox list
+   (guheadlines/sendfox.py), so no SendFox script loads here. The "website"
+   field is hidden from people; robots that fill in every field give
+   themselves away with it. #}
+<form class="signup-form" action="/newsletter" method="post">
+  <label class="visually-hidden" for="{{ field_id }}">Email address</label>
+  <input id="{{ field_id }}" type="email" name="email" required maxlength="254"
+         autocomplete="email" inputmode="email" placeholder="Your email address">
+  <div class="signup-trap" aria-hidden="true">
+    <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+  </div>
+  <button type="submit">Sign up</button>
+</form>

@@ -1,0 +1,9 @@
+{# The newsletter box in the right-hand column of every page, while
+   SENDFOX_API_TOKEN is set (docs/newsletter.md#the-sign-up-box). #}
+<section class="panel signup">
+  <h2>Newsletter</h2>
+  <p class="small">{{ signup.pitch }}</p>
+  {% with field_id = "signup-email" %}{% include "_signup.html" %}{% endwith %}
+  <p class="muted small">Free. After you sign up, confirm your address in the email that comes to
+    your inbox. <a href="/newsletter">About the newsletter</a></p>
+</section>

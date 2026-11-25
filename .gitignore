@@ -8,3 +8,6 @@ dist/
 data/
 backups/
 .pytest_cache/
+# The sponsor's picture is your own file, not part of the code.
+config/sponsor/*
+!config/sponsor/README.md

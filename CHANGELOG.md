@@ -24,6 +24,22 @@ release, see [Updating](docs/maintenance.md#updating).
   with the day of its story and a link to it. Only stories from the last 45
   days count (`GAS_PRICE_DAYS`; `0` turns the prices off); with none, the
   sidebar shows no prices.
+- **A newsletter sign-up box.** With `SENDFOX_API_TOKEN` set, every page has
+  a small Newsletter box in the right-hand column, and the site gets a
+  newsletter page (`/newsletter`, linked from the footer). Readers type their
+  email address, and the server adds it to your SendFox list
+  (`SENDFOX_LIST`, or the account's only list). No SendFox script loads in
+  the browser, so the security rules and the PageSpeed scores do not change.
+  A hidden field and a limit of 5 sign-ups an hour from one address keep
+  robots out. `guheadlines sendfox-check` shows the lists and the one that
+  sign-ups join. See [The sign-up box](docs/newsletter.md#the-sign-up-box).
+- **A sponsor spot that you sell yourself.** Put a sponsor's picture in
+  `config/sponsor/` and set `SPONSOR_IMAGE`, `SPONSOR_LINK` and
+  `SPONSOR_ALT`: the picture shows at the top of the right-hand column of
+  every page, marked "Sponsor", above the AdSense ad. The site serves a small
+  WebP copy of it itself, with no outside script or cookie. With the visitor
+  stats on, the stats page shows the sponsor clicks. See
+  [Sponsor spot](docs/settings.md#sponsor-spot).
 - **Source health on the stats page, and an alert when a news site goes
   quiet.** The private stats page (`/stats`) now ends with **Source health**:
   for each news site, whether it is working, failing (with the error) or

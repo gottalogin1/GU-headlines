@@ -62,7 +62,9 @@
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
     <aside class="sidebar">
+      {% if sponsor %}{% include "_sponsor.html" %}{% endif %}
       {% if show_ad %}{% include "_ad.html" %}{% endif %}
+      {% if signup and show_signup %}{% include "_signup_box.html" %}{% endif %}
       {% block sidebar %}{% include "_sidebar.html" %}{% endblock %}
     </aside>
   </div>
@@ -73,6 +75,7 @@
       Headlines, intros and images belong to their publishers; every story links to the original.
       Checked for new stories every hour. Times are Chamorro Standard Time (ChST).<br>
       <a href="/status#about">About this site</a> · <a href="/status#disclaimer">Disclaimer</a>
+      {%- if signup %} · <a href="/newsletter">Newsletter</a>{% endif %}
     </div>
   </footer>
 </body>
