@@ -11,7 +11,13 @@ from conftest import ROOT, fixture_bytes
 from sqlalchemy import select
 
 from guheadlines.config import ConfigError, load_events_config, parse_events_config
-from guheadlines.events.ical import CalendarError, CalendarEvent, read_calendar, tidy_description
+from guheadlines.events.ical import (
+    CalendarError,
+    CalendarEvent,
+    read_calendar,
+    tidy_description,
+    write_calendar,
+)
 from guheadlines.events.pipeline import EventChecker
 from guheadlines.events.readers import (
     _next_page,
@@ -832,7 +838,219 @@ def test_events_page_filters(web):
 
 
 def test_events_page_is_in_the_sitemap(web):
-    assert "/events</loc>" in web.get("/sitemap.xml").text
+    sitemap = web.get("/sitemap.xml").text
+    assert "/events</loc>" in sitemap
+    # Each upcoming event's own page too, but not the ones that are over or delisted.
+    listed = {title: f"/events/{n}</loc>" in sitemap for title, n in _event_ids().items()}
+    assert listed == {
+        "Regular Session": True,
+        "Winter Break": True,
+        "Last Week's Fair": False,
+        "Delisted Event": False,
+    }
+
+
+def _event_ids() -> dict[str, int]:
+    from guheadlines.db import session_scope
+    from guheadlines.models import Event
+
+    with session_scope() as session:
+        return {e.title: e.id for e in session.scalars(select(Event))}
+
+
+def _structured(html: str) -> list[dict]:
+    import json
+
+    blocks = html.split('<script type="application/ld+json">')[1:]
+    return [json.loads(block.split("</script>", 1)[0]) for block in blocks]
+
+
+def test_event_titles_lead_to_each_events_own_page(web):
+    session_id = _event_ids()["Regular Session"]
+    html = web.get("/events").text
+    assert f'<a href="/events/{session_id}">Regular Session</a>' in html
+    # The calendar's own page is still one click away.
+    assert 'href="https://www.google.com/calendar/event?eid=abc"' in html
+
+
+def test_event_page(web):
+    session_id = _event_ids()["Regular Session"]
+    page = web.get(f"/events/{session_id}")
+    assert page.status_code == 200
+    html = page.text
+    tomorrow = datetime.now(GUAM_TZ).date() + timedelta(days=1)
+    assert "<h1>Regular Session</h1>" in html
+    assert f"<title>Regular Session, {tomorrow:%a}, {tomorrow:%b} {tomorrow.day} · " in html
+    assert "10:00 AM – 5:00 PM" in html and "Guam Congress Building, Hagåtña" in html
+    assert "Agenda (PDF)" in html and "<script>x</script>" not in html
+    assert 'aria-current="page">Events<' in html
+    url = f"http://testserver/events/{session_id}"
+    assert f'<link rel="canonical" href="{url}">' in html
+    # What Google reads to list the event in its event results.
+    (event,) = [d for d in _structured(html) if d["@type"] == "Event"]
+    assert event["name"] == "Regular Session" and event["url"] == url
+    assert event["startDate"] == f"{tomorrow.isoformat()}T10:00:00+10:00"
+    assert event["endDate"] == f"{tomorrow.isoformat()}T17:00:00+10:00"
+    assert event["location"]["name"] == "Guam Congress Building, Hagåtña"
+    assert event["location"]["address"]["addressCountry"] == "GU"
+    assert event["organizer"] == {
+        "@type": "Organization",
+        "name": "Guam Legislature",
+        "url": "https://guamlegislature.gov/calendar/",
+    }
+    (crumbs,) = [d for d in _structured(html) if d["@type"] == "BreadcrumbList"]
+    assert [i["name"] for i in crumbs["itemListElement"]] == ["Home", "Events", "Regular Session"]
+    # Add to a calendar app: Google Calendar, or a file for the others.
+    day = f"{tomorrow:%Y%m%d}"
+    assert (
+        "https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Regular+Session"
+        in html
+    )
+    assert f"dates={day}T000000Z%2F{day}T070000Z" in html
+    assert f'href="/events/{session_id}.ics"' in html
+
+
+def test_event_page_without_a_place_or_that_is_over(web):
+    ids = _event_ids()
+    html = web.get(f"/events/{ids['Winter Break']}").text
+    # No place given: Google lists events at a known place only.
+    assert "Not given by the calendar" in html
+    assert [d["@type"] for d in _structured(html)] == ["BreadcrumbList"]
+    # An all-day event's Google Calendar link has dates only, the end being the day after.
+    today = datetime.now(GUAM_TZ).date()
+    assert f"dates={today - timedelta(days=2):%Y%m%d}%2F{today + timedelta(days=5):%Y%m%d}" in html
+    for title in ("Last Week's Fair", "Delisted Event"):
+        assert web.get(f"/events/{ids[title]}").status_code == 404
+        assert web.get(f"/events/{ids[title]}.ics").status_code == 404
+    for path in ("/events/0", "/events/abc", "/events/99999999999999999999", "/events/1x"):
+        assert web.get(path).status_code == 404, path
+
+
+def test_event_file(web):
+    response = web.get(f"/events/{_event_ids()['Regular Session']}.ics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/calendar; charset=utf-8"
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.headers["x-robots-tag"] == "noindex"
+    text = response.text
+    assert "SUMMARY:Regular Session" in text and text.count("BEGIN:VEVENT") == 1
+    # A file to add once, not a calendar of its own.
+    assert "X-WR-CALNAME" not in text and "REFRESH-INTERVAL" not in text
+
+
+def test_events_feed(web):
+    from guheadlines.db import session_scope
+    from guheadlines.models import Event, EventCalendar
+
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        meetings = EventCalendar(slug="govguam-meetings", name="GovGuam public meetings")
+        session.add(meetings)
+        session.flush()
+        session.add(
+            Event(
+                calendar_id=meetings.id,
+                uid="n:1",
+                title="Board Meeting",
+                starts_at=now + timedelta(days=2),
+                first_seen_at=now,
+                last_seen_at=now,
+            )
+        )
+    response = web.get("/events.ics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/calendar; charset=utf-8"
+    assert response.headers["x-robots-tag"] == "noindex"
+    text = response.text
+    assert "X-WR-CALNAME:Guam events · GU Headlines" in text
+    assert "REFRESH-INTERVAL;VALUE=DURATION:PT3H" in text
+    # The main events, as on the month calendar (GovGuam meetings are not one),
+    # and the past month's, so subscribed calendars keep them.
+    assert "SUMMARY:Regular Session" in text and "SUMMARY:Winter Break" in text
+    assert "SUMMARY:Last Week's Fair" in text
+    assert "Board Meeting" not in text and "Delisted Event" not in text
+    assert "github" not in text.lower() and "chamber" not in text.lower()
+    # One calendar: every event on it.
+    text = web.get("/events.ics?calendar=govguam-meetings").text
+    assert "SUMMARY:Board Meeting" in text and "Regular Session" not in text
+    assert "X-WR-CALNAME:GovGuam public meetings · GU Headlines" in text
+    assert web.get("/events.ics?calendar=nope").status_code == 404
+
+
+def test_events_page_offers_the_feed(web):
+    html = web.get("/events").text
+    assert 'href="webcal://testserver/events.ics"' in html
+    assert (
+        'href="https://calendar.google.com/calendar/render?cid=webcal%3A%2F%2Ftestserver%2Fevents.ics"'
+        in html
+    )
+    assert "http://testserver/events.ics</span>" in html
+    html = web.get("/events?calendar=gcc").text
+    assert 'href="webcal://testserver/events.ics?calendar=gcc"' in html
+    assert "Get every Guam Community College event in your calendar" in html
+    # A calendar that isn't in events.yaml: the feed of every calendar.
+    assert 'href="webcal://testserver/events.ics"' in web.get("/events?calendar=nope").text
+
+
+def _stored_event(**fields):
+    from guheadlines.models import Event
+
+    now = datetime.now(timezone.utc)
+    return Event(**{"id": 7, "uid": "x", "last_seen_at": now, **fields})
+
+
+def test_write_calendar_reads_back():
+    events = [
+        _stored_event(
+            id=1,
+            title="Budget hearing; FY2027, part 2",
+            starts_at=guam(2026, 12, 1, 9),
+            ends_at=guam(2026, 12, 1, 12, 30),
+            location="Guam Congress Building, Hagåtña",
+            organizer="Committee on Appropriations",
+            description="Line one\nLine two with a long text " + "ä" * 60,
+            url="https://example.gu/hearing?a=1,2",
+            agenda_url="javascript:alert(1)",
+        ),
+        _stored_event(
+            id=2,
+            title="Liberation Day",
+            starts_at=guam(2026, 12, 21),
+            ends_at=guam(2026, 12, 23),
+            all_day=True,
+        ),
+        _stored_event(id=3, title="Open house", starts_at=guam(2026, 12, 5, 10)),
+    ]
+    items = [{"event": e, "calendar_name": "Guam Legislature"} for e in events]
+    text = write_calendar(
+        items,
+        product="GU Headlines",
+        host="news.example",
+        name="Guam events · GU Headlines",
+        refresh=timedelta(hours=3),
+    )
+    lines = text.split("\r\n")
+    assert lines[-1] == "" and all(len(line.encode()) <= 75 for line in lines)
+    assert "UID:1@news.example" in lines and "DTSTART;VALUE=DATE:20261221" in lines
+    assert "DTSTART:20261130T230000Z" in lines
+    assert "javascript" not in text
+    name, found = read_calendar(text, start=guam(2026, 11, 1), end=guam(2027, 1, 1))
+    assert name == "Guam events · GU Headlines"
+    hearing, open_house, holiday = found
+    assert hearing.title == "Budget hearing; FY2027, part 2"
+    assert hearing.starts_at == guam(2026, 12, 1, 9) and hearing.ends_at == guam(
+        2026, 12, 1, 12, 30
+    )
+    assert hearing.location == "Guam Congress Building, Hagåtña"
+    assert hearing.url == "https://example.gu/hearing?a=1,2"
+    assert hearing.description.startswith("Committee on Appropriations\nLine one\nLine two")
+    assert "Details: https://example.gu/hearing?a=1,2\nCalendar: Guam Legislature" in (
+        hearing.description
+    )
+    assert holiday.all_day and holiday.starts_at == guam(2026, 12, 21)
+    assert holiday.ends_at == guam(2026, 12, 23)
+    # No end given: the event has none.
+    assert open_house.ends_at is None
 
 
 def test_events_matching_the_file_wide_exclude_are_left_out():

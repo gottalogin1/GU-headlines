@@ -698,7 +698,7 @@ def test_site_and_scraper_do_not_mention_github(client, monkeypatch):
 
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
     pages = ("/", "/status", "/jobs", "/events", "/weather", "/category/obituaries")
-    for path in (*pages, "/robots.txt", "/sitemap.xml", "/nope"):
+    for path in (*pages, "/robots.txt", "/sitemap.xml", "/events.ics", "/nope"):
         assert "github" not in client.get(path).text.lower(), path
     assert "github" not in load_settings().user_agent.lower()
 

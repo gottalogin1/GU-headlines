@@ -6,6 +6,19 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Events in Google and in phone calendars.** Each upcoming event now has a
+  page of its own on the site (click its name on the Events page), with the
+  whole description, its links, and two buttons that add the event to Google
+  Calendar or to another calendar app (Apple Calendar, Outlook...). Each page
+  describes its event in the form Google reads for its event results (Event
+  structured data), and the sitemap lists every upcoming event's page. Under
+  the month calendar, **Get these events in your calendar** subscribes a
+  visitor's Google Calendar, Apple Calendar or Outlook to the events: the
+  main events of every calendar, or every event of the calendar picked on the
+  page. The app keeps them up to date by itself. The calendar address is
+  `/events.ics`. No setting to change, and no script is added. See
+  [Each event's page](docs/events.md#each-events-page) and
+  [Adding the events to a calendar app](docs/events.md#adding-the-events-to-a-calendar-app).
 - **Faster photos on computers and tablets.** Each story's photo is now saved
   twice on your server: the copy for phones, and a small copy 360 pixels wide
   for larger screens, where the photo is drawn 228 pixels wide. Browsers load
