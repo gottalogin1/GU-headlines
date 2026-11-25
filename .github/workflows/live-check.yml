@@ -65,8 +65,15 @@ jobs:
       - name: Probe every configured URL
         if: inputs.urls == '' && !inputs.only_jobs
         run: guheadlines probe --all
+      - name: TEMP dump pages (bids research)
+        if: startsWith(inputs.urls, 'dump ')
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          # shellcheck disable=SC2086
+          python .github/scripts/dump_pages.py ${URLS#dump }
       - name: Probe the given addresses
-        if: inputs.urls != ''
+        if: inputs.urls != '' && !startsWith(inputs.urls, 'dump ')
         env:
           URLS: ${{ inputs.urls }}
           OUTLINE: ${{ inputs.outline }}
