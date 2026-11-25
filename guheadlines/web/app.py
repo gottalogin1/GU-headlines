@@ -40,6 +40,7 @@ from ..config import (
     load_jobs_config,
 )
 from ..db import session_scope
+from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..newsletter import schedule_text
 from ..scraper.text import GUAM_TZ, truncate
@@ -53,7 +54,7 @@ from ..weather import (
     for_page,
     weather_page,
 )
-from . import queries, seo, stats
+from . import event_calendar, queries, seo, stats
 from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -971,34 +972,67 @@ def events(
     request: Request,
     q: str = Query("", max_length=200),
     calendar: str = Query("", max_length=60),
+    month: str = Query("", max_length=7),
+    day: str = Query("", max_length=10),
     page: int = Query(1, ge=1, le=10000),
 ):
     calendars_config: list[CalendarConfig] = events_config_cache.get()
-    event_filters = EventFilters(q=q.strip(), calendar=calendar.strip() or None)
     today = datetime.now(GUAM_TZ).date()
+    last_day = today + timedelta(days=EVENT_DAYS_AHEAD)
     since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
+    # A day picked on the month calendar narrows the list to that day.
+    try:
+        picked = date.fromisoformat(day) if day else None
+    except ValueError:
+        picked = None
+    if picked and not today <= picked <= last_day:
+        picked = None
+    event_filters = EventFilters(q=q.strip(), calendar=calendar.strip() or None, day=picked)
+    shown = event_calendar.first_of(picked) if picked else event_calendar.parse_month(month)
+    lowest, highest = event_calendar.first_of(today), event_calendar.first_of(last_day)
+    shown = min(max(shown or lowest, lowest), highest)
     with session_scope() as session:
         result = queries.list_events(session, event_filters, page, settings.page_size, since)
         calendars = queries.event_calendars(session, since)
+        in_month = queries.month_events(
+            session,
+            EventFilters(q=event_filters.q, calendar=event_filters.calendar),
+            *event_calendar.month_span(shown),
+            since,
+        )
     if page > 1 and not result.items:
         raise HTTPException(404)
-    # Calendars that can't be collected are listed apart, with the reason.
+    # Calendars that can't be collected are not shown.
     collected = {c.slug for c in calendars_config if c.collected}
     calendars = [c for c in calendars if c["calendar"].slug in collected]
+    colors = {c.slug: c.color for c in calendars_config if c.color}
+    month_view = event_calendar.build_month(
+        shown,
+        today,
+        last_day,
+        in_month,
+        calendars_config,
+        # Narrowed to one calendar or a word: every matching event.
+        everything=bool(event_filters.q or event_filters.calendar),
+        selected=picked,
+    )
     return render(
         request,
         "events.html",
         result=result,
-        groups=group_events(result.items, today),
+        groups=group_events(result.items, picked or today),
         event_filters=event_filters,
         calendars=calendars,
-        uncollectable=[c for c in calendars_config if c.enabled and c.cannot_scrape],
+        month_view=month_view,
+        colors=colors,
+        legend=[c for c in calendars if c["calendar"].slug in colors],
         title="Events on Guam",
         description=_events_description([c["calendar"].name for c in calendars]),
         active_nav="events",
         canonical={"calendar": event_filters.calendar, "page": page},
-        # A word search is a search page; a calendar's own list is worth finding.
-        robots="noindex, follow" if event_filters.q else None,
+        # A word search is a search page, and another month or a picked day
+        # is the same page again; a calendar's own list is worth finding.
+        robots="noindex, follow" if event_filters.q or month or day else None,
         breadcrumbs=[("Events", None)],
         show_ad=True,
     )

@@ -28,6 +28,7 @@ from .readers import (
     read_google_calendar,
     read_ical,
     read_listing,
+    read_moderncampus,
     read_notices,
 )
 
@@ -119,6 +120,10 @@ class EventChecker:
                 for cid in calendar.google_calendar
             ]
             + [(u, lambda u: read_ical(self.client, u, start, end)) for u in calendar.ical]
+            + [
+                (u, lambda u: read_moderncampus(self.client, u, start, end))
+                for u in calendar.moderncampus
+            ]
             + [(u, lambda u: read_agendas(self.client, u, start, end)) for u in calendar.agendas]
             + [(u, lambda u: read_notices(self.client, u, start, end)) for u in calendar.notices]
             + [
@@ -142,7 +147,13 @@ class EventChecker:
         for event in merge_agendas(events):
             event.location = event.location or calendar.location
             event.organizer = event.organizer or calendar.organizer
-            if calendar.excluded(event.title, event.organizer) or _CANCELLED_RE.search(event.title):
+            if (
+                calendar.excluded(event.title, event.organizer)
+                or calendar.excluded_everywhere(
+                    event.title, event.organizer, event.location, event.description
+                )
+                or _CANCELLED_RE.search(event.title)
+            ):
                 continue
             kept.setdefault(event.uid, event)
         return sorted(kept.values(), key=lambda e: (e.starts_at, e.title))

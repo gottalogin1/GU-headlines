@@ -384,6 +384,8 @@ class CalendarConfig:
     google_calendar: list[str] = field(default_factory=list)
     # iCal (.ics) addresses, the format calendar apps share calendars in.
     ical: list[str] = field(default_factory=list)
+    # RSS feeds of calendars built with Modern Campus (the University of Guam's).
+    moderncampus: list[str] = field(default_factory=list)
     # Pages that list meeting agendas as PDF links under a dated heading
     # (the Guam Legislature's session agendas).
     agendas: list[str] = field(default_factory=list)
@@ -400,10 +402,20 @@ class CalendarConfig:
     organizer: str | None = None
     # Leave out events whose title or organizer matches one of these (regexes, any case).
     exclude: list[re.Pattern[str]] = field(default_factory=list)
+    # Leave out events whose title, organizer, place or description matches one
+    # of these: the file's own `exclude`, which applies to every calendar.
+    exclude_everywhere: list[re.Pattern[str]] = field(default_factory=list)
+    # Which events are shown on the month calendar at the top of the Events
+    # page: True (all), False (none), those whose title matches one of
+    # `main_events`, or all but those whose title matches one of `not_main`.
+    main_events: bool | list[re.Pattern[str]] = True
+    not_main: list[re.Pattern[str]] = field(default_factory=list)
+    # The colour of its events on the month calendar (one of CALENDAR_COLORS).
+    color: str | None = None
     enabled: bool = True
     request_delay: float | None = None
     ignore_robots: bool = False
-    # Why this calendar can't be collected; it is listed on the Events page with a link.
+    # Why this calendar can't be collected. It is never read, and not shown on the site.
     cannot_scrape: str | None = None
 
     @property
@@ -413,15 +425,50 @@ class CalendarConfig:
     @property
     def addresses(self) -> list[str]:
         """Every web address this calendar reads (for robots.txt and delays)."""
-        return self.ical + self.agendas + self.notices + self.pages
+        return self.ical + self.moderncampus + self.agendas + self.notices + self.pages
 
     def excluded(self, *labels: str | None) -> bool:
         return any(p.search(label) for p in self.exclude for label in labels if label)
+
+    def excluded_everywhere(self, *texts: str | None) -> bool:
+        return any(p.search(text) for p in self.exclude_everywhere for text in texts if text)
+
+    def is_main(self, title: str) -> bool:
+        """Whether an event with this title goes on the month calendar."""
+        if any(p.search(title) for p in self.not_main):
+            return False
+        if isinstance(self.main_events, bool):
+            return self.main_events
+        return any(p.search(title) for p in self.main_events)
+
+
+# Colours a calendar's events can have on the month calendar (style.css has
+# a muted shade of each for the light and the dark look).
+CALENDAR_COLORS = ("green", "red", "blue")
+_INPUTS = ("google_calendar", "ical", "moderncampus", "agendas", "notices", "pages")
+
+
+def _main_events(value, where: str) -> tuple[bool | list[re.Pattern[str]], list]:
+    """(main_events, not_main) from `main_events`: all, none, a list of
+    patterns, or {except: [patterns]}."""
+    if isinstance(value, dict):
+        if set(value) != {"except"}:
+            raise ConfigError(f"{where}: main_events can only have an except list")
+        return True, _compile([str(p) for p in _as_list(value["except"])], where)
+    if value is None or value is True or str(value).strip().lower() == "all":
+        return True, []
+    if value is False or str(value).strip().lower() == "none":
+        return False, []
+    patterns = [str(p) for p in _as_list(value) if str(p).strip()]
+    if not patterns:
+        raise ConfigError(f"{where}: main_events must be all, none or a list of patterns")
+    return _compile(patterns, where), []
 
 
 def parse_events_config(data: dict) -> list[CalendarConfig]:
     calendars: list[CalendarConfig] = []
     seen: set[str] = set()
+    everywhere = _compile([str(p) for p in _as_list((data or {}).get("exclude"))], "events.yaml")
     for raw in _as_list((data or {}).get("calendars")):
         slug = str(raw.get("slug", "")).strip()
         where = f"events.yaml [{slug or '?'}]"
@@ -434,8 +481,12 @@ def parse_events_config(data: dict) -> list[CalendarConfig]:
             raise ConfigError(f"{where}: missing name")
         urls = {
             key: [str(u).strip() for u in _as_list(raw.get(key)) if str(u).strip()]
-            for key in ("google_calendar", "ical", "agendas", "notices", "pages")
+            for key in _INPUTS
         }
+        main_events, not_main = _main_events(raw.get("main_events"), where)
+        color = str(raw["color"]).strip().lower() if raw.get("color") else None
+        if color and color not in CALENDAR_COLORS:
+            raise ConfigError(f"{where}: color must be one of {', '.join(CALENDAR_COLORS)}")
         calendar = CalendarConfig(
             slug=slug,
             name=str(raw["name"]),
@@ -448,6 +499,10 @@ def parse_events_config(data: dict) -> list[CalendarConfig]:
             location=raw.get("location"),
             organizer=raw.get("organizer"),
             exclude=_compile([str(p) for p in _as_list(raw.get("exclude"))], where),
+            exclude_everywhere=everywhere,
+            main_events=main_events,
+            not_main=not_main,
+            color=color,
             enabled=bool(raw.get("enabled", True)),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),
@@ -455,7 +510,7 @@ def parse_events_config(data: dict) -> list[CalendarConfig]:
         )
         if calendar.collected and not any(urls.values()):
             raise ConfigError(
-                f"{where}: needs at least one of google_calendar, ical, agendas, notices or pages"
+                f"{where}: needs at least one of {', '.join(_INPUTS[:-1])} or {_INPUTS[-1]}"
             )
         if calendar.pages and not calendar.item:
             raise ConfigError(f"{where}: pages needs an item selector")

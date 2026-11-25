@@ -6,6 +6,22 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **A month calendar on the Events page.** Above the list of upcoming events,
+  a calendar shows the month's main events, at most 3 a day (with "+2 more"
+  and so on), all-day events first. Events are colored by their calendar:
+  green for the University of Guam, red for the Guam Legislature, blue for
+  Guam Community College, gray for the rest, with a legend. Click a day to
+  see everything on it in the list below; ‹ and › step through the months
+  events are collected for. On a phone each event is a small colored square.
+  Which events count as main events is set per calendar with the new
+  `main_events` option in `config/events.yaml` (out of the box, all but the
+  GovGuam board meetings), and the color with `color`. No script is added:
+  the calendar is plain HTML. See
+  [The month calendar](docs/events.md#the-month-calendar).
+- **University of Guam events** on the Events page, from its events
+  calendar's RSS feed (the new `moderncampus` input in
+  `config/events.yaml`): events, academic dates and holidays.
+
 - **A newsletter feed for SendFox.** The site now has a feed of its top
   stories at `/feed.xml`, for an email service such as SendFox. Every
   Tuesday and Friday at 10:00 AM (Guam time), the worker makes a new
@@ -102,6 +118,12 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **No Chamber of Commerce events, and no calendars that can't be
+  collected.** The Events page no longer lists the Chamber of Commerce, the
+  Guam Visitors Bureau or the Guampedia fiesta calendar, and events that
+  name the Chamber of Commerce are left out of every calendar (the new
+  file-wide `exclude` list in `config/events.yaml`). The "Can't be collected"
+  list is gone from the Events page.
 - **Faster pages with the ad, and 100 in all four PageSpeed scores.**
   Google's ad code now loads when the visitor first scrolls, taps, presses a
   key or moves the mouse, not with the page. The page is ready sooner, and

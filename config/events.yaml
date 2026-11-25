@@ -11,6 +11,8 @@
 #                    GOOGLE_CALENDAR_API_KEY in your .env file (see .env.example).
 #   ical             an iCal (.ics) address, the format calendar apps share
 #                    calendars in ("Subscribe", "Export" or "iCal feed" links).
+#   moderncampus     the RSS feed of a calendar built with Modern Campus (its
+#                    "Add to RSS" link), like the University of Guam's.
 #   agendas          a page that lists meeting agendas (PDFs) under dated
 #                    headings, like the Legislature's session agendas.
 #   notices          a notices.guam.gov listing: GovGuam's public meeting notices.
@@ -26,20 +28,37 @@
 #   organizer       who holds the events, when an event doesn't say
 #   exclude         leave out events whose title or organizer matches one of
 #                   these patterns (regular expressions, any upper/lower case)
+#   main_events     which of its events go on the month calendar at the top of
+#                   the Events page (all of them are always in the list below
+#                   it): all (the default), none, a list of patterns (only
+#                   events whose title matches one), or "except:" and a list
+#                   of patterns (all events but those whose title matches one)
+#   color           the colour of its events on the month calendar: green, red
+#                   or blue. Leave it out for the plain colour.
 #   request_delay   seconds between requests to this site
 #   ignore_robots   read this site even where its robots.txt disallows it
-#   cannot_scrape   why this calendar can't be collected; it is never read, and
-#                   the Events page lists it with a link. Delete the line to try
-#                   it again.
+#   cannot_scrape   why this calendar can't be collected; it is never read and
+#                   not shown on the site. Delete the line to try it again.
 #   enabled         false to pause a calendar without deleting its events
 #
 # Events whose title says they were cancelled or postponed are left out.
 #
-# Looked at on 2026-11-24 but not added: the University of Guam (no events
-# calendar on its site), the Guam Daily Post's calendar (empty), the Guam
+# The month calendar shows at most 3 events a day (with "+2 more" and so on),
+# all-day events first. An event that lasts more than a week is shown on its
+# first day only. When a visitor narrows the page to one calendar or searches
+# for a word, the month calendar shows every matching event.
+#
+# Looked at but not added: the Guam Daily Post's calendar (empty), the Guam
 # Department of Labor (no upcoming events, and its calendar export is turned
-# off), USO Guam (only a monthly programs flyer) and Pacific Historic Parks
-# (no Guam events listed).
+# off), USO Guam (only a monthly programs flyer), Pacific Historic Parks (no
+# Guam events listed), and the Guam Visitors Bureau and Guampedia calendars
+# (their firewalls turn away automated visitors).
+
+# Leave out, from every calendar, events whose title, organizer, place or
+# description matches one of these patterns (any upper/lower case).
+exclude:
+  - "chamber of commerce"
+  - "guam chamber"
 
 calendars:
   - slug: legislature
@@ -55,6 +74,7 @@ calendars:
     # to a person or group. Delete these lines to show them too.
     exclude:
       - "presentation (notice )?(for|of) (legislative )?certificate"
+    color: red
     # guamlegislature.gov's robots.txt asks for 20 seconds between requests.
     request_delay: 20
 
@@ -68,6 +88,8 @@ calendars:
     exclude:
       - "^(guam legislature|i liheslaturan gu[aå]han)"
       - "call to session"
+    # Routine board meetings: listed below the month calendar, not on it.
+    main_events: none
 
   - slug: gcc
     name: Guam Community College
@@ -79,22 +101,22 @@ calendars:
     description: .post-body
     location: Guam Community College, Mangilao
     organizer: Guam Community College
+    color: blue
 
-  - slug: gvb
-    name: Guam Visitors Bureau events
-    homepage: https://www.visitguam.com/events/
-    cannot_scrape: >-
-      The site's firewall (Akamai) turns away automated visitors on its events
-      pages and its events feed.
-
-  - slug: fiestas
-    name: Village fiesta calendar (Guampedia)
-    homepage: https://www.guampedia.com/guam-fiesta-calendar
-    cannot_scrape: >-
-      Guampedia's firewall (Cloudflare) turns away automated visitors. Its
-      calendar lists every village's fiesta, from the Archdiocese of Agaña.
-
-  - slug: chamber
-    name: Guam Chamber of Commerce events
-    homepage: https://www.guamchamber.com.gu/events
-    cannot_scrape: The site's firewall (Cloudflare) turns away automated visitors.
+  - slug: uog
+    name: University of Guam
+    homepage: https://www.uog.edu/calendar/
+    # The "Add to RSS" link on the calendar page. It lists the coming year's
+    # events (about 100 KB). The calendar's "Outlook/iCAL" link gives the same
+    # events, but it also holds every past event since 2023 (2.5 MB), so the
+    # RSS feed is read instead.
+    moderncampus: https://api.calendar.moderncampus.net/pubcalendar/1e1f6d17-b483-4b69-bd50-9d8478fae2b6/rss?category=09a9d4a6-3cdd-4ab3-9d45-bfb690a7ae8f&url=https%3A%2F%2Fwww.uog.edu%2Fcalendar%2F&hash=true
+    organizer: University of Guam
+    # Thesis defenses and course evaluations are in the list, not on the
+    # month calendar.
+    main_events:
+      except:
+        - "thesis defense"
+        - "dissertation defense"
+        - "^evaluations\\b"
+    color: green

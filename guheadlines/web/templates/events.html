@@ -25,9 +25,59 @@
   </div>
 </form>
 
-<p class="result-count">{{ "{:,}".format(result.total) }} upcoming {{ "event" if result.total == 1 else "events" }}{% if event_filters.q %} matching “{{ event_filters.q }}”{% endif %}</p>
+{% set m = month_view %}
+<section class="panel cal" aria-labelledby="cal-title">
+  <div class="cal-head">
+    <h2 id="cal-title">{{ months[m.first.month - 1] }} {{ m.first.year }}</h2>
+    <nav class="cal-nav" aria-label="Months">
+      {% if m.previous %}<a href="{{ page_url(month=m.previous.strftime('%Y-%m'), day=None, page=None) }}#cal-title"><span class="visually-hidden">Previous month: </span>‹ {{ months[m.previous.month - 1][:3] }}</a>{% endif %}
+      {% if m.next %}<a href="{{ page_url(month=m.next.strftime('%Y-%m'), day=None, page=None) }}#cal-title"><span class="visually-hidden">Next month: </span>{{ months[m.next.month - 1][:3] }} ›</a>{% endif %}
+    </nav>
+  </div>
+  <table class="cal-grid">
+    <thead><tr>{% for name in ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] %}<th scope="col"><abbr title="{{ name }}">{{ name[:3] }}</abbr></th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for week in m.weeks %}
+      <tr>
+        {% for d in week %}
+        {% if d.day is none %}<td class="cal-out"></td>
+        {% else %}
+        <td class="{% if not d.upcoming %}cal-off{% endif %}{% if d.today %} cal-today{% endif %}{% if d.selected %} cal-selected{% endif %}"{% if d.today %} aria-current="date"{% endif %}>
+          {% set inner %}
+            <span class="cal-num" aria-hidden="true">{{ d.day.day }}</span>
+            <span class="visually-hidden">{{ d.day|short_day }}{% if d.events %}:{% endif %}</span>
+            {% if d.events %}<span class="cal-evs">{% for entry in d.events %}<span class="cal-ev"><span class="cal-dot{% if entry.color %} cal-{{ entry.color }}{% endif %}" aria-hidden="true"></span><span class="cal-name">{{ entry.event.title }}{% if not loop.last or d.more %}<span class="visually-hidden">;</span>{% endif %}</span></span>{% endfor %}
+            {% if d.more %}<span class="cal-more">+{{ d.more }}<span class="cal-more-word"> more</span></span>{% endif %}</span>{% endif %}
+          {% endset %}
+          {% if d.upcoming %}<a class="cal-day" href="{{ page_url(day=d.day.isoformat(), month=None, page=None) }}#events-list"{% if d.selected %} aria-current="true"{% endif %}>{{ inner }}</a>
+          {% else %}<div class="cal-day">{{ inner }}</div>{% endif %}
+        </td>
+        {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="cal-legend small">
+    {% for c in legend %}<span><span class="cal-dot cal-{{ colors[c.calendar.slug] }}" aria-hidden="true"></span>{{ c.calendar.name }}</span>{% endfor %}
+    {% if legend|length < calendars|length %}<span><span class="cal-dot" aria-hidden="true"></span>Other calendars</span>{% endif %}
+  </p>
+  <p class="muted small cal-note">{% if event_filters.q or event_filters.calendar %}Every matching event{% else %}Main events{% endif %}, at most 3 a day. Pick a day to see everything on it.</p>
+</section>
 
-{% if not result.items %}
+<div id="events-list">
+{% if event_filters.day %}
+<p class="result-count">{{ "{:,}".format(result.total) }} {{ "event" if result.total == 1 else "events" }} on {{ event_filters.day|short_day }}{% if event_filters.q %} matching “{{ event_filters.q }}”{% endif %} · <a href="{{ page_url(day=None, page=None) }}">All upcoming events</a></p>
+{% else %}
+<p class="result-count">{{ "{:,}".format(result.total) }} upcoming {{ "event" if result.total == 1 else "events" }}{% if event_filters.q %} matching “{{ event_filters.q }}”{% endif %}</p>
+{% endif %}
+
+{% if not result.items and event_filters.day %}
+<div class="empty">
+  <h2>Nothing listed for this day</h2>
+  <p>None of the calendars list an event{% if event_filters.q or event_filters.calendar %} that matches{% endif %} on {{ event_filters.day|short_day }}.</p>
+</div>
+{% elif not result.items %}
 <div class="empty">
   <h2>No upcoming events here yet</h2>
   <p>The calendars are read every {{ settings.events_interval_hours }} hours, starting when the worker boots. Each calendar's state is listed {% if calendars %}beside this list{% else %}here once it has been read{% endif %}.</p>
@@ -43,7 +93,7 @@
     <p class="event-time">{{ event_time(e, day) }}</p>
     <div class="story-body">
       <h3 class="headline">{% if e.url %}<a href="{{ e.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ e.url|domain }}">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}</h3>
-      <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
+      <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}<span class="cal-dot{% if colors.get(item.calendar_slug) %} cal-{{ colors[item.calendar_slug] }}{% endif %}" aria-hidden="true"></span>{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
       <dl class="job-facts event-facts">
         <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
         <div><dt>Where</dt><dd>{{ e.location or blank }}</dd></div>
@@ -70,6 +120,7 @@
 {% endfor %}
 
 {{ pagination(result, page_url) }}
+</div>
 {% endblock %}
 
 {% block sidebar %}
@@ -93,20 +144,6 @@
   <p class="muted small">Upcoming events per calendar. ⚠ marks a calendar that couldn't be fully read on its last check; its earlier events stay listed.</p>
   {% else %}
   <p class="muted">Waiting for the first check.</p>
-  {% endif %}
-  {% if uncollectable %}
-  <h3 class="panel-sub">Can't be collected</h3>
-  <ul class="facets">
-    {% for s in uncollectable %}
-    <li>
-      <span class="facet-name">
-        <span>{{ s.name }}</span>
-        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
-        <span class="muted small">{{ s.cannot_scrape }}</span>
-      </span>
-    </li>
-    {% endfor %}
-  </ul>
   {% endif %}
 </section>
 
