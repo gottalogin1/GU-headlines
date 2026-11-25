@@ -48,8 +48,10 @@ They are listed in `config/bids.yaml`. Out of the box:
 | Guam Waterworks Authority | GWA's bids page. |
 | Port Authority of Guam | The Port's bids and RFPs page. Its list has no due dates, so each open bid's own page is read for its "Close Date" (once; a date found is kept). |
 
-None of these sites' robots.txt files or terms of use forbid reading their
-lists. Only the facts of each bid are shown (its title, number, agency and
+None of these sites' robots.txt files forbid reading their lists, and
+neither do the terms of use of notices.guam.gov, the OpenGov Guam portal and
+the Port's website (the hospital's and Waterworks' websites have none). The
+Port's robots.txt asks for 10 seconds between requests, which is kept. Only the facts of each bid are shown (its title, number, agency and
 dates, and the start of its text), every bid links to the page it came from,
 and the page says to check the details with the agency before bidding.
 

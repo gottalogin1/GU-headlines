@@ -369,6 +369,42 @@ def _li_value(article: Tag, label: str) -> Tag | None:
     return None
 
 
+# "Bid For: ... Destination: Department of Agriculture Submission Deadline: ..."
+_DESTINATION_RE = re.compile(
+    r"\bDestination:\s*(?:the\s+)?(.+?)(?=\s+(?:Submission|Opening|Bid|Date|Deadline|Pre-Bid)"
+    r"\b[^:]{0,30}:|$)",
+    re.I,
+)
+_FORM_LABEL_RE = re.compile(r"\b[A-Z][A-Za-z ]{1,30}:(?=\s)")
+_KIND_WORDS_RE = re.compile(
+    rf"{_KIND_PHRASE}|\b(?:invitation|bids?|proposals?|requests?|no|number|notice|of|for|the|"
+    r"and|an?|to)\b",
+    re.I,
+)
+
+
+def notice_description(body: str | None, title: str, number: str | None) -> str | None:
+    """The part of a notice's text worth showing under its title: who the
+    General Services Agency is buying for ("For the Guam Public Library
+    System."), or a sentence about the bid. Text that only repeats the title,
+    number and dates (shown apart) is left out."""
+    if not body:
+        return None
+    destination = _DESTINATION_RE.search(body)
+    if destination:
+        return f"For the {destination.group(1).strip(' .')}."
+    if len(_FORM_LABEL_RE.findall(body)) >= 2:
+        return None  # "Bid No: ... Bid Description: ... Bid Submission: ..."
+    rest = body.lower()
+    for part in (title.lower(), (number or "").lower()):
+        if part:
+            rest = rest.replace(part, " ")
+    rest = _KIND_WORDS_RE.sub(" ", rest)
+    title_words = set(re.findall(r"[a-z]{3,}", title.lower()))
+    new_words = [w for w in re.findall(r"[a-z]{3,}", rest) if w not in title_words]
+    return body if len(new_words) >= 3 else None
+
+
 def parse_notices(result: FetchResult) -> list[FoundBid]:
     """Solicitations from a notices.guam.gov listing page."""
     soup = BeautifulSoup(result.content, "lxml")
@@ -408,7 +444,7 @@ def parse_notices(result: FetchResult) -> list[FoundBid]:
             if href.lower().split("?")[0].endswith(".pdf"):
                 document = href
                 break
-        description = body if body and body.lower() != raw_title.lower() else None
+        description = notice_description(body, title, number)
         found.append(
             FoundBid(
                 uid=f"notice:{notice.group(1) if notice else url}"[:500],
@@ -440,8 +476,13 @@ def read_notices(
     oldest: date | None = None
     while url and url not in seen_pages and len(seen_pages) < max_pages:
         seen_pages.add(url)
-        result = client.get(url)
-        page_bids = parse_notices(result)
+        try:
+            result = client.get(url)
+            page_bids = parse_notices(result)
+        except (FetchError, BidError):
+            if len(seen_pages) == 1:
+                raise
+            break  # keep the pages read so far; older notices aren't taken as removed
         bids += page_bids
         dated = [b.posted_on for b in page_bids if b.posted_on]
         if dated:

@@ -193,6 +193,12 @@ def test_notices_list():
     gsa = bids["notice:9978"]
     assert (gsa.number, gsa.agency) == ("GSA-004-27", "General Services Agency")
     assert gsa.due_at == guam(2026, 12, 1, 10)
+    # Who the General Services Agency is buying for; text that only repeats
+    # the title and dates is left out.
+    assert gsa.description == (
+        "For the Department of Integrated Services for Individuals with Disabilities."
+    )
+    assert airport.description is None
     # A notice titled only with its kind takes its title from the text.
     assert (
         bids["notice:10082"].title == "Design – Build Retrofit of Warehouse “C” for Educational Use"
@@ -238,6 +244,21 @@ def test_reading_notices_follows_pages_and_keeps_the_newest_notice():
     # Two notices the same day: the later one (the corrected title) wins.
     assert "notice:9727" in uids and "notice:9726" not in uids
     assert "notice:5" in uids
+
+
+def test_a_later_notices_page_that_fails_keeps_the_pages_read():
+    def handler(request):
+        if "page:2" in str(request.url):
+            return httpx.Response(503)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(200, content=fixture_bytes("bids_notices.html"))
+
+    client = fake_client(handler)
+    bids, oldest = read_notices(client, NOTICES, date(2026, 11, 25))
+    client.close()
+    assert "notice:10062" in [b.uid for b in bids]
+    assert oldest == date(2026, 9, 25)  # the oldest notice on the page that was read
 
 
 # ------------------------------------------------------------------ tables

@@ -74,6 +74,9 @@ sources:
     # notices, newest first). A bid's later notices ("2nd Notice of ...")
     # replace its earlier ones.
     notices: https://notices.guam.gov/notices?view=list&topic_id%5B%5D=59&topic_id%5B%5D=62&topic_id%5B%5D=86
+    # The portal is also read for the Events page; a few seconds between
+    # requests keeps both checks gentle on it.
+    request_delay: 3
     exclude:
       # The Power Authority's standing notice that points to its own bid list
       # (read below, as "gpa").
