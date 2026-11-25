@@ -1,13 +1,16 @@
 {# The weather box on the home page (see weather.py). Watches and warnings are
    in the banner at the top of every page; this box lists the advisories.
    Kept short on purpose: the reading beside the forecast, then one line for
-   typhoons and advisories. #}
+   typhoons, today's tides and advisories. #}
 {% set c = weather.conditions %}
 {% set f = weather.forecast %}
 <section class="weather" aria-labelledby="weather-title">
   <div class="weather-head">
     <h2 id="weather-title">Guam weather</h2>
-    <a href="{{ nws_guam_url }}" target="_blank" rel="noopener">National Weather Service ↗</a>
+    <span class="weather-links">
+      <a href="/weather">Forecast and tides →</a>
+      <a class="muted" href="{{ nws_guam_url }}" target="_blank" rel="noopener" title="National Weather Service">NWS ↗</a>
+    </span>
   </div>
   {% if c or f %}
   <div class="weather-main">
@@ -27,7 +30,7 @@
     </div>
     {% if f %}
     <ol class="weather-forecast" aria-label="Forecast">
-      {% for p in f %}
+      {% for p in f[:4] %}
       <li title="{{ p.detail }}">
         <span class="weather-period">{{ p.name }}</span>
         <strong>{{ "High" if p.daytime else "Low" }} {{ p.temp_f }}°</strong>
@@ -53,6 +56,14 @@
       <a class="muted" href="{{ jtwc_url }}" target="_blank" rel="noopener" title="Joint Typhoon Warning Center">JTWC ↗</a>
       {% endif %}
     </div>
+    {% if weather.tides %}
+    {% set t = weather.tides %}
+    <div class="weather-group weather-tides">
+      <h3>Tides today</h3>
+      {% for tide in t.today %}<span class="weather-tide{% if tide.past %} is-past{% endif %}"><strong>{{ "High" if tide.high else "Low" }}</strong> {{ tide.time|fmt_time }} <span class="weather-tide-ft">{{ tide.ft }} ft</span></span>{% endfor %}
+      <a class="muted" href="{{ t.url }}" target="_blank" rel="noopener" title="NOAA tide predictions{% if t.name %} for {{ t.name }}{% endif %}">{% if t.name %}{{ t.name }}, {% endif %}NOAA ↗</a>
+    </div>
+    {% endif %}
     {% if weather.advisories %}
     <div class="weather-group weather-advisories">
       <h3>Advisories</h3>

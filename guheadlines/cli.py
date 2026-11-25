@@ -334,13 +334,13 @@ def _weather_loop(settings: Settings, stop: threading.Event) -> None:
 
 
 def cmd_weather(args, settings: Settings) -> None:
-    """Read the weather now and save it (the worker does this every
-    WEATHER_INTERVAL_MINUTES)."""
+    """Read the weather and the tides now and save them (the worker does
+    this every WEATHER_INTERVAL_MINUTES, and every few hours for the tides)."""
     from .weather import check_weather
 
     wait_for_db()
     migrate()
-    for kind, data, error in check_weather(settings):
+    for kind, data, error in check_weather(settings, force_tides=True):
         shown = f"ERROR: {error}" if error else json.dumps(data, ensure_ascii=False)[:300]
         print(f"{kind:<11} {shown}")
 
@@ -752,7 +752,7 @@ def main(argv: list[str] | None = None) -> None:
     events.add_argument("--limit", type=int, default=6, help="with --check: events to show")
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
-    sub.add_parser("weather", help="read the weather and the storm list now")
+    sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 

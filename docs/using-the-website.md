@@ -12,6 +12,7 @@ A tour of every page, and how to find older stories.
 | **Archive** | Every story collected, organized by year, month and day |
 | **Jobs** | Openings on Guam from local job boards (see [The Jobs page](#the-jobs-page)) |
 | **Events** | What's coming up on Guam: sessions, hearings, public meetings and more (see [The Events page](#the-events-page)) |
+| **Weather** | The weather, the sea and the tides on Guam (see [The Weather page](#the-weather-page)) |
 | **Sources** | The news sites, and whether each one is working (see [below](#the-sources-page)) |
 | **Search box** | Finds stories from any date (see [Searching](#searching)) |
 
@@ -31,7 +32,36 @@ automatically (see [Topics](topics.md)).
   typhoons in the western North Pacific from the Joint Typhoon Warning Center
   (JTWC), and the advisories, such as a Small Craft Advisory. Click an
   advisory to read it and see when it ends. Point at a forecast to see the
-  full forecast text.
+  full forecast text. It also lists today's high and low tides, and links to
+  the Weather page ("Forecast and tides").
+
+## The Weather page
+
+Everything about the weather, the sea and the tides on one page, with a row
+of links at the top to jump to each part. Each part ends with where its data
+comes from, with a link to that service.
+
+- **Right now**: the reading at Guam International Airport (temperature, how
+  hot it feels, humidity, wind), the ocean temperature, and sunrise, sunset
+  and the moon's phase.
+- **Watches, warnings and advisories**: every National Weather Service alert
+  for Guam and its coastal waters. Click one to read it.
+- **Next 24 hours**: the temperature and the chance of rain every two hours.
+- **Tides**: the time of the next high or low tide, then three views to
+  switch between: **Day** (a chart of the water's height through today, and
+  today's tides), **Week** (the next 7 days) and **Month** (the next 30 days).
+  Tides that have gone by are grey.
+- **This week**: each day's high and low, the sky and the chance of rain.
+  "Read the forecast in words" opens the full forecast text.
+- **On the water**: the rip current risk and the surf height on each side of
+  the island, from the surf forecast, and the wind and seas for boating, from
+  the coastal waters forecast.
+- **Typhoons and tropical storms**: the storms that the Joint Typhoon Warning
+  Center has warnings for in the western North Pacific.
+- **Be ready**: links to Guam Homeland Security (typhoon readiness levels),
+  the weather radar, the satellite view, and more.
+
+See [Weather](settings.md#weather) for where the weather comes from.
 
 See [Weather](settings.md#weather) for where the weather comes from.
 

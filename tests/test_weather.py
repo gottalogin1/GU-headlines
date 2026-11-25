@@ -1,11 +1,17 @@
-"""The weather: NWS alerts, the airport reading, the forecast, the JTWC storm
-list, the warning banner and the weather box. The fixtures are real answers
-from api.weather.gov and the JTWC feed, saved on 2026-11-24."""
+"""The weather: NWS alerts, the airport reading, the forecasts, the surf and
+coastal waters forecasts, the JTWC storm list, NOAA's tides, the warning
+banner, the weather box and the Weather page. The NWS and JTWC fixtures are
+real answers from api.weather.gov and the JTWC feed, saved on 2026-11-24 and
+2026-11-25. NOAA's tide API can't be reached from where the tests were
+written: noaa_tides.json is in the layout of its answer, with the Apra Harbor
+times and heights of 25 and 26 Nov 2026 that the NWS surf forecast
+(nws_surf.json) gives, and the tides before and after them filled in by
+hand."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -122,11 +128,14 @@ def test_forecast():
         "https://api.weather.gov/gridpoints/GUM/47,48/forecast"
     )
     periods = weather.parse_forecast(fixture_json("nws_forecast.json"))
+    # Every period is kept: the box shows four, the Weather page all of them.
     assert [p["name"] for p in periods] == [
         "Tonight",
         "Wednesday",
         "Wednesday Night",
         "Thanksgiving Day",
+        "Thursday Night",
+        "Friday",
     ]
     assert periods[0] | {"detail": ""} == {
         "name": "Tonight",
@@ -211,7 +220,12 @@ def _fake_sources(fail: tuple[str, ...] = ()):
         "/stations/PGUM/observations/latest": "nws_observation.json",
         "/points/13.4757,144.7489": "nws_points.json",
         "/gridpoints/GUM/47,48/forecast": "nws_forecast.json",
+        "/gridpoints/GUM/47,48/forecast/hourly": "nws_hourly.json",
+        "/products/types/SRF/locations/GUM/latest": "nws_surf.json",
+        "/products/types/CWF/locations/GUM/latest": "nws_marine.json",
         "/jtwc/rss/jtwc.rss": "jtwc.rss",
+        "/api/prod/datagetter": "noaa_tides.json",
+        "/mdapi/prod/webapi/stations/1630000.json": "noaa_station.json",
     }
     seen = []
 
@@ -243,14 +257,30 @@ def test_check_saves_each_source_and_keeps_the_last_good_copy(clean_db):
         ("alerts", None),
         ("conditions", None),
         ("forecast", None),
+        ("hourly", None),
+        ("surf", None),
+        ("marine", None),
         ("storms", None),
+        ("tides", None),
     ]
     assert seen[0].url.params["zone"] == "GUZ001,PMZ151"
     assert seen[0].headers["accept"] == "application/geo+json"
     with session_scope() as session:
         first = queries.weather_reports(session)
-    assert set(first) == {"alerts", "conditions", "forecast", "storms"}
+    assert set(first) == {
+        "alerts",
+        "conditions",
+        "forecast",
+        "hourly",
+        "surf",
+        "marine",
+        "storms",
+        "tides",
+    }
     assert first["conditions"][0]["temp_f"] == 82
+    assert first["tides"][0]["name"] == "Apra Harbor"
+    tides_read = [r for r in seen if r.url.path == "/api/prod/datagetter"]
+    assert tides_read[0].url.params["station"] == "1630000"
 
     # NWS is down: the alerts and the forecast keep their last copy.
     client, _ = _fake_sources(fail=("/alerts", "/points"))
@@ -289,6 +319,30 @@ def _save_weather(warning: bool = True):
     weather.save("conditions", weather.parse_observation(fixture_json("nws_observation.json")))
     weather.save("forecast", weather.parse_forecast(fixture_json("nws_forecast.json")))
     weather.save("storms", weather.parse_storms(ACTIVE_STORMS.encode()))
+    now = datetime.now(timezone.utc)
+    # The forecast for each hour and the tides, moved to start now.
+    hours = weather.parse_hourly(fixture_json("nws_hourly.json"))
+    for i, hour in enumerate(hours):
+        hour["time"] = (now + timedelta(hours=i)).isoformat()
+    weather.save("hourly", hours)
+    weather.save("surf", weather.parse_surf(fixture_json("nws_surf.json")))
+    weather.save("marine", weather.parse_marine(fixture_json("nws_marine.json")))
+    weather.save(
+        "tides", {"station": "1630000", "name": "Apra Harbor", "tides": _tides_around(now)}
+    )
+
+
+def _tides_around(now: datetime) -> list[dict]:
+    """Highs and lows every 6 h 12 min from two days ago to 32 days ahead."""
+    start = now - timedelta(days=2)
+    return [
+        {
+            "time": (start + i * timedelta(hours=6, minutes=12)).isoformat(),
+            "high": i % 2 == 0,
+            "ft": 2.4 if i % 2 == 0 else (-1.1 if i % 4 == 1 else 1.4),
+        }
+        for i in range(34 * 4)
+    ]
 
 
 def test_banner_on_every_page_and_weather_box_on_the_home_page(client):
@@ -341,3 +395,304 @@ def test_weather_needs_no_change_to_the_content_security_policy(client):
     # Everything is drawn on the server: no new script, style or address.
     assert page.headers["content-security-policy"] == CONTENT_SECURITY_POLICY
     assert " style=" not in page.text and "<script src" not in page.text
+
+
+# ------------------------------------------------------------------- tides
+
+TIDES_NOW = datetime(2026, 11, 25, 2, 0, tzinfo=timezone.utc)  # 12:00 PM ChST, Nov 25
+
+
+def _saved_tides(station: str = "1630000") -> dict:
+    return {
+        "station": station,
+        "name": "Apra Harbor",
+        "tides": weather.parse_tides(fixture_json("noaa_tides.json")),
+    }
+
+
+def test_tides_from_noaa():
+    tides = weather.parse_tides(fixture_json("noaa_tides.json"))
+    assert len(tides) == 11
+    assert tides[2] == {"time": "2026-11-24T22:45:00+00:00", "high": True, "ft": 2.4}
+    assert tides[1]["ft"] == -1.0 and not tides[1]["high"]
+    # -0.04 ft is 0.0 ft, not "-0.0 ft".
+    almost = weather.parse_tides(
+        {"predictions": [{"t": "2026-11-25 01:00", "v": "-0.04", "type": "L"}]}
+    )
+    assert str(almost[0]["ft"]) == "0.0"
+    # Bad rows are skipped; an answer with no tides, or NOAA's error, raises.
+    rows = [{"t": "soon", "v": "1", "type": "H"}, {"t": "2026-11-25 01:00", "v": "x", "type": "L"}]
+    with pytest.raises(weather.WeatherError):
+        weather.parse_tides({"predictions": rows})
+    with pytest.raises(weather.WeatherError, match="No Predictions data was found"):
+        weather.parse_tides({"error": {"message": "No Predictions data was found."}})
+
+    url = httpx.URL(weather.tides_url("1630000", date(2026, 11, 24), date(2026, 12, 26)))
+    assert url.host == "api.tidesandcurrents.noaa.gov"
+    assert dict(url.params) == {
+        "product": "predictions",
+        "interval": "hilo",
+        "station": "1630000",
+        "begin_date": "20261124",
+        "end_date": "20261226",
+        "datum": "MLLW",
+        "units": "english",
+        "time_zone": "gmt",
+        "format": "json",
+    }
+    assert weather.station_name(fixture_json("noaa_station.json")) == "Apra Harbor"
+    assert weather.station_name({"stations": [{"name": "Guam"}]}) == ""
+    assert weather.station_name({}) == ""
+    assert weather.tide_page_url("1630000").endswith("noaatidepredictions.html?id=1630000")
+
+
+def test_todays_tides_in_guam_time():
+    saved = _saved_tides()
+    today = weather.tides_today(saved, "1630000", TIDES_NOW)
+    # Guam's 25 Nov starts at 14:00 UTC on the 24th: its first tide is the
+    # low of 1:30 AM ChST, and the last the high of 6:52 PM.
+    assert [(t["time"].hour, t["time"].minute, t["high"]) for t in today["today"]] == [
+        (15, 30, False),
+        (22, 45, True),
+        (3, 53, False),
+        (8, 52, True),
+    ]
+    assert [t["past"] for t in today["today"]] == [True, True, False, False]
+    assert today["name"] == "Apra Harbor"
+    # Off, another station, or no tides for today: nothing.
+    assert weather.tides_today(saved, "", TIDES_NOW) is None
+    assert weather.tides_today(saved, "1631428", TIDES_NOW) is None
+    assert weather.tides_today(saved, "1630000", TIDES_NOW + timedelta(days=5)) is None
+    assert weather.tides_today(None, "1630000", TIDES_NOW) is None
+
+    days = weather.tide_days(saved, "1630000", TIDES_NOW, 7)
+    # The saved tides reach into the 27th (ChST) only: the rest is left out.
+    assert [d["day"].day for d in days] == [25, 26, 27]
+    assert len(days[1]["tides"]) == 4
+
+
+def test_tide_chart():
+    chart = weather.tide_chart(_saved_tides(), date(2026, 11, 25), TIDES_NOW)
+    assert chart["line"].startswith("M0.0,") and chart["line"].count(" L") == 96
+    assert [d["high"] for d in chart["dots"]] == [False, True, False, True]
+    assert chart["now"] == 360.0  # noon, half way across
+    # Every point is inside the chart, with room above and below for the times.
+    ys = [float(xy.split(",")[1]) for xy in chart["line"][1:].split(" L")]
+    assert 42 <= min(ys) and max(ys) <= weather.CHART_HEIGHT - 42
+    # A day that the saved tides don't cover from start to end has no chart.
+    assert weather.tide_chart(_saved_tides(), date(2026, 11, 27), TIDES_NOW) is None
+    assert weather.tide_chart(None, date(2026, 11, 25), TIDES_NOW) is None
+
+
+def test_tide_station_setting(monkeypatch):
+    from guheadlines.settings import load_settings
+
+    monkeypatch.delenv("TIDE_STATION", raising=False)
+    assert load_settings().tide_station == "1630000"
+    for value, station in (
+        ("", ""),
+        (" 1631428 ", "1631428"),
+        ("TPT2707", "TPT2707"),
+        ("16 30", ""),
+    ):
+        monkeypatch.setenv("TIDE_STATION", value)
+        assert load_settings().tide_station == station, value
+
+
+def test_tides_are_read_every_few_hours(clean_db):
+    import dataclasses
+
+    from guheadlines.settings import get_settings
+
+    settings = get_settings()
+    kinds = lambda results: [kind for kind, _, _ in results]  # noqa: E731
+    client, seen = _fake_sources()
+    assert "tides" in kinds(weather.check_weather(settings, client))
+    # Saved a moment ago: not read again, unless asked (guheadlines weather).
+    assert "tides" not in kinds(weather.check_weather(settings, client))
+    assert "tides" in kinds(weather.check_weather(settings, client, force_tides=True))
+    later = datetime.now(timezone.utc) + weather.TIDES_EVERY
+    assert weather.tides_due("1630000", later)
+    # Another station: read now. No station: never read.
+    assert weather.tides_due("1631428")
+    off = dataclasses.replace(settings, tide_station="")
+    assert "tides" not in kinds(weather.check_weather(off, client, force_tides=True))
+    # The station's name is a nice-to-have: without it, the tides still work.
+    client, _ = _fake_sources(fail=("/mdapi",))
+    data = weather.read_tides(client, "1630000", TIDES_NOW)
+    assert data["name"] == "" and len(data["tides"]) == 11
+
+
+# ----------------------------------------------- the Weather page's parts
+
+
+def test_sunrise_sunset_and_moon():
+    from guheadlines import sky
+    from guheadlines.scraper.text import GUAM_TZ
+
+    def clock(dt: datetime) -> str:
+        return f"{dt.astimezone(GUAM_TZ):%H:%M}"
+
+    sunrise, sunset = sky.sun_times(date(2026, 11, 25))
+    assert (clock(sunrise), clock(sunset)) == ("06:25", "17:50")
+    sunrise, sunset = sky.sun_times(date(2026, 6, 21))
+    assert (clock(sunrise), clock(sunset)) == ("05:55", "18:50")
+    assert sky.for_day(date(2026, 11, 24))["moon"] == "Full moon"
+    assert sky.for_day(date(2026, 12, 9))["moon"] == "New moon"
+    assert sky.for_day(date(2026, 12, 1))["moon"] == "Last quarter"
+
+
+def test_hourly_forecast():
+    hours = weather.parse_hourly(fixture_json("nws_hourly.json"))
+    assert len(hours) == 30
+    assert hours[0] == {
+        "time": "2026-11-25T11:00:00+10:00",
+        "temp_f": 86,
+        "rain": 13,
+        "short": "Isolated Rain Showers",
+        "wind": "ENE 15 mph",
+    }
+    assert weather.forecast_url(fixture_json("nws_points.json"), "forecastHourly").endswith(
+        "/forecast/hourly"
+    )
+    with pytest.raises(weather.WeatherError):
+        weather.parse_hourly({"properties": {"periods": []}})
+
+
+def test_surf_zone_forecast():
+    surf = weather.parse_surf(fixture_json("nws_surf.json"))
+    assert surf["issued"] == "2026-11-24T19:24:00+00:00"
+    assert surf["headlines"] == [
+        "High risk of rip currents through Thursday afternoon along east facing reefs."
+    ]
+    assert [p["name"] for p in surf["periods"]] == ["Today", "Tonight", "Thursday"]
+    today = surf["periods"][0]
+    assert today["rip"] == "High"
+    assert today["surf"] == [
+        ["North", "4 to 6 ft"],
+        ["East", "7 to 9 ft"],
+        ["South", "2 to 4 ft"],
+        ["West", "2 to 4 ft"],
+    ]
+    assert today["water_f"] == 84
+    assert surf["discussion"].startswith("A trade-wind swell will continue")
+    with pytest.raises(weather.WeatherError):
+        weather.parse_surf({"productText": "nothing", "issuanceTime": "2026-11-25T00:00:00Z"})
+
+
+def test_coastal_waters_forecast():
+    marine = weather.parse_marine(fixture_json("nws_marine.json"))
+    assert marine["headlines"] == [
+        "Small craft advisory will expire at 5 AM ChST early this morning."
+    ]
+    assert [p["name"] for p in marine["periods"]][:4] == [
+        "Today",
+        "Tonight",
+        "Thursday",
+        "Thursday Night",
+    ]
+    assert marine["periods"][0]["text"].startswith("East wind 15 kt. Seas 6 to 8 ft.")
+    assert marine["synopsis"].startswith("Moderate to fresh trade winds")
+    with pytest.raises(weather.WeatherError):
+        weather.parse_marine({"productText": "", "issuanceTime": ""})
+
+
+def test_forecast_by_day():
+    periods = weather.parse_forecast(fixture_json("nws_forecast.json"))
+    days = weather.forecast_days(periods)
+    assert [(d["name"], d["high"], d["low"]) for d in days] == [
+        ("Tonight", None, 77),
+        ("Wednesday", 88, 77),
+        ("Thanksgiving Day", 88, 77),
+        ("Friday", 86, None),
+    ]
+    assert days[1]["rain"] == 18
+
+
+def test_weather_page_parts():
+    now = TIDES_NOW
+    reports = {
+        "hourly": (weather.parse_hourly(fixture_json("nws_hourly.json")), now),
+        "surf": (weather.parse_surf(fixture_json("nws_surf.json")), now),
+        "marine": (weather.parse_marine(fixture_json("nws_marine.json")), now - timedelta(days=1)),
+        "tides": (_saved_tides(), now),
+    }
+    page = weather.weather_page(reports, TIDES_NOW, "1630000")
+    # From the hour that starts now (12 PM ChST): 11 AM is over.
+    assert page["hourly"][0]["time"] == datetime(2026, 11, 25, 2, 0, tzinfo=timezone.utc)
+    assert len(page["hourly"]) == 24
+    assert page["surf"]["issued"] == datetime(2026, 11, 24, 19, 24, tzinfo=timezone.utc)
+    assert page["marine"] is None  # a day old
+    assert [(t["time"].hour, t["high"]) for t in page["next_tides"]] == [(3, False), (8, True)]
+    assert [len(page["tide_views"][v]) for v in ("day", "week", "month")] == [1, 3, 3]
+    assert page["tide_station"]["name"] == "Apra Harbor"
+    assert page["tide_chart"]["now"] == 360.0
+    assert page["sky"]["moon"] == "Full moon"
+    # No tides for the station: no tide parts.
+    assert weather.weather_page(reports, TIDES_NOW, "")["tide_station"] is None
+
+
+def test_weather_page(client):
+    _save_weather()
+    page = client.get("/weather")
+    assert page.status_code == 200
+    html = page.text
+    assert '<a href="/weather" aria-current="page">Weather</a>' in html
+    for title in (
+        "Right now",
+        "Watches, warnings and advisories",
+        "Next 24 hours",
+        "Tides at Apra Harbor",
+        "This week",
+        "On the water",
+        "Typhoons and tropical storms",
+        "Be ready",
+    ):
+        assert f">{title}</h2>" in html, title
+    # The tide views switch with radio buttons: Day is the one shown first.
+    assert 'id="tide-day" checked' in html and 'id="tide-month">' in html
+    assert html.count('<tr class="is-today">') == 2  # the week and the month tables
+    assert '<svg viewBox="0 0 720 190"' in html and 'class="tide-now"' in html
+    assert "High risk of rip currents through Thursday afternoon" in html
+    assert "Small craft advisory will expire at 5 AM ChST" in html
+    assert "Typhoon 25W (Yagi) Warning #12" in html
+    # Each source is credited with a link.
+    for url in (
+        "https://www.weather.gov/gum/",
+        "https://www.metoc.navy.mil/jtwc/jtwc.html",
+        "https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=1630000",
+        "https://forecast.weather.gov/product.php?site=GUM&amp;issuedby=GUM&amp;product=SRF",
+        "https://forecast.weather.gov/product.php?site=GUM&amp;issuedby=GUM&amp;product=CWF",
+    ):
+        assert f'href="{url}"' in html, url
+    # Drawn on the server: the same policy as every page, no inline style.
+    from guheadlines.web.app import CONTENT_SECURITY_POLICY
+
+    assert page.headers["content-security-policy"] == CONTENT_SECURITY_POLICY
+    assert " style=" not in html and "<script src" not in html
+    # The home page's box links here and shows today's tides.
+    home = client.get("/").text
+    box = home.split('class="weather"', 1)[1].split("</section>", 1)[0]
+    assert 'href="/weather"' in box and "<h3>Tides today</h3>" in box
+    assert "Apra Harbor, NOAA ↗" in box
+
+
+def test_weather_page_before_the_first_check(client):
+    page = client.get("/weather")
+    assert page.status_code == 200
+    assert "No recent reading from the airport." in page.text
+    assert "No tide predictions yet." in page.text
+    assert "Sunrise" in page.text  # worked out here, so always there
+
+
+def test_no_weather_page_when_the_weather_is_off(client, monkeypatch):
+    from test_web import _set
+
+    _set(monkeypatch, weather_interval_minutes=0)
+    assert client.get("/weather").status_code == 404
+    assert 'href="/weather"' not in client.get("/").text
+    assert "/weather</loc>" not in client.get("/sitemap.xml").text
+
+
+def test_weather_page_in_the_sitemap(client):
+    assert "/weather</loc>" in client.get("/sitemap.xml").text
