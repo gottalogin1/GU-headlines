@@ -302,6 +302,19 @@ travels without protection.
 - The disclaimer on the Sources page gets a short paragraph that tells
   visitors about the counts.
 
+## Newsletter feed
+
+The worker makes a feed of the top stories for an email newsletter, at your
+domain followed by `/feed.xml`. An email service such as SendFox reads it.
+See [Newsletter feed](newsletter.md) for how the stories are picked and for
+connecting SendFox step by step.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `NEWSLETTER_DAYS` | `tue,fri` | The days of the week when the worker makes a new edition of the feed. Day names in English, or their first three letters, with commas. Empty: no feed. |
+| `NEWSLETTER_TIME` | `10:00` | The time of the edition, in Guam time, on a 24-hour clock. Make it about two hours before the email goes out. |
+| `NEWSLETTER_STORIES` | `12` | The number of stories in each edition (1 to 50). |
+
 ## Checking for news
 
 | Setting | Default | What it does |

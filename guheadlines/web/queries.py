@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -16,6 +17,7 @@ from ..models import (
     EventCalendar,
     Job,
     JobSource,
+    NewsletterEdition,
     PageViews,
     Referrers,
     ScrapeRun,
@@ -550,3 +552,66 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
             ).all()
         ),
     }
+
+
+# ------------------------------------------------------------- newsletter
+
+
+def top_stories(
+    session: Session,
+    since: datetime,
+    until: datetime,
+    limit: int,
+    per_source: int,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
+) -> list[int]:
+    """The ids of the stories for a newsletter edition (see newsletter.py):
+    stories first found from `since` to `until`, the ones readers clicked most
+    first, then those with a photo, then the newest; at most `per_source` from
+    one news source."""
+    clicks = (
+        select(StoryClicks.article_id, func.sum(StoryClicks.clicks).label("clicks"))
+        .group_by(StoryClicks.article_id)
+        .subquery()
+    )
+    has_photo = func.coalesce(Article.image_path, Article.image_url, "") != ""
+    stmt = (
+        select(Article.id, Article.source_id)
+        .outerjoin(clicks, clicks.c.article_id == Article.id)
+        .where(
+            Article.first_seen_at >= since,
+            Article.first_seen_at < until,
+            # An old story that was found late (from a site's archive) is not news.
+            Article.published_at >= since - timedelta(days=1),
+            *_left_out(hide_sources, hide_topics),
+        )
+        .order_by(
+            func.coalesce(clicks.c.clicks, 0).desc(),
+            has_photo.desc(),
+            Article.published_at.desc(),
+            Article.id.desc(),
+        )
+    )
+    picked: list[int] = []
+    taken: Counter[int] = Counter()
+    for article_id, source_id in session.execute(stmt):
+        if taken[source_id] < per_source:
+            taken[source_id] += 1
+            picked.append(article_id)
+            if len(picked) == limit:
+                break
+    return picked
+
+
+def newsletter_edition(session: Session) -> tuple[datetime, list[dict]] | None:
+    """The newest newsletter edition: its time, and its stories in their
+    order (a story deleted since then is left out). None before the first."""
+    edition = session.scalar(
+        select(NewsletterEdition).order_by(NewsletterEdition.formed_at.desc()).limit(1)
+    )
+    if edition is None:
+        return None
+    rows = _rows(session, _article_query().where(Article.id.in_(edition.article_ids)))
+    by_id = {row["article"].id: row for row in rows}
+    return edition.formed_at, [by_id[i] for i in edition.article_ids if i in by_id]

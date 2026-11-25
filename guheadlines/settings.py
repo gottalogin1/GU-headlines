@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from datetime import time
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -95,6 +96,13 @@ class Settings:
     # The password of the private visitor stats page (/stats). Empty: no
     # counting, no stats page, and story links go straight to the news sites.
     stats_password: str = ""
+    # The newsletter feed (/feed.xml, see newsletter.py): a new edition of the
+    # top stories is made on these days of the week (0 is Monday), at
+    # newsletter_time, Guam time. No days: no feed.
+    newsletter_days: tuple[int, ...] = (1, 4)
+    newsletter_time: time = time(10, 0)
+    # The number of stories in each edition.
+    newsletter_stories: int = 12
 
     @property
     def sources_file(self) -> Path:
@@ -163,6 +171,40 @@ def _tide_station(value: str | None, default: str) -> str:
     return value if re.fullmatch(r"[A-Za-z0-9]{1,16}", value) else ""
 
 
+DAY_NAMES = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _days(value: str | None, default: tuple[int, ...]) -> tuple[int, ...]:
+    """NEWSLETTER_DAYS "tue,fri" -> (1, 4) (0 is Monday). Each day is its
+    English name or the first three letters of it. Empty: () (no feed).
+    Missing, or no day name in it: the default."""
+    if value is None:
+        return default
+    words = value.replace(",", " ").lower().split()
+    if not words:
+        return ()
+    short = [name[:3] for name in DAY_NAMES]
+    days = {short.index(word[:3]) for word in words if word[:3] in short}
+    return tuple(sorted(days)) or default
+
+
+def _clock(value: str | None, default: time) -> time:
+    """NEWSLETTER_TIME "10:00", "14:30", "9" or "2:30 pm" -> a time of day;
+    the default when the setting is missing or not a time."""
+    text = (value or "").strip().lower()
+    found = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?(?:\s*([ap])\.?m?\.?)?", text)
+    if not found:
+        return default
+    hour, minute = int(found[1]), int(found[2] or 0)
+    if found[3]:  # a 12-hour clock: 12 am is midnight, 12 pm is noon
+        if not 1 <= hour <= 12:
+            return default
+        hour = hour % 12 + (12 if found[3] == "p" else 0)
+    if hour > 23 or minute > 59:
+        return default
+    return time(hour, minute)
+
+
 def load_settings() -> Settings:
     env = os.environ
     db_url = env.get("DATABASE_URL")
@@ -213,6 +255,11 @@ def load_settings() -> Settings:
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
         stats_password=env.get("STATS_PASSWORD", "").strip(),
+        newsletter_days=_days(env.get("NEWSLETTER_DAYS"), defaults.newsletter_days),
+        newsletter_time=_clock(env.get("NEWSLETTER_TIME"), defaults.newsletter_time),
+        newsletter_stories=max(
+            1, min(50, _int(env.get("NEWSLETTER_STORIES"), defaults.newsletter_stories))
+        ),
     )
 
 

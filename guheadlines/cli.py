@@ -297,6 +297,16 @@ def cmd_worker(args, settings: Settings) -> None:
         threading.Thread(
             target=_weather_loop, args=(settings, stop), name="weather", daemon=True
         ).start()
+    if settings.newsletter_days:
+        from .newsletter import schedule_text
+
+        log.info(
+            "newsletter feed on: a new edition every %s (Guam time)",
+            schedule_text(settings.newsletter_days, settings.newsletter_time),
+        )
+        threading.Thread(
+            target=_newsletter_loop, args=(settings, stop), name="newsletter", daemon=True
+        ).start()
     if settings.scrape_on_start:
         run_once()
         run_jobs_if_due()
@@ -330,6 +340,32 @@ def _weather_loop(settings: Settings, stop: threading.Event) -> None:
         except Exception:
             log.exception("weather check failed")
         if stop.wait(settings.weather_interval_minutes * 60):
+            return
+
+
+def _newsletter_loop(settings: Settings, stop: threading.Event) -> None:
+    """Makes each newsletter edition on time (see newsletter.py), also while
+    a news check is running. At the start, it makes the newest edition that
+    is due, so the feed has stories at once."""
+    from .newsletter import form_edition, next_edition_time
+
+    while True:
+        now = datetime.now(timezone.utc)
+        try:
+            made = form_edition(settings, load_config(settings.config_dir), now)
+        except Exception:
+            log.exception("newsletter edition failed; trying again in 5 minutes")
+            wait = 300.0
+        else:
+            if made:
+                log.info(
+                    "newsletter edition of %s made: %d stories",
+                    f"{made[0]:%a %b %d %H:%M}",
+                    made[1],
+                )
+            due = next_edition_time(now, settings.newsletter_days, settings.newsletter_time)
+            wait = (due - datetime.now(timezone.utc)).total_seconds() + 1
+        if stop.wait(max(wait, 1)):
             return
 
 
