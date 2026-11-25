@@ -292,6 +292,18 @@ def cmd_worker(args, settings: Settings) -> None:
         except Exception:
             log.exception("alert check failed")
 
+    def look_after_photos() -> None:
+        """Small copies of older photos, and the IMAGE_STORAGE_GB limit (photos.py)."""
+        from .photos import tidy_photos
+
+        try:
+            report = tidy_photos(settings)
+        except Exception:
+            log.exception("photo tidy-up failed")
+            return
+        if report.changed:
+            log.info("saved photos: %s", report.summary(settings.image_storage_gb))
+
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
         try:
@@ -339,6 +351,7 @@ def cmd_worker(args, settings: Settings) -> None:
         run_events_if_due()
         run_bids_if_due()
         check_alerts()
+        look_after_photos()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -354,6 +367,7 @@ def cmd_worker(args, settings: Settings) -> None:
             run_events_if_due()
             run_bids_if_due()
             check_alerts()
+            look_after_photos()
     log.info("worker stopped")
 
 
@@ -407,6 +421,22 @@ def cmd_weather(args, settings: Settings) -> None:
     for kind, data, error in check_weather(settings, force_tides=True):
         shown = f"ERROR: {error}" if error else json.dumps(data, ensure_ascii=False)[:300]
         print(f"{kind:<11} {shown}")
+
+
+def cmd_photos(args, settings: Settings) -> None:
+    """Show the space the saved photos use, and tidy them up now (the worker
+    does this after each news check; see photos.py)."""
+    from .photos import tidy_photos
+
+    wait_for_db()
+    migrate()
+    report = tidy_photos(settings, max_small=None)
+    limit = f"{settings.image_storage_gb:g} GB" if settings.image_storage_gb else "no limit"
+    print(f"Saved photos: {report.files:,} files, {report.size}")
+    print(f"Space allowed (IMAGE_STORAGE_GB): {limit}")
+    print(f"Small copies made just now: {report.small_made:,}")
+    print(f"Unused files deleted just now: {report.unused_deleted:,}")
+    print(f"Oldest stories whose photos were deleted just now: {report.stories_pruned:,}")
 
 
 def cmd_check(args, settings: Settings) -> None:
@@ -901,6 +931,7 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
+    sub.add_parser("photos", help="show the space the saved photos use, and tidy them up now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
 
@@ -930,6 +961,7 @@ def main(argv: list[str] | None = None) -> None:
         "bids": cmd_bids,
         "alert-test": cmd_alert_test,
         "weather": cmd_weather,
+        "photos": cmd_photos,
     }[args.command]
     handler(args, settings)
 

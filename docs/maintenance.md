@@ -401,7 +401,15 @@ Good to know:
 ## Disk space
 
 The collection grows by roughly **2 to 4 GB a year**, almost all of it
-photos. To see how much Docker uses:
+photos. The photos stop growing at `IMAGE_STORAGE_GB` (5 GB unless you change
+it): above it, the worker deletes the photos of the oldest stories, which then
+show the news site's own photo. To see how much space the photos use:
+
+```sh
+docker compose exec worker guheadlines photos
+```
+
+To see how much Docker uses in all:
 
 ```sh
 docker system df
@@ -413,8 +421,9 @@ Old versions of the program pile up after updates. Remove unused ones with:
 docker image prune
 ```
 
-(This never touches your stories or photos.) If disk space gets tight, you
-can set `STORE_IMAGES=false` in `.env`; see [Changing settings](settings.md#photos).
+(This never touches your stories or photos.) If disk space gets tight, lower
+`IMAGE_STORAGE_GB` in `.env`, or set `STORE_IMAGES=false` to save no photos
+at all; see [Changing settings](settings.md#photos).
 
 ---
 
@@ -532,8 +541,10 @@ Before making the site public, read the [note on content](../README.md#a-note-on
 The site is ready for Google and Bing: every page has a title, a summary,
 one canonical address and a link preview card, and
 `https://news.example.com/sitemap.xml` lists every page worth finding (the
-home page, each topic and news site, the Jobs, Events and Sources pages, and
-the archive down to each day). Search engines find it through `robots.txt`.
+home page, each topic and news site, the Jobs, Events and Sources pages, each
+upcoming event's own page, and the archive down to each day). The event pages
+describe their event in the form Google reads for its event results (see
+[Each event's page](events.md#each-events-page)). Search engines find it through `robots.txt`.
 
 To get listed sooner and see how people find the site:
 

@@ -6,15 +6,18 @@
    the click; search engines are asked not to follow them. #}
 {% set link = story_link(a) %}
 {% set rel = "nofollow noopener" if link.startswith("/go/") else "noopener" %}
-{% set photo = ('/media/' ~ a.image_path) if a.image_path else a.image_url|safe_url %}
-{% set loading %}{% if first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async"{% if not a.image_path %} referrerpolicy="no-referrer"{% endif %}{% endset %}
+{# Our saved copy (the small one on larger screens), or the news site's photo. #}
+{% set photo = story_photo(a) %}
+{% set loading %}{% if first %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async"{% if photo and photo.remote %} referrerpolicy="no-referrer"{% endif %}{% endset %}
 <article class="story{% if not photo %} no-photo{% endif %}">
   {% if photo %}
+  {% set sources %}src="{{ photo.src }}"{% if photo.srcset %} srcset="{{ photo.srcset }}" sizes="{{ photo_sizes }}"{% endif %}{% endset %}
   <a class="thumb" href="{{ link }}" target="_blank" rel="{{ rel }}" tabindex="-1" aria-hidden="true">
-    {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest. #}
-    <img class="thumb-fill" src="{{ photo }}" alt="" {{ loading }}>
-    <img class="thumb-img" src="{{ photo }}" alt="" {{ loading }}
-         {% if a.image_width %}width="{{ a.image_width }}" height="{{ a.image_height }}"{% endif %}>
+    {# The whole photo, fitted inside the frame, over a blurred copy that fills the rest.
+       Both use the same address, so the browser loads the photo once. #}
+    <img class="thumb-fill" {{ sources }} alt="" {{ loading }}>
+    <img class="thumb-img" {{ sources }} alt="" {{ loading }}
+         {% if photo.width %}width="{{ photo.width }}" height="{{ photo.height }}"{% endif %}>
   </a>
   {% endif %}
   <div class="story-body">

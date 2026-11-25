@@ -5,15 +5,17 @@ and the sitemap."""
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote, urlencode
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import Request
 from markupsafe import Markup
 
+from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
 
 settings = get_settings()
@@ -85,6 +87,53 @@ def breadcrumb_data(request: Request, trail: Iterable[tuple[str, str | None]]) -
     return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": items}
 
 
+# A place that is only online. Google lists events at a physical place only.
+_ONLINE_RE = re.compile(r"\b(zoom|webex|teams|online|virtual|teleconference|live ?stream)\b", re.I)
+
+
+def event_data(
+    event, *, url: str, calendar_name: str, calendar_homepage: str | None
+) -> dict | None:
+    """Event structured data for an event's own page (`url`), so that Google
+    can list the event in its event results. None when the event has no
+    physical place, which Google needs."""
+    place = event.location
+    if not place or _ONLINE_RE.search(place):
+        return None
+    start = event.starts_at.astimezone(GUAM_TZ)
+    end = event.ends_at.astimezone(GUAM_TZ) if event.ends_at else None
+    if event.all_day:
+        # Dates only. An all-day event ends at the start of the day after its last.
+        last = (end - timedelta(days=1)).date() if end else start.date()
+        start_date, end_date = start.date().isoformat(), max(last, start.date()).isoformat()
+    else:
+        start_date, end_date = start.isoformat(), end.isoformat() if end else None
+    organizer = {"@type": "Organization", "name": event.organizer or calendar_name}
+    if calendar_homepage:
+        organizer["url"] = calendar_homepage
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": event.title,
+        "url": url,
+        "startDate": start_date,
+        # Events marked cancelled or postponed are not collected.
+        "eventStatus": "https://schema.org/EventScheduled",
+        "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+        "location": {
+            "@type": "Place",
+            "name": place,
+            "address": {"@type": "PostalAddress", "streetAddress": place, "addressCountry": "GU"},
+        },
+        "organizer": organizer,
+    }
+    if end_date:
+        data["endDate"] = end_date
+    if event.description:
+        data["description"] = event.description
+    return data
+
+
 @dataclass
 class PageMeta:
     title: str
@@ -105,6 +154,7 @@ def page_meta(
     robots: str | None = None,
     canonical: dict | None = None,
     breadcrumbs: list[tuple[str, str | None]] | None = None,
+    structured: list[dict] | None = None,
     result=None,
     static_url=None,
 ) -> PageMeta:
@@ -113,6 +163,7 @@ def page_meta(
     `canonical` holds the query parameters that make this page distinct
     (e.g. {"page": 2}); None means the page gets no canonical link (search
     results, error pages, pages search engines are told to skip).
+    `structured` is the page's own structured data, such as an event.
     """
     meta = PageMeta(
         title=title or f"{settings.site_name} · {settings.site_tagline}",
@@ -132,6 +183,8 @@ def page_meta(
     if breadcrumbs and meta.canonical:
         trail = [("Home", "/"), *breadcrumbs]
         meta.structured.append(json_ld(breadcrumb_data(request, trail)))
+    if meta.canonical:
+        meta.structured.extend(json_ld(data) for data in structured or [])
     return meta
 
 
@@ -164,12 +217,18 @@ def sitemap_xml(entries: Iterable[tuple[str, datetime | None]]) -> str:
 
 
 def sitemap_entries(
-    request: Request, data: dict, categories, sources, weather: bool = False
+    request: Request,
+    data: dict,
+    categories,
+    sources,
+    weather: bool = False,
+    events: Iterable[int] = (),
 ) -> list[tuple[str, datetime | None]]:
-    """Every page worth finding in a search: home, topics, news sources, jobs, events, bids,
-    the Weather page (when `weather` is on), the Sources page, and the archive down to
-    each day that has stories. `data` comes from queries.sitemap_data; `sources` are the
-    slugs of news sources to list."""
+    """Every page worth finding in a search: home, topics, news sources, jobs, events
+    and each upcoming event's page (`events`: their IDs), bids, the Weather page (when
+    `weather` is on), the Sources page, and the archive down to each day that has
+    stories. `data` comes from queries.sitemap_data; `sources` are the slugs of news
+    sources to list."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
     latest = data["latest"]
     entries: list[tuple[str, datetime | None]] = [(url("/"), latest)]
@@ -181,6 +240,7 @@ def sitemap_entries(
             entries.append((url(f"/source/{slug}"), data["sources"][slug]))
     entries.append((url("/jobs"), None))
     entries.append((url("/events"), None))
+    entries.extend((url(f"/events/{event_id}"), None) for event_id in events)
     entries.append((url("/bids"), None))
     if weather:
         entries.append((url("/weather"), None))

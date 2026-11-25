@@ -410,9 +410,24 @@ SCRAPER_USER_AGENT=Mozilla/5.0 (compatible; GUHeadlinesBot/1.0; +mailto:you@exam
 | Setting | Default | What it does |
 |---|---|---|
 | `STORE_IMAGES` | `true` | Save a copy of each story's photo on your server, so old stories keep their pictures even after the news site deletes them. With `false`, the photo is loaded from the news site each time a page is viewed. |
-| `IMAGE_MAX_WIDTH` | `720` | Width in pixels of saved photos. 720 looks sharp on the site, including on phones. Larger means bigger files. This only affects photos saved from now on. |
+| `IMAGE_MAX_WIDTH` | `720` | Width in pixels of the larger saved photos (the ones phones load). 720 looks sharp on the site, including on phones. Larger means bigger files. This only affects photos saved from now on. |
+| `IMAGE_STORAGE_GB` | `5` | The most disk space the saved photos may use, in GB. Above it, the worker deletes the photos of the oldest stories until the photos use 90% of it; those stories then show the news site's own photo. Decimals are fine (`2.5`). `0`: no limit. |
 
-Saved photos are stored in Docker's `media` storage, about 30 to 60 KB each.
+Saved photos are stored in Docker's `media` storage. Each photo is saved
+twice: a copy for phones (about 30 to 60 KB) and a small copy, 360 pixels
+wide, for computers and tablets, where the photo is drawn 228 pixels wide
+(about 10 to 20 KB). Each browser loads only the copy it needs. Photos saved
+before small copies existed get theirs from the worker, a few thousand after
+each news check, newest stories first. If a story has no saved copy (the
+photo was never saved, was deleted to stay within `IMAGE_STORAGE_GB`, or the
+`media` storage was not moved along with the database), the site shows the
+news site's own photo instead.
+
+To see how much space the photos use, and tidy them up at once:
+
+```sh
+docker compose exec worker guheadlines photos
+```
 
 ## Database
 

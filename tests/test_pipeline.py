@@ -10,12 +10,14 @@ import httpx
 import pytest
 import yaml
 from conftest import ROOT, fixture_bytes, make_jpeg
+from PIL import Image
 from sqlalchemy import select, text, update
 
 from guheadlines.config import parse_config
 from guheadlines.db import session_scope
 from guheadlines.models import Article, HttpCache, IgnoredImage, ScrapeRun, SeenUrl, Source
 from guheadlines.scraper.http import HttpClient
+from guheadlines.scraper.images import small_image_path
 from guheadlines.scraper.pipeline import Scraper, sync_sources
 from guheadlines.settings import get_settings
 
@@ -142,6 +144,9 @@ def test_first_run_stores_new_articles(clean_db, scraper, site):
     assert full.image_path and full.image_path.endswith(".webp")
     assert (get_settings().media_dir / full.image_path).exists()
     assert full.image_width == 720
+    # And the small copy for larger screens.
+    small = get_settings().media_dir / small_image_path(full.image_path)
+    assert Image.open(small).size == (360, 240)
 
     # Article page was blocked (403): the feed's headline and summary are used,
     # with WordPress' "[…]" and "appeared first on" boilerplate removed.

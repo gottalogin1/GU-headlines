@@ -156,10 +156,13 @@ The **Events** link lists what's coming up on Guam over the next 90 days,
 from the calendars in `config/events.yaml`, grouped by day (Today, Tomorrow,
 then each date). The time of each event is on its left, in Guam time; an
 event that started on an earlier day and is still going shows **Ongoing**.
-Each event shows its name (click to open it on its calendar), who holds it,
-when and where it is, the start of its description, and for Legislature
-sessions a link to the agenda. Use **Words** and **Calendar** to narrow the
-list. The sidebar lists each calendar with its number of upcoming events, a
+Each event shows its name (click it for the event's own page, with buttons
+that add it to Google Calendar or another calendar app), who holds it, when
+and where it is, the start of its description, a link to its calendar, and
+for Legislature sessions a link to the agenda. Use **Words** and **Calendar**
+to narrow the list. Under the month calendar, **Google Calendar** and **Apple
+Calendar or Outlook** subscribe to the events in a calendar app, which keeps
+them up to date by itself (see [Adding the events to a calendar app](events.md#adding-the-events-to-a-calendar-app)). The sidebar lists each calendar with its number of upcoming events, a
 red **⚠** when its last check failed, and the calendars that can't be
 collected. More in [Events](events.md).
 

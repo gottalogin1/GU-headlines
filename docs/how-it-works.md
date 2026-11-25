@@ -24,7 +24,7 @@ page to run GU Headlines.
 |---|---|---|
 | `db` | PostgreSQL 16, the database | Data is kept in the Docker volume `pgdata`. |
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
-| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)), the bid lists every `BIDS_INTERVAL_HOURS` (see [Bids and RFPs](bids.md)), the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)), and makes each newsletter edition on `NEWSLETTER_DAYS` at `NEWSLETTER_TIME` in another thread (see [Newsletter feed](newsletter.md)). |
+| `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)), the bid lists every `BIDS_INTERVAL_HOURS` (see [Bids and RFPs](bids.md)), the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)), makes each newsletter edition on `NEWSLETTER_DAYS` at `NEWSLETTER_TIME` in another thread (see [Newsletter feed](newsletter.md)), and after each news check tidies the saved photos: small copies of older photos, files no story uses, and the `IMAGE_STORAGE_GB` limit (see [Photos](settings.md#photos)). |
 | `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. |
 
 `web` and `worker` are the same program (`guheadlines`) started with
@@ -63,8 +63,9 @@ For each news site that is switched on (and not marked `cannot_scrape`):
    about 280 characters (at most three paragraphs, cut at 700 characters),
    skipping photo captions, bylines and "subscribe" lines.
 5. **Tag and store.** Topics are assigned ([Topics](topics.md)). The photo is
-   downloaded, resized to `IMAGE_MAX_WIDTH`, and saved as WebP. A photo the
-   site reuses on many stories (a logo) is ignored from then on.
+   downloaded, resized to `IMAGE_MAX_WIDTH`, and saved as WebP, with a small
+   copy 360 pixels wide for larger screens. A photo the site reuses on many
+   stories (a logo) is ignored from then on.
 6. **Retry or remember.** Pages that fail are retried after 1, 2, 4 and
    8 hours. If an article page is blocked but its feed was readable, the
    feed's headline and summary are used instead.
