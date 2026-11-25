@@ -1,8 +1,8 @@
-"""Visitor counts for the private stats page (/stats): page views and story
-clicks, counted on the server.
+"""Visitor counts for the private stats page (/stats): page views, story
+clicks and the websites that visits come from, counted on the server.
 
 No script runs in the visitor's browser, no cookie is set and no IP address is
-kept: a view or a click only adds 1 to a total for its Guam day. Each web
+kept: a view, a click or a visit only adds 1 to a total for its Guam day. Each web
 worker process adds up its counts in memory, and a thread of its own writes
 them to the database every FLUSH_SECONDS, so a page view costs no database
 write.
@@ -16,13 +16,14 @@ import threading
 import time
 from collections import Counter
 from datetime import date, datetime
+from urllib.parse import urlsplit
 
 from fastapi import Request
 from sqlalchemy import BigInteger, Date, Integer, column, select, values
 from sqlalchemy.dialects.postgresql import insert
 
 from ..db import session_scope
-from ..models import Article, PageViews, StoryClicks
+from ..models import Article, PageViews, Referrers, StoryClicks
 from ..scraper.text import GUAM_TZ
 
 log = logging.getLogger(__name__)
@@ -56,6 +57,37 @@ def is_reader(request: Request) -> bool:
     return mode == "navigate"
 
 
+# A host name such as www.google.com (a Referer header can hold anything).
+_HOST = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
+# Names for the phone and link-redirect copies of a site: m.facebook.com and
+# lm.facebook.com count as facebook.com.
+_SUBSITE = re.compile(r"^(www|m|l|lm|mobile)\.")
+
+
+def _site(host: str) -> str:
+    return _SUBSITE.sub("", host)
+
+
+def came_from(request: Request) -> str | None:
+    """The website that a visit came from (only its name, such as google.com),
+    "" when it came from no site (typed, a bookmark, or an app that hides it),
+    or None when the reader came from another page of this site."""
+    referrer = request.headers.get("referer", "")
+    try:
+        parts = urlsplit(referrer)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return ""
+    if parts.scheme not in ("http", "https"):
+        return ""
+    site = _site(host)
+    if site == _site((request.url.hostname or "").lower()):
+        return None
+    if len(host) > 100 or not _HOST.fullmatch(host):
+        return ""
+    return site
+
+
 class Counts:
     """The counts of one web worker process that are not in the database yet."""
 
@@ -63,6 +95,7 @@ class Counts:
         self._lock = threading.Lock()
         self._views: Counter[tuple[date, str]] = Counter()
         self._clicks: Counter[tuple[date, int]] = Counter()
+        self._referrers: Counter[tuple[date, str]] = Counter()
         self._writer: threading.Thread | None = None
 
     def view(self, path: str) -> None:
@@ -70,6 +103,9 @@ class Counts:
 
     def click(self, article_id: int) -> None:
         self._add(self._clicks, article_id)
+
+    def referrer(self, site: str) -> None:
+        self._add(self._referrers, site)
 
     def _add(self, counter: Counter, key: str | int) -> None:
         with self._lock:
@@ -89,9 +125,9 @@ class Counts:
         """Add the counts to the totals in the database. When the database
         cannot be reached, the counts are kept for the next try."""
         with self._lock:
-            views, clicks = self._views, self._clicks
-            self._views, self._clicks = Counter(), Counter()
-        if not views and not clicks:
+            views, clicks, referrers = self._views, self._clicks, self._referrers
+            self._views, self._clicks, self._referrers = Counter(), Counter(), Counter()
+        if not views and not clicks and not referrers:
             return
         try:
             with session_scope() as session:
@@ -102,6 +138,15 @@ class Counts:
                         stmt.on_conflict_do_update(
                             index_elements=[PageViews.day, PageViews.path],
                             set_={"views": PageViews.views + stmt.excluded.views},
+                        )
+                    )
+                if referrers:
+                    rows = [{"day": d, "site": s, "visits": n} for (d, s), n in referrers.items()]
+                    stmt = insert(Referrers).values(rows)
+                    session.execute(
+                        stmt.on_conflict_do_update(
+                            index_elements=[Referrers.day, Referrers.site],
+                            set_={"visits": Referrers.visits + stmt.excluded.visits},
                         )
                     )
                 if clicks:
@@ -128,6 +173,7 @@ class Counts:
             with self._lock:
                 self._views.update(views)
                 self._clicks.update(clicks)
+                self._referrers.update(referrers)
 
 
 counts = Counts()

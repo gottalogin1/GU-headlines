@@ -903,3 +903,47 @@ def test_reader_check():
         "",
     ):
         assert not is_reader(request({"user-agent": robot, "sec-fetch-mode": "navigate"})), robot
+
+
+def _arrivals() -> dict:
+    from guheadlines.models import Referrers
+    from guheadlines.web import stats
+
+    stats.counts.flush()
+    with session_scope() as session:
+        return {row.site: row.visits for row in session.query(Referrers)}
+
+
+def test_the_websites_that_visits_come_from_are_counted(counting):
+    import base64
+
+    for referrer in (
+        "https://www.google.com/",
+        "https://www.google.com/",
+        "https://lm.facebook.com/l.php?u=https%3A%2F%2Fguamheadlines.com%2F&h=AT0",
+        "https://m.facebook.com/",
+        "https://news.google.com/stories/abc?hl=en-US",
+        "android-app://com.google.android.gm/",
+        "javascript:alert(1)",
+        "https://" + "x" * 120 + ".com/",
+        "not an address",
+    ):
+        counting.get("/", headers={**BROWSER, "referer": referrer})
+    counting.get("/", headers=BROWSER)  # typed, or a bookmark
+    # Moving between the site's own pages is not a new visit.
+    counting.get("/category/labor", headers={**BROWSER, "referer": "https://testserver/"})
+    # Robots and missing pages are not counted.
+    robot = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+    counting.get("/", headers={"user-agent": robot, "referer": "https://spam.example/"})
+    counting.get("/nope", headers={**BROWSER, "referer": "https://spam.example/"})
+    # Only the site's name is kept: no address, page or search words.
+    assert _arrivals() == {"google.com": 2, "facebook.com": 2, "news.google.com": 1, "": 5}
+
+    login = {"authorization": "Basic " + base64.b64encode(b":a long stats password").decode()}
+    page = counting.get("/stats", headers=login).text
+    table = page.split("Where readers come from", 1)[1].split("</table>", 1)[0]
+    rows = [" ".join(row.split()) for row in table.split("<tr>")[2:]]
+    assert rows[0].startswith('<td><span class="muted">No website</span></td><td class="num">5')
+    # Most visits first; a tie in name order.
+    assert rows[1].startswith('<td>facebook.com</td><td class="num">2</td><td class="num">20%')
+    assert rows[2].startswith('<td>google.com</td><td class="num">2</td><td class="num">20%')

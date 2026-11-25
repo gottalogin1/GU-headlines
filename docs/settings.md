@@ -239,9 +239,9 @@ Open `https://your-domain/ads.txt` in a browser (put your own domain in).
 GU Headlines can count page views and story clicks, and show them on a private
 page of your site, `/stats`, behind a password. The page shows the totals for
 today, the last 7, 30 or 90 days or the last year, a chart for each day, the
-stories readers opened most, the clicks for each news source, the views and
-clicks for each topic, and the most viewed pages. Until you set a password,
-nothing is counted.
+websites that readers come from, the stories readers opened most, the clicks
+for each news source, the views and clicks for each topic, and the most viewed
+pages. Until you set a password, nothing is counted.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -268,6 +268,15 @@ travels without protection.
   and the stats page itself are not counted.
 - A **story click** each time a person follows a story's link (the headline,
   the photo or "Read the full story") to the news site.
+- **Where readers come from**: for each visit that starts on your site, the
+  website it came from, such as `google.com` or `facebook.com` (the phone
+  copies `m.facebook.com` and `lm.facebook.com` count as `facebook.com`).
+  Moving from one page of your site to another is not a new visit. **No
+  website** means that the person typed the address, used a bookmark, or
+  opened the link in an app that does not tell where it came from (many chat
+  and email apps). The browser sends this information with each visit (the
+  Referer header). Most sites send only their name, and the stats page keeps
+  only that name, never the full address or search words.
 - Search engines, link previews (Facebook, Discord, iMessage and others),
   speed tests such as PageSpeed, other robots, and pages that the browser
   loads before the person opens them are not counted. Your own visits are
@@ -278,8 +287,8 @@ travels without protection.
 - The counting happens on your own server, so no script runs in the
   visitor's browser and the pages are as fast as before. No cookie is set,
   no outside service is used, and no API key is needed.
-- The site keeps only totals: one number for each page, and one for each
-  story, for each Guam day. It stores no IP address, no browser name and no
+- The site keeps only totals: one number for each page, one for each story,
+  and one for each website that sent visits, for each Guam day. It stores no IP address, no browser name and no
   other personal detail.
 - While the stats are on, each story link first opens a short address on your
   own site, `/go/<number>`. It counts the click and sends the reader on to the
