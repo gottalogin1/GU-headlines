@@ -36,7 +36,9 @@
           {% if settings.weather_interval_minutes %}
           <a href="/weather" {% if active_nav == 'weather' %}aria-current="page"{% endif %}>Weather</a>
           {% endif %}
-          <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
+          {% if settings.outages_interval_minutes %}
+          <a href="/outages" {% if active_nav == 'outages' %}aria-current="page"{% endif %}>Outages</a>
+          {% endif %}
         </nav>
         <form class="search" action="/search" method="get" role="search">
           <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -60,7 +62,9 @@
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
     <aside class="sidebar">
+      {% if sponsor %}{% include "_sponsor.html" %}{% endif %}
       {% if show_ad %}{% include "_ad.html" %}{% endif %}
+      {% if signup and show_signup %}{% include "_signup_box.html" %}{% endif %}
       {% block sidebar %}{% include "_sidebar.html" %}{% endblock %}
     </aside>
   </div>
@@ -70,7 +74,8 @@
       <strong>{{ settings.site_name }}</strong> · {{ settings.site_tagline }}.<br>
       Headlines, intros and images belong to their publishers; every story links to the original.
       Checked for new stories every hour. Times are Chamorro Standard Time (ChST).<br>
-      <a href="/status#about">About this site</a> · <a href="/status#disclaimer">Disclaimer</a>
+      <a href="/status">Sources</a> · <a href="/status#about">About this site</a> · <a href="/status#disclaimer">Disclaimer</a>
+      {%- if signup %} · <a href="/newsletter">Newsletter</a>{% endif %}
     </div>
   </footer>
 </body>

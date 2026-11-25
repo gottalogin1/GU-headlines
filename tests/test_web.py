@@ -141,6 +141,9 @@ def test_odd_addresses_are_refused_without_a_server_error(client):
 
 def test_status_and_health(client):
     assert "KUAM News" in client.get("/status").text
+    # The Sources page is linked from every page's footer (the top bar is full).
+    footer = client.get("/").text.split('<footer class="footer">', 1)[1]
+    assert '<a href="/status">Sources</a>' in footer
     health = client.get("/healthz").json()
     assert health["status"] == "ok" and health["last_scrape"]
     assert "Disallow: /search" in client.get("/robots.txt").text

@@ -92,6 +92,11 @@ that is always on can do this by itself after each change; see
   sunrise and sunset, and the high and low tides for a day, a week or a
   month, each part linked to its source. Free government data, no key.
   See [Weather](docs/settings.md#weather).
+- **Outages page** with the power outages from GPA, the water outages from
+  GWA, and boil-water notices, by day, each linked to the agency's notice.
+- **Gas prices** in the sidebar: regular, premium and diesel, picked up from
+  the local news, each with the day and a link to its story. See
+  [Outages and gas prices](docs/settings.md#outages-and-gas-prices).
 - **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
   from the news. It can show an ad.
 - **Light and dark mode**: follows your device's setting, with a switch in the

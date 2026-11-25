@@ -9,6 +9,7 @@ followed by `/feed.xml`, for example `https://guamheadlines.com/feed.xml`.
 - [Settings](#settings)
 - [Connecting SendFox](#connecting-sendfox)
 - [Checking the feed](#checking-the-feed)
+- [The sign-up box](#the-sign-up-box)
 
 ## How the stories are picked
 
@@ -125,3 +126,97 @@ without the photo.
 - An edition with no stories (no new stories were found, for example because
   the worker was stopped) makes a feed with no stories. The email service
   then finds no new stories to send.
+
+## The sign-up box
+
+With a SendFox API token in `.env`, every page has a small **Newsletter** box
+in the right-hand column (below the stories on a phone), where readers type
+their email address to join your SendFox list. The site also gets a newsletter
+page, `/newsletter`, with the same form and a few lines about the email, and
+the footer of every page links to it.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SENDFOX_API_TOKEN` | *(empty)* | A SendFox API token. A token here turns the box on. Secret: a person who has it can see and change your contacts. |
+| `SENDFOX_LIST` | *(empty)* | The list that new readers join: its name as SendFox shows it, or its number. Empty: the account's only list. |
+
+**How it works**
+
+- The form is part of the site. The reader's browser sends the address to
+  your site (`/newsletter`), and your server adds it to the list with
+  SendFox's API. No SendFox script loads in the reader's browser, so the pages
+  stay as fast as before and the security rules do not change.
+- After a sign-up, the newsletter page tells the reader to check their inbox
+  and confirm their address in the email from SendFox (or says what went
+  wrong, such as an address with a typing error). The box and the page also
+  say this before the reader signs up. Only confirmed addresses get the
+  newsletter.
+- SendFox keeps one contact for each address, so signing up twice does no
+  harm.
+- Robots are kept out in three ways: a field that people do not see (a robot
+  that fills it in is told that all went well, and nothing is sent), forms
+  are taken only from the pages of your own site, and at most 5 sign-ups an
+  hour come from one internet address (100 an hour in all).
+- The site does not keep the addresses. They go straight to SendFox, and the
+  site's log says only that a sign-up was added or why it failed.
+
+**How to turn it on**
+
+1. Sign in to SendFox and open the page for API tokens:
+   <https://sendfox.com/account/oauth>. In the menus it is in your account
+   settings (your name or picture at the top right), under **Connections** or
+   **Integrations**, as **API** or **Personal Access Tokens**. SendFox changes
+   these names now and then.
+2. Make a new token, and name it GU Headlines. SendFox shows the token only
+   once, so copy it at once.
+3. Put it in `.env` and run `docker compose up -d`:
+
+   ```
+   SENDFOX_API_TOKEN=the-token-from-step-2
+   ```
+
+4. Check it:
+
+   ```
+   docker compose exec web guheadlines sendfox-check
+   ```
+
+   It shows your SendFox account, its lists, and the list that sign-ups join.
+   If your account has more than one list, it says "Problem" and names them.
+   Put the name of the list for new readers in `.env` as `SENDFOX_LIST` (for
+   example `SENDFOX_LIST=Guam Headlines`), run `docker compose up -d`, and
+   check again.
+5. Sign up on your own site, with an email address of yours. The page says
+   "Thanks, you're signed up", and the address shows in your SendFox contacts
+   within a minute. SendFox sends the address an email to confirm it: open it
+   and confirm.
+
+To turn the box off, make `SENDFOX_API_TOKEN` empty and run
+`docker compose up -d`.
+
+**If the page says that the sign-up didn't work**
+
+Run `docker compose logs web | grep newsletter`. The line after "newsletter
+sign-up failed" tells why, for example:
+
+- "SendFox refused SENDFOX_API_TOKEN": the token is wrong or was deleted in
+  SendFox. Make a new one (steps 1 to 3).
+- "SendFox has no list": the name in `SENDFOX_LIST` is not the name of one of
+  your lists. The line names your lists; copy one of them.
+- "SendFox could not be reached": SendFox or the server's internet connection
+  was down for a moment. Try again later.
+
+**If sign-ups stay unconfirmed**
+
+SendFox can ask each new contact to confirm the address by email (double
+opt-in). Only confirmed contacts get your emails. Look at your own test
+address in SendFox's contacts after step 5:
+
+- If it is confirmed, or it got an email to confirm it, all is well.
+- If it shows as "Unconfirmed" and no email came, the sign-ups would never get
+  the newsletter. Look for the double opt-in (confirmation email) setting in
+  SendFox's settings and turn it off, or ask SendFox's support how contacts
+  added through the API are confirmed. With double opt-in off, the hidden
+  field and the limit of sign-ups above are what keep robots from signing up
+  other people's addresses.
+

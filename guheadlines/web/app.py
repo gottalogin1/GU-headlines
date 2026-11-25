@@ -7,13 +7,15 @@ import hashlib
 import logging
 import re
 import secrets
+import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import (
@@ -28,10 +30,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from sqlalchemy import select
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import health
+from .. import gas, health, sendfox
 from ..config import (
     AppConfig,
     CalendarConfig,
@@ -46,9 +49,10 @@ from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..newsletter import schedule_text
+from ..outages import EPA_URL, GPA_TROUBLE_PHONE, GPA_URL, GWA_DISPATCH_PHONE, GWA_URL, outages_page
 from ..scraper.images import SMALL_WIDTH, small_image_path
 from ..scraper.text import GUAM_TZ, truncate
-from ..settings import get_settings
+from ..settings import DAY_NAMES, get_settings
 from ..weather import (
     GUAM_RADAR_URL,
     JTWC_URL,
@@ -58,7 +62,7 @@ from ..weather import (
     for_page,
     weather_page,
 )
-from . import event_calendar, queries, seo, stats
+from . import event_calendar, queries, seo, sponsor, stats
 from .queries import MARK_END, MARK_START, BidFilters, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -338,12 +342,13 @@ class _TTLCache:
 # shared between requests for two minutes.
 sidebar_cache = _TTLCache(ttl=120)
 # The weather is read on every page, for the warning banner; the worker
-# updates it every few minutes.
+# updates it every few minutes. The outage notices (outages.py) are kept in
+# the same table and come with it.
 weather_cache = _TTLCache(ttl=60)
 
 
 def weather_reports() -> dict[str, tuple]:
-    """The saved weather (see weather.py)."""
+    """The saved weather (see weather.py) and outage notices (outages.py)."""
 
     def load():
         with session_scope() as session:
@@ -622,6 +627,62 @@ def page_url(request: Request, **changes) -> str:
     return f"{request.url.path}?{query}" if query else request.url.path
 
 
+def gas_prices(config) -> list[gas.Price]:
+    """Guam's newest regular, premium and diesel prices, read from the news
+    (gas.py). Empty when GAS_PRICE_DAYS is 0 or no recent story gives one."""
+    if not settings.gas_price_days:
+        return []
+    since = datetime.now(timezone.utc) - timedelta(days=settings.gas_price_days)
+    with session_scope() as session:
+        rows = queries.gas_price_stories(
+            session,
+            since,
+            hide_sources=config.hidden_sources(),
+            hide_topics=config.separate_topics(),
+            mute=config.muted,
+        )
+    return gas.latest_prices([gas.Story(**row) for row in rows])
+
+
+def sponsor_ad() -> dict | None:
+    """The sponsor spot (_sponsor.html), or None while SPONSOR_IMAGE has no picture."""
+    picture = sponsor.picture(settings)
+    if picture is None:
+        return None
+    link = settings.sponsor_link
+    counted = bool(link and settings.stats_password)
+    return {
+        "src": f"/sponsor.webp?v={picture.version}",
+        "width": picture.width,
+        "height": picture.height,
+        "alt": settings.sponsor_alt or (f"Sponsor: {domain(link)}" if link else "Sponsor"),
+        # While the visitor stats are on, the click is counted on the way.
+        "href": "/go/sponsor" if counted else link,
+        "rel": "nofollow sponsored noopener" if counted else "sponsored noopener",
+    }
+
+
+def _days_text(days: tuple[int, ...], word: str) -> str:
+    """(1, 4), "and" -> "Tuesday and Friday"."""
+    names = [DAY_NAMES[d].capitalize() for d in days]
+    if len(names) <= 1:
+        return "".join(names)
+    return ", ".join(names[:-1]) + f" {word} {names[-1]}"
+
+
+def signup_info() -> dict | None:
+    """The newsletter sign-up box and page, or None while SENDFOX_API_TOKEN is empty."""
+    if not settings.sendfox_api_token:
+        return None
+    days = settings.newsletter_days
+    pitch = "The top Guam stories by email"
+    if len(days) == 7:
+        pitch += " every day"
+    elif days:
+        pitch += " every " + _days_text(days, "and")
+    return {"pitch": pitch + "."}
+
+
 def render(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
     """Render a page with what every page needs: the sections, the sidebar and
     the pagination helper."""
@@ -642,10 +703,12 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "facets_week": facets,
             "last_updated": last_updated,
             "uncollectable": [s for s in config.uncollectable_sources if s.slug not in hidden],
+            "gas": gas_prices(config),
         }
 
     context.setdefault("title", None)
     count_view = context.pop("count_view", True)
+    show_signup = context.pop("show_signup", True)
     # The ad block, on the pages that ask for it, once AdSense is set up.
     show_ad = context.pop("show_ad", False) and bool(
         settings.adsense_client and settings.adsense_slot
@@ -673,6 +736,9 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "seo": meta,
             "show_ad": show_ad,
             "csp_nonce": nonce,
+            "sponsor": sponsor_ad(),
+            "signup": signup_info(),
+            "show_signup": show_signup,
             "weather": (
                 for_page(
                     weather_reports(),
@@ -993,6 +1059,33 @@ def weather_view(request: Request):
         active_nav="weather",
         canonical={},
         breadcrumbs=[("Weather", None)],
+    )
+
+
+@app.get("/outages", response_class=HTMLResponse)
+def outages_view(request: Request):
+    if not settings.outages_interval_minutes:
+        raise HTTPException(404)
+    return render(
+        request,
+        "outages.html",
+        outages=outages_page(weather_reports(), datetime.now(timezone.utc)),
+        sources={
+            "gpa": GPA_URL,
+            "gwa": GWA_URL,
+            "epa": EPA_URL,
+            "gpa_phone": GPA_TROUBLE_PHONE,
+            "gwa_phone": GWA_DISPATCH_PHONE,
+        },
+        title="Guam power and water outages",
+        description=(
+            "Power outages from the Guam Power Authority and water outages and boil-water"
+            " notices from the Guam Waterworks Authority and Guam EPA: today, coming up and"
+            " the last few days, by village."
+        ),
+        active_nav="outages",
+        canonical={},
+        breadcrumbs=[("Outages", None)],
     )
 
 
@@ -1318,6 +1411,36 @@ def _jobs_description(boards: list[str]) -> str:
     return text + ". Every posting links to the board that published it."
 
 
+@app.get("/go/sponsor")
+def go_sponsor(request: Request):
+    """Count a click on the sponsor spot, then send the reader on to the
+    sponsor's website (SPONSOR_LINK)."""
+    if not settings.sponsor_link:
+        raise HTTPException(404)
+    if settings.stats_password and stats.is_reader(request):
+        stats.counts.sponsor_click()
+    return RedirectResponse(
+        settings.sponsor_link,
+        status_code=302,
+        headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"},
+    )
+
+
+@app.get("/sponsor.webp")
+def sponsor_picture(v: str = Query("", max_length=20)):
+    """The sponsor's picture: the small WebP copy that web/sponsor.py makes."""
+    picture = sponsor.picture(settings)
+    if picture is None:
+        raise HTTPException(404)
+    # The page's address for it carries the version, so a new picture gets a new address.
+    cache = "public, max-age=31536000, immutable" if v == picture.version else "public, max-age=300"
+    return Response(
+        picture.data,
+        media_type="image/webp",
+        headers={"Cache-Control": cache, "X-Robots-Tag": "noindex"},
+    )
+
+
 @app.get("/go/{article_id}")
 def go(request: Request, article_id: int):
     """Count a click on a story's link, then send the reader on to the story.
@@ -1406,6 +1529,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/jobs": "Jobs",
         "/events": "Events",
         "/weather": "Weather",
+        "/outages": "Outages",
         "/status": "Sources",
         "/search": "Search",
         **{f"/category/{c.slug}": c.name for c in config.categories},
@@ -1428,6 +1552,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         sources=data["sources"],
         referrers=data["referrers"][:20],
         visits=sum(row.visits for row in data["referrers"]),
+        sponsor_clicks=data["sponsor_clicks"],
         topics=sorted(topics, key=lambda t: (-t["clicks"], -t["views"])),
         news_health=news_health,
         feed_health=feed_health,
@@ -1507,6 +1632,7 @@ def sitemap(request: Request):
         config.categories,
         news_sources,
         weather=bool(settings.weather_interval_minutes),
+        outages=bool(settings.outages_interval_minutes),
         events=found["events"],
     )
     return Response(
@@ -1571,6 +1697,139 @@ def newsletter_feed(request: Request):
         media_type="application/rss+xml; charset=utf-8",
         headers={"Cache-Control": "public, max-age=600", "X-Robots-Tag": "noindex"},
     )
+
+
+# ------------------------------------------------------ newsletter sign-up
+
+
+class SignupLimit:
+    """Keeps robots from adding many addresses: at most `per_address` sign-ups
+    an hour from one IP address, and `total` an hour in all, in each web
+    worker. The IP addresses are kept in memory for an hour at most."""
+
+    def __init__(self, per_address: int = 5, total: int = 100, window: float = 3600) -> None:
+        self.per_address, self.total, self.window = per_address, total, window
+        self._lock = threading.Lock()
+        self._all: deque[float] = deque()
+        self._by_address: dict[str, deque[float]] = {}
+
+    def allow(self, address: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            while self._all and now - self._all[0] > self.window:
+                self._all.popleft()
+            for key in list(self._by_address):
+                times = self._by_address[key]
+                while times and now - times[0] > self.window:
+                    times.popleft()
+                if not times:
+                    del self._by_address[key]
+            mine = self._by_address.setdefault(address, deque())
+            if len(self._all) >= self.total or len(mine) >= self.per_address:
+                return False
+            self._all.append(now)
+            mine.append(now)
+            return True
+
+
+signup_limit = SignupLimit()
+
+# An address as people type it: something@domain.tld, without spaces or the
+# characters that only odd quoted addresses use. The browser checks it too.
+_EMAIL = re.compile(r"[^\s@<>()\[\],;:\\\"]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+_MAX_SIGNUP_BODY = 4096
+
+
+def _from_this_site(request: Request) -> bool:
+    """True when the form was sent from a page of this site. Browsers say
+    which site a form came from (the Origin header, else the Referer)."""
+    sent_from = request.headers.get("origin") or request.headers.get("referer") or ""
+    try:
+        host = (urlsplit(sent_from).netloc or "").lower()
+    except ValueError:
+        return False
+    return bool(host) and host == request.headers.get("host", "").lower()
+
+
+def _signup_results() -> dict[str, tuple[bool, str]]:
+    days = settings.newsletter_days
+    when = f" on {_days_text(days, 'or')}" if 0 < len(days) < 7 else ""
+    return {
+        "ok": (
+            True,
+            "Almost done: check your inbox. We've sent you an email to confirm your address."
+            f" Open it and confirm, and the newsletter starts with the next email{when}."
+            " If it isn't there in a few minutes, look in your spam or promotions folder.",
+        ),
+        "invalid": (
+            False,
+            "That doesn't look like an email address. Please check it and try again.",
+        ),
+        "busy": (False, "Too many sign-ups in a short time. Please try again in an hour."),
+        "error": (False, "Sorry, the sign-up didn't work this time. Please try again later."),
+    }
+
+
+@app.get("/newsletter", response_class=HTMLResponse)
+def newsletter_page(request: Request, signup: str = Query("", max_length=10)):
+    """What the newsletter is, with the sign-up form, and the result of a sign-up."""
+    if not settings.sendfox_api_token:
+        raise HTTPException(404)
+    found = _signup_results().get(signup)
+    return render(
+        request,
+        "newsletter.html",
+        title="Newsletter",
+        description=signup_info()["pitch"]
+        + " Headlines, photos and the first lines of each story, with links to the news sites.",
+        canonical={},
+        # The page after a sign-up is not one to find in a search.
+        robots="noindex, follow" if signup else None,
+        breadcrumbs=[("Newsletter", None)],
+        show_signup=False,
+        result={"ok": found[0], "text": found[1]} if found else None,
+    )
+
+
+@app.post("/newsletter")
+async def newsletter_signup(request: Request):
+    """The sign-up form (_signup.html): add the address to the SendFox list
+    (sendfox.py), then show the result on the newsletter page."""
+    if not settings.sendfox_api_token:
+        raise HTTPException(404)
+
+    def result(name: str) -> RedirectResponse:
+        return RedirectResponse(
+            f"/newsletter?signup={name}", status_code=303, headers={"Cache-Control": "no-store"}
+        )
+
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the sign-up form on the site.", status_code=403)
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > _MAX_SIGNUP_BODY:
+            return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
+    email = (form.get("email") or [""])[0].strip()
+    if (form.get("website") or [""])[0]:
+        # The field that people don't see: a robot filled it in. It is told
+        # that all went well, so it does not try again.
+        return result("ok")
+    if len(email) > 254 or not _EMAIL.fullmatch(email):
+        return result("invalid")
+    if not signup_limit.allow(request.client.host if request.client else ""):
+        log.warning("newsletter sign-up refused: too many sign-ups in the last hour")
+        return result("busy")
+    try:
+        await run_in_threadpool(sendfox.add_contact, settings, email)
+    except sendfox.InvalidEmail:
+        return result("invalid")
+    except sendfox.SignupError as exc:
+        log.warning("newsletter sign-up failed: %s", exc)
+        return result("error")
+    log.info("newsletter sign-up added to SendFox")
+    return result("ok")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

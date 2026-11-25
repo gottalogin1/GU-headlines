@@ -21,7 +21,42 @@ release, see [Updating](docs/maintenance.md#updating).
   `BIDS_INTERVAL_HOURS` (default 6), and `guheadlines bids --check` tries
   them. See [Bids and RFPs](docs/bids.md). When you update, the database
   gets two new tables, by itself, and the page works without a change to
-  `.env`.
+  `.env`. To keep the top bar on one line with Bids and Outages, the
+  **Sources** link moved to the bottom of every page, beside About this site.
+- **An Outages page.** The new **Outages** link in the top bar opens a page
+  of the power outages that the Guam Power Authority announces (from
+  GuamALERTS), the water outages that the Guam Waterworks Authority
+  announces, and the boil-water notices of the last 30 days (from GWA and
+  Guam EPA). Power and water are sorted into Today, Coming up and Earlier.
+  Each notice shows the villages, the day and hours and the areas, and links
+  to the agency's notice; each part has the number to call to report an
+  outage. Outages are only on this page, not in the warning banner or on the
+  home page. The worker reads the notices every 15 minutes
+  (`OUTAGES_INTERVAL_MINUTES`; `0` turns the page off). Run
+  `guheadlines outages` to read them now. No database change. See
+  [Outages and gas prices](docs/settings.md#outages-and-gas-prices).
+- **Gas prices in the sidebar.** Regular, premium and diesel, for a gallon,
+  read from the headlines and intros of the local news stories the site
+  already collects ("Gas prices up again: $5.94 a gallon of regular"), each
+  with the day of its story and a link to it. Only stories from the last 45
+  days count (`GAS_PRICE_DAYS`; `0` turns the prices off); with none, the
+  sidebar shows no prices.
+- **A newsletter sign-up box.** With `SENDFOX_API_TOKEN` set, every page has
+  a small Newsletter box in the right-hand column, and the site gets a
+  newsletter page (`/newsletter`, linked from the footer). Readers type their
+  email address, and the server adds it to your SendFox list
+  (`SENDFOX_LIST`, or the account's only list). No SendFox script loads in
+  the browser, so the security rules and the PageSpeed scores do not change.
+  A hidden field and a limit of 5 sign-ups an hour from one address keep
+  robots out. `guheadlines sendfox-check` shows the lists and the one that
+  sign-ups join. See [The sign-up box](docs/newsletter.md#the-sign-up-box).
+- **A sponsor spot that you sell yourself.** Put a sponsor's picture in
+  `config/sponsor/` and set `SPONSOR_IMAGE`, `SPONSOR_LINK` and
+  `SPONSOR_ALT`: the picture shows at the top of the right-hand column of
+  every page, marked "Sponsor", above the AdSense ad. The site serves a small
+  WebP copy of it itself, with no outside script or cookie. With the visitor
+  stats on, the stats page shows the sponsor clicks. See
+  [Sponsor spot](docs/settings.md#sponsor-spot).
 - **Source health on the stats page, and an alert when a news site goes
   quiet.** The private stats page (`/stats`) now ends with **Source health**:
   for each news site, whether it is working, failing (with the error) or

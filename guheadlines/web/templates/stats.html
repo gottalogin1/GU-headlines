@@ -61,6 +61,18 @@
 </details>
 {% endif %}
 
+{% if settings.sponsor_image or sponsor_clicks %}
+<h2 class="section-title">Sponsor spot</h2>
+<p class="muted section-note">The sponsor's picture is at the top of the right-hand column of every page
+  (below the stories on phones), so it was on every page view. A click counts when a reader follows the
+  picture to the sponsor's website. If you changed the sponsor in this period, the numbers include both.</p>
+<dl class="job-facts stats-totals">
+  <div><dt>Page views</dt><dd>{{ "{:,}".format(views) }}</dd></div>
+  <div><dt>Sponsor clicks</dt><dd>{{ "{:,}".format(sponsor_clicks) }}</dd></div>
+  <div><dt>Clicks per 1,000 views</dt><dd>{{ "%.1f"|format(sponsor_clicks * 1000 / views) if views else "–" }}</dd></div>
+</dl>
+{% endif %}
+
 <h2 class="section-title">Where readers come from</h2>
 <p class="muted section-note">The website each visit started from, such as a search engine or Facebook. Only the site's name is kept. "No website" is someone who typed the address, used a bookmark, or opened a link in an app that doesn't say where it came from.</p>
 {% if referrers %}

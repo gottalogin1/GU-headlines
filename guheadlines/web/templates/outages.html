@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{# The Outages page (outages.outages_page): GPA power outages, GWA water
+   outages and boil-water notices, by day. Everything is drawn on the server,
+   with no script. Each card ends with where its notices come from. #}
+{% macro link(url, text) %}<a href="{{ url|safe_url }}" target="_blank" rel="noopener">{{ text }} ↗</a>{% endmacro %}
+{% macro checked(status, name, url) -%}
+{%- if not status.checked %} Not checked yet.
+{%- elif status.stale %} <strong>Couldn't reach {{ name }}'s notices since {{ status.checked|fmt_datetime }}.</strong> See {{ link(url, "the latest there") }}.
+{%- else %} Checked {{ status.checked|rel_time }}.{% endif %}
+{%- endmacro %}
+
+{% macro power_notice(n) %}
+<li class="outage">
+  <p class="outage-head">
+    <strong class="outage-where">{{ n.villages or n.title }}</strong>
+    {% if n.category %}<span class="outage-kind">{{ n.category }}</span>{% endif %}
+  </p>
+  <p class="outage-when">{{ n.day|short_day }}{% if n.hours %} · {{ n.hours }}{% endif %}</p>
+  {% if n.areas %}<p class="outage-areas">{{ n.areas }}</p>{% endif %}
+  {% if n.villages %}<p class="outage-title muted">{{ n.title }}</p>{% endif %}
+  <p class="outage-links">{{ link(n.url, "GPA notice") }}{% if n.pdf %} {{ link(n.pdf, "PDF") }}{% endif %}</p>
+</li>
+{% endmacro %}
+
+{% macro water_notice(n) %}
+<li class="outage">
+  <p class="outage-head">
+    <strong class="outage-where">{{ n.villages or n.title }}</strong>
+    <span class="outage-kind{% if n.kind == 'emergency' %} is-emergency{% endif %}">{{ {"emergency": "Emergency", "scheduled": "Scheduled", "extended": "Extended", "notice": "Notice"}[n.kind] }}</span>
+  </p>
+  <p class="outage-when">{{ n.day|short_day }}
+    {%- if n.start %} · Starts {{ n.start|lower if n.start|lower == 'immediately' else n.start }}{% endif %}
+    {%- if n.end %} · Ends about {{ n.end }}{% endif %}</p>
+  {% if n.areas %}<p class="outage-areas">{{ n.areas }}</p>{% endif %}
+  {% if n.notes %}<p class="outage-note">{{ n.notes[0] }}</p>{% endif %}
+  {% if n.villages %}<p class="outage-title muted">{{ n.title }}</p>{% endif %}
+  <p class="outage-links">{{ link(n.url, "GWA notice") }}</p>
+</li>
+{% endmacro %}
+
+{% macro by_day(groups, notice, nothing) %}
+{% if groups.today or groups.coming or groups.earlier %}
+  {% if groups.today %}
+  <h3>Today</h3>
+  <ul class="outage-list">{% for n in groups.today %}{{ notice(n) }}{% endfor %}</ul>
+  {% endif %}
+  {% if groups.coming %}
+  <h3>Coming up</h3>
+  <ul class="outage-list">{% for n in groups.coming %}{{ notice(n) }}{% endfor %}</ul>
+  {% endif %}
+  {% if not groups.today and not groups.coming %}
+  <p class="wx-none">{{ nothing }}</p>
+  {% endif %}
+  {% if groups.earlier %}
+  <details class="outage-earlier">
+    <summary>Earlier ({{ groups.earlier|length }})</summary>
+    <ul class="outage-list">{% for n in groups.earlier %}{{ notice(n) }}{% endfor %}</ul>
+  </details>
+  {% endif %}
+{% else %}
+  <p class="wx-none">{{ nothing }}</p>
+{% endif %}
+{% endmacro %}
+
+{% block main %}
+{% set o = outages %}
+<header class="page-head">
+  <h1>Power and water outages</h1>
+  <p class="muted">Outage notices from the Guam Power Authority (GPA) and the Guam Waterworks Authority
+    (GWA), and boil-water notices, as each agency posts them. Times are Chamorro Standard Time.</p>
+</header>
+
+<div class="wx">
+<section class="wx-card wx-wide" id="boil" aria-labelledby="boil-title">
+  <h2 id="boil-title">Boil-water notices</h2>
+  {% if o.boil %}
+  <ul class="outage-list">
+    {% for n in o.boil %}
+    <li class="outage{% if not n.lifted %} is-boil{% endif %}">
+      <p class="outage-head">
+        <strong class="outage-where">{{ n.title }}</strong>
+        <span class="outage-kind">{{ "Lifted" if n.lifted else n.source }}</span>
+      </p>
+      <p class="outage-when">Posted {{ n.posted|fmt_datetime }}</p>
+      {% if n.areas %}<p class="outage-areas">{{ n.areas }}</p>{% endif %}
+      {% if n.notes %}<p class="outage-note">{{ n.notes[0] }}</p>{% endif %}
+      {% if n.summary %}<p class="outage-note">{{ n.summary }}</p>{% endif %}
+      <p class="outage-links">{{ link(n.url, n.source ~ " notice") }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="wx-none">No boil-water notices in the last 30 days.</p>
+  {% endif %}
+  <p class="wx-source">From {{ link(sources.gwa, "GWA") }} and {{ link(sources.epa, "Guam EPA") }}.{{ checked(o.gwa, "GWA", sources.gwa) }}</p>
+</section>
+
+<section class="wx-card" id="power" aria-labelledby="power-title">
+  <h2 id="power-title">Power (GPA)</h2>
+  {{ by_day(o.power, power_notice, "No power outages posted for today or the days ahead.") }}
+  <p class="wx-source">From GPA's outage notices on {{ link(sources.gpa, "GuamALERTS") }}. To report a power outage, call GPA at
+    <a href="tel:{{ sources.gpa_phone }}">{{ sources.gpa_phone }}</a>.{{ checked(o.gpa, "GPA", sources.gpa) }}</p>
+</section>
+
+<section class="wx-card" id="water" aria-labelledby="water-title">
+  <h2 id="water-title">Water (GWA)</h2>
+  {{ by_day(o.water, water_notice, "No water outages posted for today or the days ahead.") }}
+  <p class="wx-source">From {{ link(sources.gwa, "GWA's outage updates") }}. To report a water problem, call GWA at
+    <a href="tel:{{ sources.gwa_phone }}">{{ sources.gwa_phone }}</a>.{{ checked(o.gwa, "GWA", sources.gwa) }}</p>
+</section>
+</div>
+{% endblock %}

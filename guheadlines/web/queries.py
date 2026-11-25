@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from ..bids.readers import number_key
 from ..models import (
     SEARCH_CONFIG,
+    SPONSOR_CLICKS,
     Article,
     Bid,
     BidSource,
@@ -720,7 +721,8 @@ def bid_sources(session: Session, now: datetime) -> list[dict]:
 def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
     """Page views and story clicks from the Guam day `since` to today, for the
     stats page (see web/stats.py)."""
-    viewed = PageViews.day >= since
+    # Page addresses start with "/"; SPONSOR_CLICKS counts the sponsor clicks.
+    viewed = (PageViews.day >= since) & PageViews.path.startswith("/")
     clicked = StoryClicks.day >= since
     views = func.sum(PageViews.views).label("views")
     clicks = func.sum(StoryClicks.clicks).label("clicks")
@@ -766,6 +768,11 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
             .group_by(PageViews.path)
             .order_by(views.desc(), PageViews.path)
         ).all(),
+        "sponsor_clicks": session.scalar(
+            select(func.coalesce(func.sum(PageViews.views), 0)).where(
+                PageViews.day >= since, PageViews.path == SPONSOR_CLICKS
+            )
+        ),
         "referrers": session.execute(
             select(Referrers.site, visits)
             .where(Referrers.day >= since)
@@ -780,6 +787,46 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
             ).all()
         ),
     }
+
+
+# -------------------------------------------------------------- gas prices
+
+# Words a story about pump prices has in its headline or intro (gas.py reads
+# the prices).
+_GAS_WORDS = ("%gas%", "%fuel%", "%diesel%", "%gallon%")
+
+
+def gas_price_stories(
+    session: Session,
+    since: datetime,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
+    limit: int = 60,
+) -> list[dict]:
+    """Stories published since `since` that may give Guam's gas prices: a
+    fuel word and a dollar sign in the headline or intro. Newest first."""
+    intro = func.coalesce(Article.intro, "")
+    stmt = (
+        select(
+            Article.id,
+            Article.url,
+            Article.title,
+            Article.intro,
+            Article.published_at,
+            Source.name.label("source"),
+        )
+        .join(Source, Source.id == Article.source_id)
+        .where(
+            Article.published_at >= since,
+            or_(*[c for w in _GAS_WORDS for c in (Article.title.ilike(w), intro.ilike(w))]),
+            or_(Article.title.contains("$"), intro.contains("$")),
+            *_left_out(hide_sources, hide_topics, mute),
+        )
+        .order_by(Article.published_at.desc(), Article.id.desc())
+        .limit(limit)
+    )
+    return [dict(row._mapping) for row in session.execute(stmt)]
 
 
 # ------------------------------------------------------------- newsletter

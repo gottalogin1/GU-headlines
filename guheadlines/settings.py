@@ -101,6 +101,14 @@ class Settings:
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
     weather_interval_minutes: int = 10
+    # How often the worker reads the power and water outage notices (GPA,
+    # GWA and Guam EPA's boil-water notices, see outages.py), in minutes.
+    # 0 turns the Outages page off.
+    outages_interval_minutes: int = 15
+    # How many days back the sidebar looks for news stories that give Guam's
+    # gas prices (see gas.py). A price older than this is not shown. 0 turns
+    # the gas prices off.
+    gas_price_days: int = 45
     # The NOAA tide station whose high and low tides the weather box shows.
     # 1630000 is Apra Harbor. Empty: no tides.
     tide_station: str = "1630000"
@@ -114,6 +122,17 @@ class Settings:
     newsletter_time: time = time(10, 0)
     # The number of stories in each edition.
     newsletter_stories: int = 12
+    # The newsletter sign-up box (see sendfox.py): a SendFox API token, and
+    # the name or number of the SendFox list that new subscribers join. No
+    # token: no sign-up box. No list: the account's only list.
+    sendfox_api_token: str = ""
+    sendfox_list: str = ""
+    # The sponsor spot (see web/sponsor.py): a picture in config/sponsor/, the
+    # web address it opens, and its words for people who cannot see it. No
+    # picture: no sponsor spot.
+    sponsor_image: str = ""
+    sponsor_link: str = ""
+    sponsor_alt: str = ""
 
     @property
     def sources_file(self) -> Path:
@@ -170,6 +189,28 @@ def _adsense_client(value: str | None) -> str:
 def _adsense_slot(value: str | None) -> str:
     value = (value or "").strip()
     return value if re.fullmatch(r"\d{5,20}", value) else ""
+
+
+def _web_address(value: str | None) -> str:
+    """SPONSOR_LINK: an http(s) address as it is, or "" if it is not one."""
+    value = (value or "").strip()
+    try:
+        parts = urlsplit(value)
+    except ValueError:  # such as "https://[" (a broken IPv6 address)
+        return ""
+    if parts.scheme not in ("http", "https") or not parts.netloc or re.search(r"\s", value):
+        return ""
+    return value
+
+
+def _file_name(value: str | None) -> str:
+    """SPONSOR_IMAGE "ad.jpg" -> "ad.jpg": only the name of the file, without
+    a folder in front of it ("config/sponsor/ad.jpg" also gives "ad.jpg").
+    "" when it is not the name of a picture (.jpg, .jpeg, .png, .webp, .gif)."""
+    name = re.split(r"[\\/]", (value or "").strip())[-1]
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\.(jpe?g|png|webp|gif)", name, re.I):
+        return name
+    return ""
 
 
 def _tide_station(value: str | None, default: str) -> str:
@@ -240,6 +281,7 @@ def load_settings() -> Settings:
 
     defaults = Settings(database_url="", config_dir=Path(), media_dir=Path())
     weather_minutes = _int(env.get("WEATHER_INTERVAL_MINUTES"), defaults.weather_interval_minutes)
+    outage_minutes = _int(env.get("OUTAGES_INTERVAL_MINUTES"), defaults.outages_interval_minutes)
     return Settings(
         database_url=_normalize_db_url(db_url),
         config_dir=Path(env.get("CONFIG_DIR", PROJECT_DIR / "config")),
@@ -275,6 +317,8 @@ def load_settings() -> Settings:
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         alert_keywords=_words(env.get("ALERT_KEYWORDS")),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
+        outages_interval_minutes=max(5, outage_minutes) if outage_minutes > 0 else 0,
+        gas_price_days=max(0, min(365, _int(env.get("GAS_PRICE_DAYS"), defaults.gas_price_days))),
         tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
         stats_password=env.get("STATS_PASSWORD", "").strip(),
         newsletter_days=_days(env.get("NEWSLETTER_DAYS"), defaults.newsletter_days),
@@ -282,6 +326,11 @@ def load_settings() -> Settings:
         newsletter_stories=max(
             1, min(50, _int(env.get("NEWSLETTER_STORIES"), defaults.newsletter_stories))
         ),
+        sendfox_api_token=env.get("SENDFOX_API_TOKEN", "").strip(),
+        sendfox_list=env.get("SENDFOX_LIST", "").strip(),
+        sponsor_image=_file_name(env.get("SPONSOR_IMAGE")),
+        sponsor_link=_web_address(env.get("SPONSOR_LINK")),
+        sponsor_alt=" ".join(env.get("SPONSOR_ALT", "").split())[:200],
     )
 
 

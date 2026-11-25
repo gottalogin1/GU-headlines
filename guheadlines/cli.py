@@ -354,6 +354,10 @@ def cmd_worker(args, settings: Settings) -> None:
         threading.Thread(
             target=_weather_loop, args=(settings, stop), name="weather", daemon=True
         ).start()
+    if settings.outages_interval_minutes:
+        threading.Thread(
+            target=_outages_loop, args=(settings, stop), name="outages", daemon=True
+        ).start()
     if settings.newsletter_days:
         from .newsletter import schedule_text
 
@@ -406,6 +410,20 @@ def _weather_loop(settings: Settings, stop: threading.Event) -> None:
             return
 
 
+def _outages_loop(settings: Settings, stop: threading.Event) -> None:
+    """Outage notices are posted the same day an outage starts, so they are
+    read every few minutes in a thread of their own (see outages.py)."""
+    from .outages import check_outages
+
+    while True:
+        try:
+            check_outages(settings)
+        except Exception:
+            log.exception("outage check failed")
+        if stop.wait(settings.outages_interval_minutes * 60):
+            return
+
+
 def _newsletter_loop(settings: Settings, stop: threading.Event) -> None:
     """Makes each newsletter edition on time (see newsletter.py), also while
     a news check is running. At the start, it makes the newest edition that
@@ -442,6 +460,22 @@ def cmd_weather(args, settings: Settings) -> None:
     for kind, data, error in check_weather(settings, force_tides=True):
         shown = f"ERROR: {error}" if error else json.dumps(data, ensure_ascii=False)[:300]
         print(f"{kind:<11} {shown}")
+
+
+def cmd_outages(args, settings: Settings) -> None:
+    """Read the power and water outage notices now and save them (the worker
+    does this every OUTAGES_INTERVAL_MINUTES)."""
+    from .outages import check_outages
+
+    wait_for_db()
+    migrate()
+    for name, notices, error in check_outages(settings):
+        if error:
+            print(f"{name:<4} ERROR: {error}")
+            continue
+        print(f"{name:<4} {len(notices)} notices")
+        for notice in notices[:5]:
+            print(f"     {notice.get('day') or '?':<10} {notice['title'][:90]}")
 
 
 def cmd_photos(args, settings: Settings) -> None:
@@ -892,6 +926,35 @@ def cmd_alert_test(args, settings: Settings) -> None:
     print("Test alert sent. It shows in your Discord channel within a few seconds.")
 
 
+def cmd_sendfox_check(args, settings: Settings) -> None:
+    """Show the SendFox account of SENDFOX_API_TOKEN, its lists, and the list
+    that sign-ups from the website join."""
+    from . import sendfox
+
+    if not settings.sendfox_api_token:
+        raise SystemExit(
+            "SENDFOX_API_TOKEN is empty, so the newsletter sign-up box is off. Set it in .env "
+            "(see .env.example), then run: docker compose up -d"
+        )
+    try:
+        me = sendfox.account(settings)
+        found = sendfox.lists(settings)
+    except sendfox.SignupError as exc:
+        raise SystemExit(f"SendFox did not answer as expected: {exc}") from None
+    print(f"SendFox account: {me.get('email') or me.get('name') or '(no email shown)'}")
+    print("Lists:" if found else "Lists: none yet. Make one in SendFox (Audience > Lists).")
+    for item in found:
+        print(f"  {item.id:>10}  {item.name}")
+    try:
+        picked = sendfox.pick_list(settings.sendfox_list, found)
+    except sendfox.SignupError as exc:
+        raise SystemExit(f"Problem: {exc}") from None
+    if picked is None:
+        print("Sign-ups join no list (the account has none), only your contacts.")
+    else:
+        print(f'Sign-ups from the website join the list "{picked.name}" ({picked.id}).')
+
+
 def main(argv: list[str] | None = None) -> None:
     settings = get_settings()
     setup_logging(settings)
@@ -951,7 +1014,9 @@ def main(argv: list[str] | None = None) -> None:
     bids.add_argument("--limit", type=int, default=8, help="with --check: bids to show")
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
+    sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
+    sub.add_parser("outages", help="read the power and water outage notices now")
     sub.add_parser("photos", help="show the space the saved photos use, and tidy them up now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
@@ -981,7 +1046,9 @@ def main(argv: list[str] | None = None) -> None:
         "events": cmd_events,
         "bids": cmd_bids,
         "alert-test": cmd_alert_test,
+        "sendfox-check": cmd_sendfox_check,
         "weather": cmd_weather,
+        "outages": cmd_outages,
         "photos": cmd_photos,
     }[args.command]
     handler(args, settings)

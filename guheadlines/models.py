@@ -360,8 +360,14 @@ class WeatherReport(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+# Clicks on the sponsor spot (web/sponsor.py) are kept in page_views, under
+# this name. Page addresses start with "/", so it is never a page.
+SPONSOR_CLICKS = "sponsor-click"
+
+
 class PageViews(Base):
-    """How many times readers opened each page on one Guam day (see web/stats.py)."""
+    """How many times readers opened each page on one Guam day (see web/stats.py),
+    and the clicks on the sponsor spot (path SPONSOR_CLICKS)."""
 
     __tablename__ = "page_views"
 
