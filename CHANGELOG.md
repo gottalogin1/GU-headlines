@@ -124,6 +124,16 @@ Agendas page and the other calendars.
   name the Chamber of Commerce are left out of every calendar (the new
   file-wide `exclude` list in `config/events.yaml`). The "Can't be collected"
   list is gone from the Events page.
+- **No news stories that name the Chamber of Commerce.** Stories whose
+  headline or intro mentions the Chamber of Commerce are no longer shown
+  anywhere on the site: the front page, the topics, the news sites' pages,
+  the archive, search, the sidebar counts, the sitemap and the newsletter
+  feed. They are still collected, so nothing is lost. The words are listed
+  under the new `muted:` setting near the top of `config/sources.yaml`; add a
+  word or phrase there to hide other stories the same way, or delete a line
+  to show them again. See
+  [Hide stories that mention a name](docs/news-sources.md#hide-stories-that-mention-a-name).
+  Nothing to do when you update.
 - **Faster pages with the ad, and 100 in all four PageSpeed scores.**
   Google's ad code now loads when the visitor first scrolls, taps, presses a
   key or moves the mouse, not with the page. The page is ready sooner, and

@@ -49,6 +49,19 @@
 # 403). To see whether one works again from your server, run
 # `guheadlines check --source <slug>`; if it does, delete its cannot_scrape line.
 
+# Muted: stories whose headline or intro contains one of these words or
+# phrases are not shown anywhere on the site: not on the front page, the
+# topics, the archive, search, the sidebar counts, the sitemap or the
+# newsletter feed. Upper and lower case don't matter, and each line is plain
+# text, not a pattern ("guam chamber" also hides "Guam Chamber's"). Keep the
+# phrases specific: "chamber" alone would also hide a hyperbaric chamber.
+# The stories are still collected and kept, so deleting a line brings them
+# back within a few minutes, without a restart. Out of the box, stories that
+# name the Guam Chamber of Commerce are hidden.
+muted:
+  - chamber of commerce
+  - guam chamber
+
 # Obituaries are not skipped: they go to the Obituaries topic, which shows them
 # only on its own page (see separate: in categories.yaml).
 defaults:

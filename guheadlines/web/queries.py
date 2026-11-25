@@ -91,6 +91,8 @@ class Filters:
     # Topics left out (separate topics, such as Obituaries, whose stories
     # belong only on their own page).
     hide_topics: tuple[str, ...] = ()
+    # Words and phrases (muted: in sources.yaml) whose stories are never shown.
+    mute: tuple[str, ...] = ()
 
     @property
     def active(self) -> bool:
@@ -117,13 +119,30 @@ def _hidden(slugs: tuple[str, ...] | list[str]):
     return Article.source_id.not_in(select(Source.id).where(Source.slug.in_(slugs)))
 
 
-def _left_out(hide_sources: list[str] | None, hide_topics: list[str] | None) -> list:
-    """Conditions leaving out the articles of these sources and these topics."""
+def _muted(phrases: tuple[str, ...] | list[str]):
+    """Condition leaving out the articles whose headline or intro contains one
+    of these words or phrases (any upper/lower case)."""
+    patterns = [
+        "%" + p.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%" for p in phrases
+    ]
+    intro = func.coalesce(Article.intro, "")
+    return not_(or_(*[c for p in patterns for c in (Article.title.ilike(p), intro.ilike(p))]))
+
+
+def _left_out(
+    hide_sources: list[str] | None,
+    hide_topics: list[str] | None,
+    mute: tuple[str, ...] | list[str] = (),
+) -> list:
+    """Conditions leaving out the articles of these sources and these topics,
+    and the muted ones."""
     conditions = []
     if hide_sources:
         conditions.append(_hidden(hide_sources))
     if hide_topics:
         conditions.append(not_(Article.categories.overlap(list(hide_topics))))
+    if mute:
+        conditions.append(_muted(mute))
     return conditions
 
 
@@ -140,6 +159,8 @@ def _apply_filters(stmt: Select, f: Filters) -> Select:
         stmt = stmt.where(Article.published_at >= local_day_bounds(f.date_from)[0])
     if f.date_to:
         stmt = stmt.where(Article.published_at < local_day_bounds(f.date_to)[1])
+    if f.mute:
+        stmt = stmt.where(_muted(f.mute))
     return stmt
 
 
@@ -214,9 +235,12 @@ def search_articles(session: Session, f: Filters, page: int, per_page: int) -> t
     return Page(rows, len(rows), 1, per_page), bool(rows)
 
 
-def facet_counts(session: Session, since: datetime | None = None) -> dict:
-    """Article counts per category and per source (optionally since a date)."""
-    cond = Article.published_at >= since if since else true()
+def facet_counts(
+    session: Session, since: datetime | None = None, mute: tuple[str, ...] | list[str] = ()
+) -> dict:
+    """Article counts per category and per source (optionally since a date),
+    without muted stories."""
+    cond = and_(Article.published_at >= since if since else true(), *_left_out(None, None, mute))
     category = func.unnest(Article.categories).label("category")
     cat_rows = session.execute(
         select(category, func.count()).select_from(Article).where(cond).group_by(category)
@@ -258,13 +282,16 @@ def weather_reports(session: Session) -> dict[str, tuple]:
 
 
 def archive_months(
-    session: Session, hide_sources: list[str] | None = None, hide_topics: list[str] | None = None
+    session: Session,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
 ) -> list[dict]:
     """[{year, months: [{month, count}]}] in Guam local time, newest first."""
     local = func.timezone("Pacific/Guam", Article.published_at)
     year = func.extract("year", local).label("y")
     month = func.extract("month", local).label("m")
-    stmt = select(year, month, func.count()).where(*_left_out(hide_sources, hide_topics))
+    stmt = select(year, month, func.count()).where(*_left_out(hide_sources, hide_topics, mute))
     stmt = stmt.group_by(year, month)
     rows = session.execute(stmt.order_by(year.desc(), month.desc())).all()
     years: dict[int, list[dict]] = {}
@@ -279,6 +306,7 @@ def archive_days(
     month: int,
     hide_sources: list[str] | None = None,
     hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
 ) -> list[dict]:
     start = date(year, month, 1)
     end = date(year + (month == 12), (month % 12) + 1, 1)
@@ -286,7 +314,7 @@ def archive_days(
     stmt = select(local_day, func.count()).where(
         Article.published_at >= local_day_bounds(start)[0],
         Article.published_at < local_day_bounds(end)[0],
-        *_left_out(hide_sources, hide_topics),
+        *_left_out(hide_sources, hide_topics, mute),
     )
     rows = session.execute(stmt.group_by(local_day).order_by(local_day.desc())).all()
     return [{"day": d, "count": c} for d, c in rows]
@@ -297,11 +325,12 @@ def neighbor_days(
     day: date,
     hide_sources: list[str] | None = None,
     hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
 ) -> tuple[date | None, date | None]:
     """The nearest earlier and later Guam days that have stories (None if none),
     so the archive's day-to-day links never lead to empty pages."""
     start, end = local_day_bounds(day)
-    hidden = _left_out(hide_sources, hide_topics)
+    hidden = _left_out(hide_sources, hide_topics, mute)
     before = session.scalar(
         select(func.max(Article.published_at)).where(Article.published_at < start, *hidden)
     )
@@ -315,19 +344,24 @@ def neighbor_days(
 
 
 def sitemap_data(
-    session: Session, hide_sources: list[str] | None = None, hide_topics: list[str] | None = None
+    session: Session,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
 ) -> dict:
     """Newest story time overall, per topic, per source and per archive day,
     for the sitemap's last-modified dates."""
-    hidden = _left_out(hide_sources, hide_topics)
+    hidden = _left_out(hide_sources, hide_topics, mute)
+    muted = _left_out(None, None, mute)
     latest = session.scalar(select(func.max(Article.published_at)).where(*hidden))
     category = func.unnest(Article.categories).label("category")
     categories = session.execute(
-        select(category, func.max(Article.published_at)).group_by(category)
+        select(category, func.max(Article.published_at)).where(*muted).group_by(category)
     ).all()
     sources = session.execute(
         select(Source.slug, func.max(Article.published_at))
         .join(Article, Article.source_id == Source.id)
+        .where(*muted)
         .group_by(Source.slug)
     ).all()
     local_day = func.date(func.timezone("Pacific/Guam", Article.published_at)).label("d")
@@ -617,6 +651,7 @@ def top_stories(
     per_source: int,
     hide_sources: list[str] | None = None,
     hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
 ) -> list[int]:
     """The ids of the stories for a newsletter edition (see newsletter.py):
     stories first found from `since` to `until`, the ones readers clicked most
@@ -636,7 +671,7 @@ def top_stories(
             Article.first_seen_at < until,
             # An old story that was found late (from a site's archive) is not news.
             Article.published_at >= since - timedelta(days=1),
-            *_left_out(hide_sources, hide_topics),
+            *_left_out(hide_sources, hide_topics, mute),
         )
         .order_by(
             func.coalesce(clicks.c.clicks, 0).desc(),
@@ -656,14 +691,18 @@ def top_stories(
     return picked
 
 
-def newsletter_edition(session: Session) -> tuple[datetime, list[dict]] | None:
+def newsletter_edition(
+    session: Session, mute: tuple[str, ...] | list[str] = ()
+) -> tuple[datetime, list[dict]] | None:
     """The newest newsletter edition: its time, and its stories in their
-    order (a story deleted since then is left out). None before the first."""
+    order (a story deleted or muted since then is left out). None before the
+    first."""
     edition = session.scalar(
         select(NewsletterEdition).order_by(NewsletterEdition.formed_at.desc()).limit(1)
     )
     if edition is None:
         return None
-    rows = _rows(session, _article_query().where(Article.id.in_(edition.article_ids)))
+    stmt = _article_query().where(Article.id.in_(edition.article_ids), *_left_out(None, None, mute))
+    rows = _rows(session, stmt)
     by_id = {row["article"].id: row for row in rows}
     return edition.formed_at, [by_id[i] for i in edition.article_ids if i in by_id]

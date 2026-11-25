@@ -8,7 +8,7 @@ option.
 
 - [How it reads a news site](#how-it-reads-a-news-site)
 - [Editing sources.yaml safely](#editing-sourcesyaml-safely)
-- [Common tasks](#common-tasks): pause, remove, rename, test, sites that can't be collected
+- [Common tasks](#common-tasks): pause, remove, hide stories that mention a name, sites that can't be collected, rename, test
 - [Adding a new news site, step by step](#adding-a-new-news-site-step-by-step)
 - [Every option explained](#every-option-explained)
 - [Fixing problems](#fixing-problems)
@@ -128,6 +128,29 @@ Delete the site's whole block from the file (from its `- slug:` line down to
 the line before the next `- slug:`). Its old stories stay in your archive and
 in search, and the site disappears from the Sources page and the sidebar.
 PNC News First was removed this way when it closed.
+
+### Hide stories that mention a name
+
+The `muted:` list near the top of `sources.yaml` hides every story whose
+headline or intro contains one of its words or phrases. Out of the box it
+hides stories that name the Guam Chamber of Commerce:
+
+```yaml
+muted:
+  - chamber of commerce
+  - guam chamber
+```
+
+- Upper and lower case don't matter, and each line is plain text, not a
+  pattern: `guam chamber` also hides "Guam Chamber's".
+- A muted story is shown nowhere: not on the front page, a topic or news
+  site page, the archive, search, the sidebar counts, the sitemap or the
+  newsletter feed.
+- Stories are still collected and kept. Delete a line, and its stories come
+  back within a few minutes (the sidebar and sitemap are remembered for up
+  to 10 minutes). No restart needed.
+- Keep the phrases specific. A short word such as `chamber` would also hide
+  stories about a hyperbaric chamber or the chamber of the Legislature.
 
 ### Sites that can't be collected
 
@@ -351,6 +374,8 @@ At the top of `sources.yaml`:
   site, such as `/sports/` and `/opinion/`.
 - **`defaults: max_age_days`** *(optional)*: changes the default of 30 days
   for all sites.
+- **`muted`**: words or phrases whose stories are not shown on the site (see
+  [Hide stories that mention a name](#hide-stories-that-mention-a-name)).
 - **`guam_keywords`**: the words that mean "this story is about Guam or the
   CNMI", for sites with `require_guam: true`. Add a village or place name
   here if stories are being skipped. Accents and capital letters don't

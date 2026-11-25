@@ -577,7 +577,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
     def sidebar():
         with session_scope() as session:
             week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-            facets = queries.facet_counts(session, week_ago)
+            facets = queries.facet_counts(session, week_ago, config.muted)
             last_updated = queries.last_updated(session)
         # News sources only: sites that can't be collected are listed apart, and
         # only_in_topic sources are reached through their topic, even when
@@ -649,6 +649,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
 
 def _listing(request: Request, template: str, filters: Filters, page: int, **context):
     """A page of stories grouped by day (home, topic, source and archive day pages)."""
+    filters.mute = _muted()
     with session_scope() as session:
         result = queries.list_articles(session, filters, page, settings.page_size)
     if page > 1 and not result.items:
@@ -670,6 +671,11 @@ def _hidden(topic: str | None = None) -> tuple[str, ...]:
     """Sources to leave out of a listing for `topic` (only_in_topic sources
     whose stories belong on another topic's page)."""
     return tuple(config_cache.get().hidden_sources(topic))
+
+
+def _muted() -> tuple[str, ...]:
+    """Words and phrases whose stories are never shown (muted: in sources.yaml)."""
+    return config_cache.get().muted
 
 
 def _separate(topic: str | None = None) -> tuple[str, ...]:
@@ -766,6 +772,7 @@ def search(
         date_to=_parse_date(date_to),
         sort=sort,
         hide_sources=_hidden(category or None),
+        mute=_muted(),
     )
     fuzzy = False
     result = None
@@ -796,7 +803,7 @@ def search(
 @app.get("/archive", response_class=HTMLResponse)
 def archive(request: Request):
     with session_scope() as session:
-        years = queries.archive_months(session, list(_hidden()), list(_separate()))
+        years = queries.archive_months(session, list(_hidden()), list(_separate()), _muted())
     return render(
         request,
         "archive.html",
@@ -817,8 +824,10 @@ def archive_month(request: Request, year: int, month: int):
     if not (1990 <= year <= 2200 and 1 <= month <= 12):
         raise HTTPException(404)
     with session_scope() as session:
-        days = queries.archive_days(session, year, month, list(_hidden()), list(_separate()))
-        years = queries.archive_months(session, list(_hidden()), list(_separate()))
+        days = queries.archive_days(
+            session, year, month, list(_hidden()), list(_separate()), _muted()
+        )
+        years = queries.archive_months(session, list(_hidden()), list(_separate()), _muted())
     # The nearest months with stories, so the month-to-month links never lead
     # crawlers (or readers) through endless empty months.
     stored = sorted((y["year"], m["month"]) for y in years for m in y["months"])
@@ -860,7 +869,9 @@ def archive_day(
     with session_scope() as session:
         # The nearest days with stories, so the day-to-day links never lead
         # crawlers (or readers) through endless empty days.
-        prev_day, next_day = queries.neighbor_days(session, the_day, list(hidden), list(separate))
+        prev_day, next_day = queries.neighbor_days(
+            session, the_day, list(hidden), list(separate), _muted()
+        )
     long_date = fmt_date_long(the_day)
     month_name = f"{MONTHS[month - 1]} {year}"
     return _listing(
@@ -1220,7 +1231,7 @@ def sitemap(request: Request):
 
     def data() -> dict:
         with session_scope() as session:
-            return queries.sitemap_data(session, hidden, separate)
+            return queries.sitemap_data(session, hidden, separate, config.muted)
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
     entries = seo.sitemap_entries(
@@ -1254,7 +1265,7 @@ def newsletter_feed(request: Request):
     if not settings.newsletter_days:
         raise HTTPException(404)
     with session_scope() as session:
-        formed_at, rows = queries.newsletter_edition(session) or (None, [])
+        formed_at, rows = queries.newsletter_edition(session, _muted()) or (None, [])
     base = seo.base_url(request)
     items = []
     for row in rows:
