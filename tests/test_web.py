@@ -228,6 +228,53 @@ def test_obituaries_stay_on_the_obituaries_page(client):
     assert "Andersen to host Cope North" in client.get("/").text  # news is unaffected
 
 
+def test_muted_stories_are_shown_nowhere(client):
+    now = datetime.now(timezone.utc)
+    published = now - timedelta(days=4)  # alone on their Guam day
+    with session_scope() as session:
+        kuam = session.query(Source).filter_by(slug="kuam").one()
+        session.add_all(
+            [
+                Article(
+                    source_id=kuam.id,
+                    url="https://www.kuam.com/story/2/mixer",
+                    title="GUAM CHAMBER OF COMMERCE hosts holiday mixer",
+                    categories=["business"],
+                    published_at=published,
+                ),
+                Article(
+                    source_id=kuam.id,
+                    url="https://www.kuam.com/story/3/luncheon",
+                    title="Business leaders meet in Tumon",
+                    intro="The Guam Chamber's general membership luncheon drew 200 people.",
+                    categories=["business"],
+                    published_at=published + timedelta(minutes=5),
+                ),
+            ]
+        )
+    from guheadlines.web.app import config_cache
+
+    assert config_cache.get().muted == ("chamber of commerce", "guam chamber")
+    day = published.astimezone(GUAM_TZ).date()
+    pages = [
+        "/",
+        "/category/business",
+        "/source/kuam",
+        "/search?q=mixer",
+        "/search?q=luncheon",
+        "/search?q=chamber",
+        f"/archive/{day.year}/{day.month}/{day.day}",
+        f"/archive/{day.year}/{day.month}",
+    ]
+    for path in pages:
+        html = client.get(path).text.lower()
+        assert "story/2/mixer" not in html and "story/3/luncheon" not in html, path
+        if "q=chamber" not in path:  # that page repeats what was searched for
+            assert "chamber" not in html, path
+    assert f"/archive/{day.year}/{day.month}/{day.day}<" not in client.get("/sitemap.xml").text
+    assert "story/1/minimum-wage" in client.get("/search?q=wage").text  # others unaffected
+
+
 def test_sources_page_lists_sites_that_cannot_be_collected(client):
     with session_scope() as session:
         session.add(Source(slug="pnc", name="PNC News First", enabled=False))  # removed site

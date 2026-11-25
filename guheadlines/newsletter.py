@@ -77,9 +77,11 @@ def form_edition(
             formed_at,
             settings.newsletter_stories,
             PER_SOURCE,
-            # Like the home page: no Obituaries, and no only_in_topic sources.
+            # Like the home page: no Obituaries, no only_in_topic sources and no
+            # muted stories.
             config.hidden_sources(),
             config.separate_topics(),
+            config.muted,
         )
         # Two workers can make the same edition at the same time; the first one wins.
         made = session.execute(

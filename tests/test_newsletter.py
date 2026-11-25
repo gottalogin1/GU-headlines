@@ -123,6 +123,11 @@ def test_edition_holds_the_top_stories_since_the_last_one(clean_db, app_config):
             "after": _story(post, 10, TUESDAY),  # in the next edition
             "archive": _story(post, 11, TUESDAY - timedelta(hours=2), FRIDAY - timedelta(days=9)),
             "obituary": _story(post, 12, TUESDAY - timedelta(hours=3), categories=["obituaries"]),
+            # Muted (muted: in sources.yaml), in the headline or the intro:
+            "muted": _story(pnc, 13, TUESDAY - timedelta(minutes=30), title="Guam Chamber mixer"),
+            "muted2": _story(
+                post, 14, TUESDAY - timedelta(minutes=20), intro="The Chamber of Commerce said."
+            ),
         }
         session.add_all(stories.values())
         session.flush()
@@ -147,7 +152,7 @@ def test_edition_holds_the_top_stories_since_the_last_one(clean_db, app_config):
         picked = session.get(NewsletterEdition, TUESDAY).article_ids
     assert ids["kuam2"] in picked and ids["older"] in picked
     assert ids["kuam1"] not in picked  # at most 3 from one news source
-    for name in ("before", "after", "archive", "obituary"):
+    for name in ("before", "after", "archive", "obituary", "muted", "muted2"):
         assert ids[name] not in picked, name
 
 
@@ -191,11 +196,15 @@ def client(clean_db):
             ),
             _story(kuam, 2, now, title="Wage\x08 rises", image_url="https://www.kuam.com/a.jpg"),
             _story(kuam, 3, now, title="Not in the edition"),
+            # Muted after the edition was made: left out of the feed.
+            _story(kuam, 4, now, title="Guam Chamber of Commerce luncheon"),
         ]
         session.add_all(stories)
         session.flush()
         session.add(
-            NewsletterEdition(formed_at=TUESDAY, article_ids=[stories[0].id, stories[1].id, 999])
+            NewsletterEdition(
+                formed_at=TUESDAY, article_ids=[stories[0].id, stories[1].id, 999, stories[3].id]
+            )
         )
     return TestClient(app)
 
@@ -226,7 +235,7 @@ def test_feed_lists_the_newest_edition(client, monkeypatch):
     assert [i.findtext("title") for i in items] == [
         "Andersen to host Cope North & more",
         "Wage rises",  # a character XML does not allow is left out
-    ]  # a deleted story (999) is skipped
+    ]  # a deleted story (999) and a muted one are skipped
 
     first, second = items
     assert first.findtext("link") == "https://www.postguam.com/story/1"  # stats off: straight there

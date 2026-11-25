@@ -123,6 +123,9 @@ class AppConfig:
     sources: list[SourceConfig]
     categories: list[CategoryConfig]
     guam_keywords: list[tuple[str, re.Pattern[str]]]
+    # Words and phrases whose stories are never shown on the site or in the
+    # newsletter feed (they are still collected): `muted` in sources.yaml.
+    muted: tuple[str, ...] = ()
 
     @property
     def enabled_sources(self) -> list[SourceConfig]:
@@ -274,7 +277,12 @@ def parse_config(sources_data: dict, categories_data: dict) -> AppConfig:
         sources.append(source)
 
     guam_keywords = compile_keywords([str(k) for k in _as_list(sources_data.get("guam_keywords"))])
-    return AppConfig(sources=sources, categories=categories, guam_keywords=guam_keywords)
+    muted = tuple(
+        dict.fromkeys(str(m).strip() for m in _as_list(sources_data.get("muted")) if str(m).strip())
+    )
+    return AppConfig(
+        sources=sources, categories=categories, guam_keywords=guam_keywords, muted=muted
+    )
 
 
 def load_config(config_dir: Path) -> AppConfig:
