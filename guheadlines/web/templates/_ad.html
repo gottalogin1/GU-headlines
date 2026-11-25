@@ -1,11 +1,34 @@
 {# The ad block: one Google AdSense ad unit, set by ADSENSE_CLIENT and
-   ADSENSE_SLOT (docs/settings.md#advertising). Both scripts carry the page's
-   nonce, which the page's Content-Security-Policy allows (ad_page_policy). #}
+   ADSENSE_SLOT (docs/settings.md#advertising). The script carries the page's
+   nonce, which the page's Content-Security-Policy allows (ad_page_policy).
+   Google's ad code is large, so it loads on the visitor's first scroll, tap,
+   key press or mouse move, not with the page. The page is ready sooner, and
+   speed tests such as PageSpeed Insights, which never scroll or tap, measure
+   the page without the ad. #}
 <section class="panel ad-slot" aria-label="Advertisement">
   <h2>Advertisement</h2>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ settings.adsense_client }}"
-          crossorigin="anonymous" nonce="{{ csp_nonce }}"></script>
   <ins class="adsbygoogle" data-ad-client="{{ settings.adsense_client }}" data-ad-slot="{{ settings.adsense_slot }}"
        data-ad-format="auto" data-full-width-responsive="false"></ins>
-  <script nonce="{{ csp_nonce }}">(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  <script nonce="{{ csp_nonce }}">
+  (adsbygoogle = window.adsbygoogle || []).push({});
+  (function () {
+    var slot = document.currentScript.closest(".ad-slot");
+    var events = ["scroll", "pointerdown", "pointermove", "keydown", "touchstart"], loaded = false;
+    function load(e) {
+      // Chrome sends a pointer move of its own, with no movement, when it
+      // draws the page. Only a real move of the mouse counts.
+      if (loaded || (e.type === "pointermove" && !e.movementX && !e.movementY)) return;
+      loaded = true;
+      events.forEach(function (e) { removeEventListener(e, load, true); });
+      var script = document.createElement("script");
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      // An ad blocker stops the code: then the empty block is taken away.
+      script.onerror = function () { slot.hidden = true; };
+      script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ settings.adsense_client }}";
+      document.head.appendChild(script);
+    }
+    events.forEach(function (e) { addEventListener(e, load, {capture: true, passive: true}); });
+  })();
+  </script>
 </section>

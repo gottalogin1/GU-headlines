@@ -271,6 +271,57 @@ def test_light_dark_switch(client):
     assert "backdrop-filter" not in css and "gradient(" not in css
 
 
+def _contrast(a: str, b: str) -> float:
+    def luminance(color: str) -> float:
+        channels = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_text_colors_are_easy_to_read(client):
+    # WCAG AA (what PageSpeed's Accessibility score checks): 4.5:1 for text.
+    import re
+
+    css = client.get("/static/style.css").text
+    themes = {
+        "dark": css.split(":root {", 1)[1].split("}", 1)[0],
+        "light": css.split(':root[data-theme="light"] {', 1)[1].split("}", 1)[0],
+    }
+    for theme, block in themes.items():
+        color = dict(re.findall(r"--([\w-]+):\s*(#[0-9a-f]{6})", block))
+        for text in ("text", "text-soft", "muted", "link"):
+            for background in ("bg", "surface", "well", "field-bg"):
+                ratio = _contrast(color[text], color[background])
+                assert ratio >= 4.5, (theme, text, background, round(ratio, 2))
+    # Faded text drops below that, whatever its colour.
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    faded = [sel.strip() for sel, body in rules if "opacity:" in body and "thumb-fill" not in sel]
+    assert faded == []
+
+
+def test_headings_go_down_one_level_at_a_time(client):
+    import re
+    from itertools import pairwise
+
+    for path in (
+        "/",
+        "/category/labor",
+        "/jobs",
+        "/events",
+        "/status",
+        "/search?q=wage",
+        "/search",
+        "/archive",
+    ):
+        levels = [int(n) for n in re.findall(r"<h([1-6])[\s>]", client.get(path).text)]
+        assert levels[0] == 1, path
+        for before, after in pairwise(levels):
+            assert after <= before + 1, (path, levels)
+
+
 def test_scraped_links_must_be_web_addresses():
     from guheadlines.web.app import safe_url
 
@@ -379,10 +430,14 @@ def test_pages_describe_themselves_to_search_engines(client):
 
 
 def test_search_and_error_pages_are_kept_out_of_search_results(client):
-    for path in ("/search?q=wage", "/search", "/status", "/jobs?q=nurse", "/nope"):
+    for path in ("/search?q=wage", "/search", "/jobs?q=nurse", "/nope"):
         head = _head(client.get(path).text)
         assert '<meta name="robots" content="noindex' in head, path
         assert 'rel="canonical"' not in head, path
+    # The Sources page has "Why this site exists" and the disclaimer: listed.
+    sources = _head(client.get("/status").text)
+    assert 'name="robots"' not in sources
+    assert '<link rel="canonical" href="http://testserver/status">' in sources
     jobs = _head(client.get("/jobs?source=gdoe&utm_medium=x").text)
     assert '<link rel="canonical" href="http://testserver/jobs?source=gdoe">' in jobs
 
@@ -442,7 +497,7 @@ def _recent_day():
 
 def test_sitemap_and_robots(client):
     robots = client.get("/robots.txt").text
-    assert "Disallow: /search" in robots and "Disallow: /status" in robots
+    assert "Disallow: /search" in robots and "Disallow: /status" not in robots
     assert "Sitemap: http://testserver/sitemap.xml" in robots
 
     page = client.get("/sitemap.xml")
@@ -463,15 +518,16 @@ def test_sitemap_and_robots(client):
         "/source/kuam",
         "/jobs",
         "/events",
+        "/status",
         "/archive",
         f"/archive/{today.year}/{today.month}",
         f"/archive/{today.year}/{today.month}/{today.day}",
         f"/archive/{old.year}/{old.month}/{old.day}",
     ):
         assert f"http://testserver{path}" in locs, path
-    # Topics without stories, search and the Sources page are left out.
+    # Topics without stories and search are left out.
     assert "http://testserver/category/sports" not in locs
-    assert not [loc for loc in locs if "/search" in loc or "/status" in loc]
+    assert not [loc for loc in locs if "/search" in loc]
     assert "<lastmod>" in xml
 
 
@@ -574,8 +630,17 @@ def test_ad_block_on_the_home_sources_jobs_events_and_obituaries_pages(client, m
         sidebar = page.text.split('<aside class="sidebar">', 1)[1]
         assert 'data-ad-client="ca-pub-1234567890123456"' in sidebar
         assert 'data-ad-slot="9876543210"' in sidebar
-        # The AdSense code and the line that fills the slot both carry the nonce.
-        assert sidebar.count(f'nonce="{nonce}"') == 2
+        # One script, with the nonce, fills the slot and loads the AdSense code
+        # on the first scroll, tap, key press or mouse move, not with the page.
+        assert sidebar.count(f'nonce="{nonce}"') == 1
+        assert "<script async src=" not in page.text
+        assert '"scroll", "pointerdown", "pointermove", "keydown", "touchstart"' in sidebar
+        assert (
+            'script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'
+            '?client=ca-pub-1234567890123456";'
+        ) in sidebar
+        # An ad blocker stops the code: the empty block is then taken away.
+        assert "script.onerror = function () { slot.hidden = true; };" in sidebar
     assert len(nonces) == 6  # a new nonce for every page
 
     # Other pages keep the strict policy and show no ad.

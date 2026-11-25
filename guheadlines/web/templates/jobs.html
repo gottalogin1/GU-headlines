@@ -25,7 +25,7 @@
   </div>
 </form>
 
-<p class="result-count">{{ "{:,}".format(result.total) }} open {{ "posting" if result.total == 1 else "postings" }}{% if job_filters.q %} matching “{{ job_filters.q }}”{% endif %}</p>
+<h2 class="result-count">{{ "{:,}".format(result.total) }} open {{ "posting" if result.total == 1 else "postings" }}{% if job_filters.q %} matching “{{ job_filters.q }}”{% endif %}</h2>
 
 {% if not result.items %}
 <div class="empty">

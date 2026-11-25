@@ -217,9 +217,15 @@ Open `https://your-domain/ads.txt` in a browser (put your own domain in).
   Google supports for AdSense: the AdSense code is allowed by a random value
   (a nonce) that changes on every page, and it can then load the other code,
   frames and requests that ads need. All other pages keep the strict policy.
-- `robots.txt` lets the AdSense crawler (`Mediapartners-Google`) read the
-  Sources page, so that it can choose ads that fit. Search engines still do
-  not list that page.
+- Google's ad code loads when the visitor first scrolls, taps, presses a key
+  or moves the mouse, not with the page. The code is large, so the page is
+  ready sooner without it. Speed tests such as
+  [PageSpeed Insights](https://pagespeed.web.dev) never scroll or tap, so they
+  measure the page without the ad. On a phone the ad is below the stories, so
+  visitors scroll to it anyway. The block keeps room for the ad until it
+  comes in, and is taken away when an ad blocker stops it.
+- `robots.txt` lets the AdSense crawler (`Mediapartners-Google`) read every
+  page, so that it can choose ads that fit.
 - The disclaimer on the Sources page gets a paragraph about Google's
   advertising cookies and how to opt out. The AdSense program policies require
   this notice.

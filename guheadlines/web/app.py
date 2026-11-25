@@ -840,7 +840,7 @@ def status(request: Request):
         runs=runs,
         title="Sources",
         active_nav="status",
-        robots="noindex",
+        canonical={},
         show_ad=True,
     )
 
@@ -960,7 +960,6 @@ def robots(request: Request):
         f"{adsense}"
         "User-agent: *\n"
         "Disallow: /search\n"
-        "Disallow: /status\n"
         "Disallow: /healthz\n"
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"

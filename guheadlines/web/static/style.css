@@ -95,6 +95,9 @@ body {
 }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* A link inside a sentence is underlined, so that colour is not the only sign
+   of it. Links with a class of their own (buttons, tags, the menu) are not. */
+p a:not([class]), .weather-group > span > a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 8px; }
 img { max-width: 100%; }
 code { background: var(--well); padding: .1em .4em; border-radius: 6px; font-size: .9em; }
@@ -329,7 +332,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .pagination a { color: var(--text); }
 .pagination a:hover { text-decoration: none; border-color: var(--accent); }
 .pagination .current { color: var(--on-fill); border-color: transparent; background: var(--fill); }
-.pagination .disabled { color: var(--muted); opacity: .5; }
+.pagination .disabled { color: var(--muted); }
 .pagination .pages { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------- sidebar ---------- */
@@ -337,12 +340,16 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .sidebar h2 { margin: 0 0 8px; font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .sidebar .panel-sub { margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .sidebar p { margin: 4px 0; }
-/* The ad block (_ad.html). It folds away when Google has no ad to show. */
-.ad-slot ins.adsbygoogle { display: block; }
+/* The ad block (_ad.html). It keeps room for a usual ad size, so the sidebar
+   does not jump down when the ad comes in, and folds away when Google has no
+   ad to show. */
+.ad-slot ins.adsbygoogle { display: block; min-height: 250px; }
 .ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }
 .facets { list-style: none; margin: 0; padding: 0; }
 .facets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .93rem; }
 .facet-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+.facet-name a { display: flex; align-items: center; min-height: 24px; }  /* a tap area of 24px or more */
+.facets li:has(.facet-name) { padding: 2px 0; }  /* its links have their own room */
 .facets li:last-child { border-bottom: 0; }
 .facets a { color: var(--text-soft); }
 .facets .count, .day-list .count {
@@ -424,8 +431,10 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 }
 .weather-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
 .weather-storm { font-weight: 700; }
+/* The links and the advisory switches: a tap area of 24px or more. */
+.weather-group > a { display: inline-flex; align-items: center; min-height: 24px; }
 .weather-advisory summary {
-  cursor: pointer; list-style: none; display: inline-flex; align-items: baseline; gap: 5px;
+  cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 5px; min-height: 24px;
 }
 .weather-advisory summary::-webkit-details-marker { display: none; }
 .weather-advisory summary::after { content: "▾"; font-size: .75em; color: var(--muted); }
@@ -474,7 +483,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .field input:focus, .field select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .field.actions { flex-direction: row; align-items: center; align-self: end; gap: 14px; min-height: 44px; }
 .reset { font-size: .9rem; }
-.result-count { color: var(--muted); margin: 6px 4px 12px; }
+.result-count { color: var(--muted); margin: 6px 4px 12px; font-size: 1rem; font-weight: 400; }
 .tips { padding: 8px 22px 14px; border-radius: var(--r-xl); }
 .tips h2 { font-size: 1.1rem; letter-spacing: -.01em; }
 .tips li { margin: 5px 0; color: var(--text-soft); }
@@ -502,7 +511,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .status-table tr:last-child td { border-bottom: 0; }
 .status-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .status-table.compact td { padding: 8px 16px; }
-.status-table tr.disabled { opacity: .55; }
+.status-table tr.disabled td { color: var(--muted); }
 .badge { font-size: .68rem; padding: 2px 8px; border-radius: 999px; background: var(--well); color: var(--muted); margin-left: 6px; font-weight: 650; }
 .error { color: var(--error); }
 
