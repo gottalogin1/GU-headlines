@@ -41,7 +41,15 @@ from ..db import session_scope
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..scraper.text import GUAM_TZ
 from ..settings import get_settings
-from ..weather import JTWC_URL, NWS_GUAM_URL, for_page
+from ..weather import (
+    GUAM_RADAR_URL,
+    JTWC_URL,
+    MARINE_PAGE,
+    NWS_GUAM_URL,
+    SURF_PAGE,
+    for_page,
+    weather_page,
+)
 from . import queries, seo, stats
 from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
 
@@ -325,6 +333,16 @@ sidebar_cache = _TTLCache(ttl=120)
 weather_cache = _TTLCache(ttl=60)
 
 
+def weather_reports() -> dict[str, tuple]:
+    """The saved weather (see weather.py)."""
+
+    def load():
+        with session_scope() as session:
+            return queries.weather_reports(session)
+
+    return weather_cache.get("weather", load)
+
+
 # --------------------------------------------------------- template helpers
 
 
@@ -397,6 +415,12 @@ def fmt_time(dt: datetime | None) -> str:
     if not local:
         return ""
     return f"{local.hour % 12 or 12}:{local:%M} {local:%p}"
+
+
+def fmt_hour(dt: datetime) -> str:
+    """2 PM (Guam time)"""
+    local = to_local(dt)
+    return f"{local.hour % 12 or 12} {local:%p}"
 
 
 def _short_day(value: date) -> str:
@@ -480,6 +504,8 @@ templates.env.filters.update(
     fmt_time=fmt_time,
     event_when=event_when,
     fmt_until=fmt_until,
+    short_day=_short_day,
+    fmt_hour=fmt_hour,
     fmt_date_long=fmt_date_long,
     fmt_day=fmt_day,
     rel_time=rel_time,
@@ -499,6 +525,9 @@ templates.env.globals.update(
     theme_script=Markup(THEME_SCRIPT),
     nws_guam_url=NWS_GUAM_URL,
     jtwc_url=JTWC_URL,
+    guam_radar_url=GUAM_RADAR_URL,
+    surf_page_url=SURF_PAGE,
+    marine_page_url=MARINE_PAGE,
 )
 
 
@@ -558,10 +587,6 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "uncollectable": [s for s in config.uncollectable_sources if s.slug not in hidden],
         }
 
-    def weather():
-        with session_scope() as session:
-            return queries.weather_reports(session)
-
     context.setdefault("title", None)
     count_view = context.pop("count_view", True)
     # The ad block, on the pages that ask for it, once AdSense is set up.
@@ -591,7 +616,11 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "show_ad": show_ad,
             "csp_nonce": nonce,
             "weather": (
-                for_page(weather_cache.get("weather", weather), datetime.now(timezone.utc))
+                for_page(
+                    weather_reports(),
+                    datetime.now(timezone.utc),
+                    tide_station=settings.tide_station,
+                )
                 if settings.weather_interval_minutes
                 else None
             ),
@@ -874,6 +903,27 @@ def status(request: Request):
     )
 
 
+@app.get("/weather", response_class=HTMLResponse)
+def weather_view(request: Request):
+    if not settings.weather_interval_minutes:
+        raise HTTPException(404)
+    shown = weather_page(weather_reports(), datetime.now(timezone.utc), settings.tide_station)
+    return render(
+        request,
+        "weather.html",
+        page_weather=shown,
+        title="Guam weather and tides",
+        description=(
+            "Guam weather now: the reading at the airport, the National Weather Service"
+            " forecast and alerts, typhoons in the western Pacific, sunrise and sunset,"
+            " and the high and low tides for today, the week and the month."
+        ),
+        active_nav="weather",
+        canonical={},
+        breadcrumbs=[("Weather", None)],
+    )
+
+
 @app.get("/jobs", response_class=HTMLResponse)
 def jobs(
     request: Request,
@@ -1045,6 +1095,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/archive": "Archive",
         "/jobs": "Jobs",
         "/events": "Events",
+        "/weather": "Weather",
         "/status": "Sources",
         "/search": "Search",
         **{f"/category/{c.slug}": c.name for c in config.categories},
@@ -1131,7 +1182,11 @@ def sitemap(request: Request):
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
     entries = seo.sitemap_entries(
-        request, sitemap_cache.get("sitemap", data), config.categories, news_sources
+        request,
+        sitemap_cache.get("sitemap", data),
+        config.categories,
+        news_sources,
+        weather=bool(settings.weather_interval_minutes),
     )
     return Response(
         seo.sitemap_xml(entries),

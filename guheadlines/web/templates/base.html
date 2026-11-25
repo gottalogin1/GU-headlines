@@ -32,6 +32,9 @@
           <a href="/archive" {% if active_nav == 'archive' %}aria-current="page"{% endif %}>Archive</a>
           <a href="/jobs" {% if active_nav == 'jobs' %}aria-current="page"{% endif %}>Jobs</a>
           <a href="/events" {% if active_nav == 'events' %}aria-current="page"{% endif %}>Events</a>
+          {% if settings.weather_interval_minutes %}
+          <a href="/weather" {% if active_nav == 'weather' %}aria-current="page"{% endif %}>Weather</a>
+          {% endif %}
           <a href="/status" {% if active_nav == 'status' %}aria-current="page"{% endif %}>Sources</a>
         </nav>
         <form class="search" action="/search" method="get" role="search">

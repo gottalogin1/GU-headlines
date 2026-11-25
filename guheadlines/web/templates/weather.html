@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{# The Weather page (weather.weather_page). Everything is drawn here on the
+   server: the tide views switch with radio buttons and CSS, with no script.
+   Each card ends with where its data comes from, with a link. #}
+{% macro tide(t) -%}
+<span class="weather-tide{% if t.past %} is-past{% endif %}"><strong>{{ "High" if t.high else "Low" }}</strong> {{ t.time|fmt_time }} <span class="weather-tide-ft">{{ t.ft }} ft</span></span>
+{%- endmacro %}
+{% macro tide_table(days, caption) %}
+<table class="tide-table">
+  <caption class="visually-hidden">{{ caption }}</caption>
+  <tbody>
+    {% for d in days %}
+    <tr{% if loop.first %} class="is-today"{% endif %}>
+      <th scope="row">{% if loop.first %}Today{% else %}{{ d.day|short_day }}{% endif %}</th>
+      <td>{% for t in d.tides %}{{ tide(t) }}{% endfor %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+{% macro source() %}<p class="wx-source">{{ caller() }}</p>{% endmacro %}
+{% macro link(url, text) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ text }} ↗</a>{% endmacro %}
+
+{% block main %}
+{% set w = page_weather %}
+{% set c = w.conditions %}
+{% set st = w.tide_station %}
+{% set surf_now = w.surf.periods[0] if w.surf else none %}
+<header class="page-head">
+  <h1>Guam weather</h1>
+  <p class="muted">The weather, the sea and the tides on Guam, from the National Weather Service,
+    the Joint Typhoon Warning Center and NOAA. Times are Chamorro Standard Time.</p>
+</header>
+
+<nav class="wx-jump" aria-label="On this page">
+  <a href="#now">Right now</a>
+  <a href="#hours">Next 24 hours</a>
+  <a href="#tides">Tides</a>
+  <a href="#week">This week</a>
+  <a href="#water">On the water</a>
+  <a href="#storms">Typhoons</a>
+  <a href="#ready">Be ready</a>
+</nav>
+
+<div class="wx">
+<section class="wx-card" id="now" aria-labelledby="now-title">
+  <h2 id="now-title">Right now</h2>
+  {% if c %}
+  <p class="wx-reading">
+    {%- if c.temp_f is not none %}<span class="wx-big">{{ c.temp_f }}°F</span> {% endif -%}
+    <span class="wx-sky">{{ c.sky }}</span>
+  </p>
+  {% else %}
+  <p>No recent reading from the airport.</p>
+  {% endif %}
+  <dl class="wx-facts">
+    {% if c and c.heat_index_f and c.heat_index_f > c.temp_f %}<div><dt>Feels like</dt><dd>{{ c.heat_index_f }}°F</dd></div>{% endif %}
+    {% if c and c.humidity is not none %}<div><dt>Humidity</dt><dd>{{ c.humidity }}%</dd></div>{% endif %}
+    {% if c and c.wind_mph is not none %}<div><dt>Wind</dt><dd>{% if c.wind_mph %}{{ c.wind_dir or 'Variable' }} {{ c.wind_mph }} mph{% if c.gust_mph %}, gusts {{ c.gust_mph }}{% endif %}{% else %}Calm{% endif %}</dd></div>{% endif %}
+    {% if surf_now and surf_now.water_f %}<div><dt>Ocean</dt><dd>{{ surf_now.water_f }}°F</dd></div>{% endif %}
+    <div><dt>Sunrise</dt><dd>{{ w.sky.sunrise|fmt_time }}</dd></div>
+    <div><dt>Sunset</dt><dd>{{ w.sky.sunset|fmt_time }}</dd></div>
+    <div><dt>Moon</dt><dd>{{ w.sky.moon }}</dd></div>
+  </dl>
+  {% call source() %}
+    {%- if c %}Guam International Airport, <span title="{{ c.time|fmt_datetime }}">{{ c.time|rel_time }}</span>, from the {{ link(nws_guam_url, "National Weather Service") }}{% if surf_now and surf_now.water_f %}; ocean from its surf forecast{% endif %}.
+    {% endif -%}
+    Sunrise, sunset and the moon are worked out for Hagåtña.
+  {%- endcall %}
+</section>
+
+<section class="wx-card" id="alerts" aria-labelledby="alerts-title">
+  <h2 id="alerts-title">Watches, warnings and advisories</h2>
+  {% set alerts = w.warnings + w.advisories %}
+  {% if alerts %}
+  {% for a in alerts %}
+  <details class="wx-alert{% if a.warning %} is-warning{% endif %}">
+    <summary><strong>{{ a.event }}</strong>{% if a.ends %} <span class="muted">until {{ a.ends|fmt_until }}</span>{% endif %}</summary>
+    <div class="wx-alert-text">
+      {% if a.area %}<p><strong>For {{ a.area }}.</strong></p>{% endif %}
+      {% for p in a.text %}<p>{{ p }}</p>{% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+  {% elif w.checked %}
+  <p class="wx-none">None for Guam right now.</p>
+  {% else %}
+  <p class="wx-none">Not checked yet.</p>
+  {% endif %}
+  {% call source() %}For Guam and its coastal waters, from the {{ link(nws_guam_url, "National Weather Service") }}.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide" id="hours" aria-labelledby="hours-title">
+  <h2 id="hours-title">Next 24 hours</h2>
+  {% if w.hourly %}
+  {% set temps = w.hourly|map(attribute="temp_f")|list %}
+  <p class="wx-lead"><strong>{{ temps|min }}° to {{ temps|max }}°F.</strong>
+    {% set rain = w.hourly|map(attribute="rain")|select|list %}
+    {% if rain %}Chance of rain up to {{ rain|max }}%.{% else %}Little chance of rain.{% endif %}</p>
+  <ol class="wx-hours">
+    {% for h in w.hourly[::2] %}
+    <li title="{{ h.short }}{% if h.wind %}, wind {{ h.wind }}{% endif %}">
+      <span class="wx-hour">{% if loop.first %}Now{% else %}{{ h.time|fmt_hour }}{% endif %}</span>
+      <strong>{{ h.temp_f }}°</strong>
+      <span class="muted">{% if h.rain %}{{ h.rain }}%{% else %}0%{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  <p class="wx-note muted">Every two hours: the temperature and the chance of rain.</p>
+  {% else %}
+  <p class="wx-none">No recent hourly forecast.</p>
+  {% endif %}
+  {% call source() %}Hourly forecast for Hagåtña from the {{ link(nws_guam_url, "National Weather Service") }}.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide wx-tides" id="tides" aria-labelledby="tides-title">
+  <h2 id="tides-title">Tides{% if st and st.name %} at {{ st.name }}{% endif %}</h2>
+  {% if st %}
+  {% set nt = w.next_tides %}
+  {% if nt %}
+  <p class="wx-reading"><span class="wx-big">{{ nt[0].time|fmt_time }}</span>
+    <span class="wx-sky">Next {{ "high" if nt[0].high else "low" }} tide{% if nt[0].tomorrow %}, tomorrow{% endif %}, {{ nt[0].ft }} ft</span></p>
+  {% if nt|length > 1 %}<p class="wx-lead">Then {{ "high" if nt[1].high else "low" }} tide at {{ nt[1].time|fmt_time }}{% if nt[1].tomorrow and not nt[0].tomorrow %} tomorrow{% endif %}, {{ nt[1].ft }} ft.</p>{% endif %}
+  {% endif %}
+  <div class="tide-switch">
+    <input class="visually-hidden" type="radio" name="tide-view" id="tide-day" checked>
+    <label for="tide-day">Day</label>
+    <input class="visually-hidden" type="radio" name="tide-view" id="tide-week">
+    <label for="tide-week">Week</label>
+    <input class="visually-hidden" type="radio" name="tide-view" id="tide-month">
+    <label for="tide-month">Month</label>
+
+    <div class="tide-view tide-view-day">
+      {% set chart = w.tide_chart %}
+      {% if chart %}
+      <figure class="tide-chart">
+        <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-label="Chart of the tide through today, from midnight to midnight">
+          {% for i in (1, 2, 3) %}<line class="tide-grid" x1="{{ chart.width * i / 4 }}" x2="{{ chart.width * i / 4 }}" y1="0" y2="{{ chart.height }}"/>{% endfor %}
+          <path class="tide-area" d="{{ chart.area }}"/>
+          <path class="tide-line" d="{{ chart.line }}"/>
+          {% if chart.now is not none %}<line class="tide-now" x1="{{ chart.now }}" x2="{{ chart.now }}" y1="0" y2="{{ chart.height }}"/>{% endif %}
+          {% for d in chart.dots %}
+          <circle class="tide-dot" cx="{{ d.x }}" cy="{{ d.y }}" r="5"/>
+          <text class="tide-label" x="{{ d.x }}" y="{{ d.y - 13 if d.high else d.y + 13 }}"
+                text-anchor="{{ 'start' if d.x < 50 else ('end' if d.x > chart.width - 50 else 'middle') }}"
+                dominant-baseline="{{ 'auto' if d.high else 'hanging' }}">{{ d.time|fmt_time }}</text>
+          {% endfor %}
+        </svg>
+        <div class="tide-hours" aria-hidden="true"><span>12 AM</span><span>6 AM</span><span>Noon</span><span>6 PM</span><span>12 AM</span></div>
+        {% if chart.now is not none %}<figcaption class="wx-note muted">The dashed line is the time now.</figcaption>{% endif %}
+      </figure>
+      {% endif %}
+      <p class="tide-today">{% for t in w.tide_views.day[0].tides %}{{ tide(t) }}{% endfor %}</p>
+    </div>
+    <div class="tide-view tide-view-week">
+      {{ tide_table(w.tide_views.week, "High and low tides for the next 7 days") }}
+    </div>
+    <div class="tide-view tide-view-month">
+      {{ tide_table(w.tide_views.month, "High and low tides for the next 30 days") }}
+    </div>
+  </div>
+  {% call source() %}
+    Predictions for {{ st.name or "NOAA station " ~ st.id }}{% if st.name %} (station {{ st.id }}){% endif %} from {{ link(st.url, "NOAA Tides & Currents") }}.
+    Heights are in feet above the average of each day's lowest tide, the zero of tide tables.
+    Tides that have gone by are grey.
+  {%- endcall %}
+  {% else %}
+  <p class="wx-none">No tide predictions yet.</p>
+  {% endif %}
+</section>
+
+<section class="wx-card wx-wide" id="week" aria-labelledby="week-title">
+  <h2 id="week-title">This week</h2>
+  {% if w.week %}
+  <ol class="wx-days">
+    {% for d in w.week %}
+    <li>
+      <strong class="wx-day-name">{{ d.name }}</strong>
+      <span class="wx-day-temps">
+        {%- if d.high is not none and d.low is not none %}<strong>{{ d.high }}°</strong> / <span class="muted">{{ d.low }}°</span>
+        {%- elif d.high is not none %}<strong>High {{ d.high }}°</strong>
+        {%- else %}<strong>Low {{ d.low }}°</strong>{% endif -%}
+      </span>
+      <span class="wx-day-sky">{{ d.short }}</span>
+      <span class="muted">{% if d.rain %}Rain {{ d.rain }}%{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  <details class="wx-more">
+    <summary>Read the forecast in words</summary>
+    <dl class="wx-words">
+      {% for p in w.forecast %}<div><dt>{{ p.name }}</dt><dd>{{ p.detail or p.short }}</dd></div>{% endfor %}
+    </dl>
+  </details>
+  {% else %}
+  <p class="wx-none">No recent forecast.</p>
+  {% endif %}
+  {% call source() %}Forecast for Hagåtña from the {{ link(nws_guam_url, "National Weather Service") }}.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide" id="water" aria-labelledby="water-title">
+  <h2 id="water-title">On the water</h2>
+  <div class="wx-columns">
+    <div>
+      <h3>Surf and rip currents</h3>
+      {% if w.surf %}
+      {% for h in w.surf.headlines %}<p class="wx-flag">{{ h }}</p>{% endfor %}
+      {% if surf_now.rip %}<p class="wx-reading"><span class="wx-mid">{{ surf_now.rip }}</span> <span class="wx-sky">risk of rip currents {{ surf_now.name|lower }}</span></p>{% endif %}
+      {% if surf_now.surf %}
+      <dl class="wx-facts">
+        {% for side, height in surf_now.surf %}<div><dt>{{ side }}-facing reefs</dt><dd>{{ height }}</dd></div>{% endfor %}
+      </dl>
+      {% endif %}
+      {% if w.surf.discussion %}<p class="wx-text">{{ w.surf.discussion }}</p>{% endif %}
+      {% call source() %}{{ link(surf_page_url, "Surf Zone Forecast") }} from the National Weather Service, <span title="{{ w.surf.issued|fmt_datetime }}">{{ w.surf.issued|rel_time }}</span>.{% endcall %}
+      {% else %}
+      <p class="wx-none">No recent surf forecast.</p>
+      {% endif %}
+    </div>
+    <div>
+      <h3>Boating: wind and seas</h3>
+      {% if w.marine %}
+      {% for h in w.marine.headlines %}<p class="wx-flag">{{ h }}</p>{% endfor %}
+      <dl class="wx-words">
+        {% for p in w.marine.periods[:3] %}<div><dt>{{ p.name }}</dt><dd>{{ p.text }}</dd></div>{% endfor %}
+      </dl>
+      {% if w.marine.periods|length > 3 or w.marine.synopsis %}
+      <details class="wx-more">
+        <summary>The rest of the week</summary>
+        <dl class="wx-words">
+          {% for p in w.marine.periods[3:] %}<div><dt>{{ p.name }}</dt><dd>{{ p.text }}</dd></div>{% endfor %}
+          {% if w.marine.synopsis %}<div><dt>Summary</dt><dd>{{ w.marine.synopsis }}</dd></div>{% endif %}
+        </dl>
+      </details>
+      {% endif %}
+      {% call source() %}{{ link(marine_page_url, "Coastal Waters Forecast") }} for the Marianas from the National Weather Service, <span title="{{ w.marine.issued|fmt_datetime }}">{{ w.marine.issued|rel_time }}</span>.{% endcall %}
+      {% else %}
+      <p class="wx-none">No recent coastal waters forecast.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="wx-card" id="storms" aria-labelledby="storms-title">
+  <h2 id="storms-title">Typhoons and tropical storms</h2>
+  {% if w.storms %}
+  <ul class="wx-list">
+    {% for s in w.storms %}<li>{{ link(s.url|safe_url, s.name) }}</li>{% endfor %}
+  </ul>
+  {% elif w.storms is none %}
+  <p class="wx-none">No recent storm list.</p>
+  {% else %}
+  <p class="wx-reading"><span class="wx-mid">None</span></p>
+  <p>No tropical storms or typhoons have warnings in the western Pacific.</p>
+  {% endif %}
+  {% call source() %}The western North Pacific, from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}.{% endcall %}
+</section>
+
+<section class="wx-card" id="ready" aria-labelledby="ready-title">
+  <h2 id="ready-title">Be ready</h2>
+  <ul class="wx-list">
+    <li>{{ link("https://ghs.guam.gov/", "Guam Homeland Security / Office of Civil Defense") }}<span class="muted">Typhoon readiness (COR) levels and shelters</span></li>
+    <li>{{ link(nws_guam_url, "National Weather Service, Guam") }}<span class="muted">Every forecast and statement</span></li>
+    <li>{{ link(guam_radar_url, "Guam weather radar") }}<span class="muted">Where it is raining now</span></li>
+    <li>{{ link("https://rammb-slider.cira.colostate.edu/?sat=himawari", "Himawari satellite") }}<span class="muted">Clouds over the western Pacific</span></li>
+    <li>{{ link(jtwc_url, "Joint Typhoon Warning Center") }}<span class="muted">Storm tracks and warnings</span></li>
+    {% if st %}<li>{{ link(st.url, "NOAA tide predictions") }}<span class="muted">The tide table for any date</span></li>{% endif %}
+    <li>{{ link("https://www.ready.gov/hurricanes", "Ready.gov: typhoons and hurricanes") }}<span class="muted">What to do before, during and after</span></li>
+  </ul>
+</section>
+</div>
+{% endblock %}

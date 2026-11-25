@@ -85,7 +85,10 @@ that is always on can do this by itself after each change; see
 - **Weather and typhoon warnings**: a banner on every page while the National
   Weather Service has a watch or a warning for Guam, and a weather box on the
   home page with the airport reading, the forecast, the typhoons in the
-  western North Pacific and the advisories. Free government data, no key.
+  western North Pacific, today's tides and the advisories.
+- **Weather page** with the next 24 hours, the week, the surf and the sea,
+  sunrise and sunset, and the high and low tides for a day, a week or a
+  month, each part linked to its source. Free government data, no key.
   See [Weather](docs/settings.md#weather).
 - **Obituaries page** for obituaries, rosaries and funeral notices, kept apart
   from the news. It can show an ad.

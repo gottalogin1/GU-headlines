@@ -113,7 +113,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `reclassify` | Re-apply `categories.yaml` to every stored story. |
 | `jobs` | Read the job boards in `jobs.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each board gives without saving anything (`--limit N`, `--details N`). |
 | `events` | Read the calendars in `events.yaml` now (`--source SLUG` for one, repeatable). `--check` shows what each calendar gives without saving anything (`--limit N`). |
-| `weather` | Read the weather now (NWS alerts, the airport reading, the forecast, the JTWC storm list) and save it. Prints what each part gave, or the error. |
+| `weather` | Read the weather now (NWS alerts, the airport reading, the forecasts, the surf and coastal waters forecasts, the JTWC storm list, NOAA's tides) and save it. Prints what each part gave, or the error. |
 | `sources` | List the configured sites with story counts; also validates both YAML files. |
 | `alert-test` | Post a test message in the Discord channel of `DISCORD_WEBHOOK_URL` (see [Alerts in Discord](maintenance.md#alerts-in-discord)). |
 | `migrate` | Apply database upgrades (done automatically on start). |
@@ -135,7 +135,7 @@ Run with `docker compose exec worker guheadlines COMMAND` (or just
 | `event_calendars` | One row per events calendar: name, homepage, on/off, last check, last error, upcoming events found |
 | `events` | The events: calendar and its own ID for the event (unique together), name, start and end, all-day, place, organizer, description, link, agenda PDF, first and last seen, and when the calendar stopped listing it |
 | `alerts` | News sites and job boards whose latest check failed, and whether their alert was posted, so each problem is posted once |
-| `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `storms`) as JSON, with the time it was read |
+| `weather` | The last good copy of each weather part (`alerts`, `conditions`, `forecast`, `hourly`, `surf`, `marine`, `storms`, `tides`) as JSON, with the time it was read |
 
 Schema changes are Alembic migrations in `guheadlines/migrations/versions/`.
 

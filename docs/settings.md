@@ -318,19 +318,26 @@ SITE_TAGLINE=Guam news, updated every 30 minutes
 
 ## Weather
 
-The worker also reads the weather for Guam from two free United States
-government services. They need no key.
+The worker also reads the weather and the tides for Guam from three free
+United States government services. They need no key.
 
 - The **National Weather Service** (NWS) office in Tiyan
   ([weather.gov/gum](https://www.weather.gov/gum/)): the watches, warnings and
-  advisories for Guam and the Guam coastal waters, the forecast for Hagåtña,
-  and the latest reading at Guam International Airport.
+  advisories for Guam and the Guam coastal waters, the forecast for Hagåtña
+  (for the week and for each hour), the latest reading at Guam International
+  Airport, the Surf Zone Forecast (rip currents, surf height, water
+  temperature) and the Coastal Waters Forecast (wind and seas).
 - The **Joint Typhoon Warning Center** (JTWC): the tropical storms and
   typhoons that it has warnings for in the western North Pacific.
+- **NOAA Tides & Currents**
+  ([tidesandcurrents.noaa.gov](https://tidesandcurrents.noaa.gov/)): the times
+  and heights of the high and low tides at one tide station, for the next
+  month.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `WEATHER_INTERVAL_MINUTES` | `10` | How often to read the weather, in minutes. The minimum is 5. `0` turns the weather off: no banner and no weather box. |
+| `WEATHER_INTERVAL_MINUTES` | `10` | How often to read the weather, in minutes. The minimum is 5. `0` turns the weather off: no banner, no weather box and no Weather page. |
+| `TIDE_STATION` | `1630000` | The NOAA tide station whose tides are shown. `1630000` is Apra Harbor. Empty: no tides. To find another station's ID, open [NOAA's tide predictions](https://tidesandcurrents.noaa.gov/tide_predictions.html), find Guam, and copy the station's number. Tides are worked out years ahead, so they are read only every 6 hours (and at once after you change the station). |
 
 What the site shows:
 
@@ -342,13 +349,21 @@ What the site shows:
   feels, the humidity and the wind at the airport, the next four forecast
   periods (two on phones), the storm list, and the advisories and statements
   (a Small Craft Advisory, a Rip Current Statement), which are not in the
-  banner.
+  banner, and today's high and low tides.
+- **The Weather page** (`/weather`, the **Weather** link in the top bar): all
+  of it in more detail, with the next 24 hours, the week, the surf and the
+  sea, sunrise and sunset, and the tides for a day, a week or a month (see
+  [The Weather page](using-the-website.md#the-weather-page)). Sunrise,
+  sunset and the moon's phase are worked out by the site itself, with no
+  service.
 
 If a service cannot be reached, the site keeps what it got last. A warning
-stays in the banner until its end time. The reading, the forecast and the
-storm list leave the box when they are more than 6 hours old.
+stays in the banner until its end time. The reading, the forecasts and the
+storm list are left out when they are more than 6 hours old (18 hours for the
+surf and coastal waters forecasts, which NWS writes twice a day). The tides
+are used as long as the saved month lasts.
 
-To read the weather now and see what each service gave:
+To read the weather and the tides now and see what each service gave:
 
 ```
 docker compose exec worker guheadlines weather

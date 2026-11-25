@@ -89,6 +89,9 @@ class Settings:
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
     weather_interval_minutes: int = 10
+    # The NOAA tide station whose high and low tides the weather box shows.
+    # 1630000 is Apra Harbor. Empty: no tides.
+    tide_station: str = "1630000"
     # The password of the private visitor stats page (/stats). Empty: no
     # counting, no stats page, and story links go straight to the news sites.
     stats_password: str = ""
@@ -150,6 +153,16 @@ def _adsense_slot(value: str | None) -> str:
     return value if re.fullmatch(r"\d{5,20}", value) else ""
 
 
+def _tide_station(value: str | None, default: str) -> str:
+    """A NOAA station ID (letters and digits, such as 1630000), the default
+    when the setting is missing, or "" (no tides) when it is empty or not an
+    ID."""
+    if value is None:
+        return default
+    value = value.strip()
+    return value if re.fullmatch(r"[A-Za-z0-9]{1,16}", value) else ""
+
+
 def load_settings() -> Settings:
     env = os.environ
     db_url = env.get("DATABASE_URL")
@@ -198,6 +211,7 @@ def load_settings() -> Settings:
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
+        tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
         stats_password=env.get("STATS_PASSWORD", "").strip(),
     )
 

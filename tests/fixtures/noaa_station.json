@@ -1,0 +1,18 @@
+{
+ "count": 1,
+ "units": null,
+ "stations": [
+  {
+   "tidal": true,
+   "greatlakes": false,
+   "shefcode": "APRP7",
+   "id": "1630000",
+   "name": "Apra Harbor, Guam",
+   "lat": 13.443389,
+   "lng": 144.656639,
+   "state": "",
+   "timezone": "GU",
+   "timezonecorr": 10
+  }
+ ]
+}
