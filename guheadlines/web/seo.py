@@ -167,8 +167,8 @@ def sitemap_entries(
     request: Request, data: dict, categories, sources
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events,
-    and the archive down to each day that has stories. `data` comes from
-    queries.sitemap_data; `sources` are the slugs of news sources to list."""
+    the Sources page, and the archive down to each day that has stories. `data`
+    comes from queries.sitemap_data; `sources` are the slugs of news sources to list."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
     latest = data["latest"]
     entries: list[tuple[str, datetime | None]] = [(url("/"), latest)]
@@ -180,6 +180,7 @@ def sitemap_entries(
             entries.append((url(f"/source/{slug}"), data["sources"][slug]))
     entries.append((url("/jobs"), None))
     entries.append((url("/events"), None))
+    entries.append((url("/status"), None))
     if data["days"]:
         entries.append((url("/archive"), latest))
         months: dict[tuple[int, int], datetime] = {}

@@ -59,6 +59,23 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **Faster pages with the ad, and 100 in all four PageSpeed scores.**
+  Google's ad code now loads when the visitor first scrolls, taps, presses a
+  key or moves the mouse, not with the page. The page is ready sooner, and
+  [PageSpeed Insights](https://pagespeed.web.dev) measures the page without
+  the ad. The ad block keeps room for the ad, so the right-hand column does
+  not jump when the ad comes in. When an ad blocker stops the ad, the empty
+  block is taken away. Nothing to do when you update.
+- **Easier to read and to tap.** Links inside sentences are underlined. The
+  greyed-out "Newer" and "Older" buttons and paused sources on the Sources
+  page are no longer faded too light to read. The links in the weather box
+  and the source lists in the right-hand column have a larger tap area. On
+  the Jobs and Search pages, the line that counts the results is now a
+  heading, so screen readers find their way through the list. Nothing to do
+  when you update.
+- **Search engines can list the Sources page**, which has "Why this site
+  exists" and the disclaimer. It is in `sitemap.xml`, and `robots.txt` no
+  longer blocks it. Nothing to do when you update.
 - **The weather box on the home page is about half as tall.** The airport
   reading sits beside the forecast, each forecast period takes one line, and
   typhoons and advisories share one line under it. Click an advisory to read

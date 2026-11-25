@@ -59,7 +59,7 @@
   </ul>
 </div>
 {% else %}
-  <p class="result-count">
+  <h2 class="result-count">
     {% if fuzzy %}
       No exact matches for <strong>{{ filters.q }}</strong>. Headlines that look similar:
     {% elif result.total %}
@@ -67,7 +67,7 @@
     {% else %}
       No stories found{% if filters.q %} for <strong>{{ filters.q }}</strong>{% endif %}. Try fewer words or a wider date range.
     {% endif %}
-  </p>
+  </h2>
   {% for item in result.items %}{{ card(item, category_names, show_snippet=true, first=loop.first) }}{% endfor %}
   {{ pagination(result, page_url) }}
 {% endif %}
