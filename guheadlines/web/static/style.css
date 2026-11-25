@@ -741,6 +741,18 @@ a.cal-day:focus-visible { outline-offset: -3px; border-radius: 0; }
 .cal-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .cal-note { margin: 2px 2px 0; }
 .job-employer .cal-dot { margin-right: 6px; vertical-align: 1px; }
+/* Subscribing to the events in a calendar app, below the month calendar. */
+.cal-subscribe { margin: 12px 2px 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.cal-subscribe-title { margin: 0; font-size: .95rem; font-weight: 700; }
+.cal-subscribe .read-link { margin-top: 8px; }
+.cal-subscribe p.small { margin: 8px 0 0; }
+/* One tap selects the whole address, ready to copy. */
+.feed-address { user-select: all; overflow-wrap: anywhere; color: var(--text-soft); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95em; }
+/* An event's own page. */
+.event-page, .add-to-calendar { margin-bottom: 16px; }
+.add-to-calendar .headline { font-size: 1.1rem; }
+.add-to-calendar p.small { margin: 8px 0 0; }
+.event-note { margin: 0 4px; }
 @media (max-width: 640px) {
   /* Too narrow for names: a square per event, and the day's list one tap away. */
   .cal { padding: 10px 8px; }

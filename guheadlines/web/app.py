@@ -40,6 +40,7 @@ from ..config import (
     load_jobs_config,
 )
 from ..db import session_scope
+from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
 from ..models import CATCH_UP_NOTE, Article, Source
 from ..newsletter import schedule_text
@@ -605,6 +606,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         robots=context.pop("robots", None),
         canonical=context.pop("canonical", None),
         breadcrumbs=context.pop("breadcrumbs", None),
+        structured=context.pop("structured", None),
         result=context.get("result"),
         static_url=static_url,
     )
@@ -1017,6 +1019,10 @@ def events(
     collected = {c.slug for c in calendars_config if c.collected}
     calendars = [c for c in calendars if c["calendar"].slug in collected]
     colors = {c.slug: c.color for c in calendars_config if c.color}
+    # The calendar feed to offer: the calendar the page is narrowed to, or all.
+    feed_calendar = next(
+        (c for c in calendars_config if c.collected and c.slug == event_filters.calendar), None
+    )
     month_view = event_calendar.build_month(
         shown,
         today,
@@ -1037,6 +1043,8 @@ def events(
         month_view=month_view,
         colors=colors,
         legend=[c for c in calendars if c["calendar"].slug in colors],
+        feed=_feed_links(request, feed_calendar.slug if feed_calendar else None),
+        feed_calendar=feed_calendar,
         title="Events on Guam",
         description=_events_description([c["calendar"].name for c in calendars]),
         active_nav="events",
@@ -1046,6 +1054,152 @@ def events(
         robots="noindex, follow" if event_filters.q or month or day else None,
         breadcrumbs=[("Events", None)],
         show_ad=True,
+    )
+
+
+def _feed_links(request: Request, calendar: str | None) -> dict:
+    """Where the events feed is, and the links that add it to a calendar app:
+    webcal:// opens Apple Calendar (and Outlook) ready to subscribe, and Google
+    Calendar takes the same address in its own link."""
+    path = "/events.ics" + (f"?{urlencode({'calendar': calendar})}" if calendar else "")
+    address = seo.absolute_url(request, path)
+    webcal = "webcal://" + address.split("://", 1)[1]
+    google = "https://calendar.google.com/calendar/render?" + urlencode({"cid": webcal})
+    return {"address": address, "webcal": webcal, "google": google}
+
+
+def _upcoming_event(event_id: int) -> dict:
+    """An upcoming event and its calendar, or 404 (an event that is over,
+    cancelled or no longer listed has no page)."""
+    if not 1 <= event_id < 2**63:
+        raise HTTPException(404)
+    today = datetime.now(GUAM_TZ).date()
+    since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
+    with session_scope() as session:
+        item = queries.upcoming_event(session, event_id, since)
+    if item is None:
+        raise HTTPException(404)
+    return item
+
+
+def google_calendar_link(event) -> str:
+    """A Google Calendar link that opens one event, filled in, ready to save."""
+    start, end = ical.ical_times(event)
+    url = safe_url(event.url)
+    details = "\n\n".join(part for part in (event.description, url and f"Details: {url}") if part)
+    params = {
+        "action": "TEMPLATE",
+        "text": event.title,
+        "dates": f"{start}/{end or start}",
+        "details": details,
+        "location": event.location,
+        "ctz": "Pacific/Guam",
+    }
+    query = urlencode({k: v for k, v in params.items() if v})
+    return f"https://calendar.google.com/calendar/render?{query}"
+
+
+def _host(request: Request) -> str:
+    return urlsplit(seo.base_url(request)).hostname or "localhost"
+
+
+@app.get("/events/{event_id:int}", response_class=HTMLResponse)
+def event_page(request: Request, event_id: int):
+    """One event's own page: what Google lists in its event results, and the
+    links that add the event to a calendar app."""
+    item = _upcoming_event(event_id)
+    event = item["event"]
+    colors = {c.slug: c.color for c in events_config_cache.get() if c.color}
+    when = event_when(event)
+    summary = f"{when}, {event.location}" if event.location else when
+    if event.description:
+        summary += f". {event.description}"
+    structured = seo.event_data(
+        event,
+        url=seo.absolute_url(request, f"/events/{event.id}"),
+        calendar_name=item["calendar_name"],
+        calendar_homepage=safe_url(item["calendar_homepage"]) or None,
+    )
+    return render(
+        request,
+        "event.html",
+        item=item,
+        color=colors.get(item["calendar_slug"]),
+        google_link=google_calendar_link(event),
+        # Many events share a name ("Public Hearing"); the day tells them apart.
+        title=f"{event.title}, {_short_day(to_local(event.starts_at).date())}",
+        description=truncate(summary, 160),
+        active_nav="events",
+        canonical={},
+        breadcrumbs=[("Events", "/events"), (event.title, None)],
+        structured=[structured] if structured else None,
+        show_ad=True,
+    )
+
+
+@app.get("/events/{event_id:int}.ics")
+def event_file(request: Request, event_id: int):
+    """One event as an iCal file, which calendar apps open to add the event."""
+    item = _upcoming_event(event_id)
+    return Response(
+        ical.write_calendar([item], product=settings.site_name, host=_host(request)),
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="event-{event_id}.ics"',
+            "Cache-Control": "public, max-age=900",
+            "X-Robots-Tag": "noindex",
+        },
+    )
+
+
+# Events that ended this many days ago stay in the calendar feed, so that a
+# calendar app that subscribed to it keeps the recent past.
+FEED_DAYS_BEHIND = 30
+
+
+@app.get("/events.ics")
+def events_feed(request: Request, calendar: str = Query("", max_length=60)):
+    """The events as a calendar that visitors subscribe to in their calendar
+    app (Google Calendar, Apple Calendar, Outlook...), which checks it again by
+    itself. With ?calendar=<slug>, every event of that calendar; without it,
+    the main events of every calendar, as on the month calendar."""
+    calendars_config = {c.slug: c for c in events_config_cache.get()}
+    slug = calendar.strip()
+    if slug and not (slug in calendars_config and calendars_config[slug].collected):
+        raise HTTPException(404)
+    today = datetime.now(GUAM_TZ).date()
+    since = datetime.combine(
+        today - timedelta(days=FEED_DAYS_BEHIND), datetime.min.time(), tzinfo=GUAM_TZ
+    )
+    until = datetime.combine(
+        today + timedelta(days=EVENT_DAYS_AHEAD + 1), datetime.min.time(), tzinfo=GUAM_TZ
+    )
+    with session_scope() as session:
+        items = queries.month_events(
+            session, EventFilters(calendar=slug or None), since, until, since
+        )
+    if not slug:
+        items = [
+            item
+            for item in items
+            if item["calendar_slug"] not in calendars_config
+            or calendars_config[item["calendar_slug"]].is_main(item["event"].title)
+        ]
+    name = calendars_config[slug].name if slug else "Guam events"
+    return Response(
+        ical.write_calendar(
+            items,
+            product=settings.site_name,
+            host=_host(request),
+            name=f"{name} · {settings.site_name}",
+            refresh=timedelta(hours=settings.events_interval_hours),
+        ),
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": 'inline; filename="guam-events.ics"',
+            "Cache-Control": "public, max-age=900",
+            "X-Robots-Tag": "noindex",
+        },
     )
 
 
@@ -1230,16 +1384,22 @@ def sitemap(request: Request):
     separate = list(_separate())
 
     def data() -> dict:
+        today = datetime.now(GUAM_TZ).date()
+        since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
         with session_scope() as session:
-            return queries.sitemap_data(session, hidden, separate, config.muted)
+            found = queries.sitemap_data(session, hidden, separate, config.muted)
+            found["events"] = queries.upcoming_event_ids(session, since)
+            return found
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
+    found = sitemap_cache.get("sitemap", data)
     entries = seo.sitemap_entries(
         request,
-        sitemap_cache.get("sitemap", data),
+        found,
         config.categories,
         news_sources,
         weather=bool(settings.weather_interval_minutes),
+        events=found["events"],
     )
     return Response(
         seo.sitemap_xml(entries),
