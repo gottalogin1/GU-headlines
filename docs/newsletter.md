@@ -146,8 +146,11 @@ the footer of every page links to it.
   your site (`/newsletter`), and your server adds it to the list with
   SendFox's API. No SendFox script loads in the reader's browser, so the pages
   stay as fast as before and the security rules do not change.
-- After a sign-up, the newsletter page says that it worked (or what went
-  wrong, such as an address with a typing error).
+- After a sign-up, the newsletter page tells the reader to check their inbox
+  and confirm their address in the email from SendFox (or says what went
+  wrong, such as an address with a typing error). The box and the page also
+  say this before the reader signs up. Only confirmed addresses get the
+  newsletter.
 - SendFox keeps one contact for each address, so signing up twice does no
   harm.
 - Robots are kept out in three ways: a field that people do not see (a robot
@@ -185,8 +188,8 @@ the footer of every page links to it.
    check again.
 5. Sign up on your own site, with an email address of yours. The page says
    "Thanks, you're signed up", and the address shows in your SendFox contacts
-   within a minute. If SendFox sends the address an email to confirm it, open
-   it and confirm.
+   within a minute. SendFox sends the address an email to confirm it: open it
+   and confirm.
 
 To turn the box off, make `SENDFOX_API_TOKEN` empty and run
 `docker compose up -d`.

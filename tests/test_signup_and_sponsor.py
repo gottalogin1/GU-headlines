@@ -122,6 +122,8 @@ def test_signup_box_on_every_page(signup):
         assert sidebar.count('<form class="signup-form" action="/newsletter" method="post">') == 1
         assert "The top Guam stories by email every Tuesday and Friday." in sidebar
         assert 'type="email" name="email" required' in sidebar
+        # Readers are told to confirm their address in the email that SendFox sends.
+        assert "confirm your address in the email that comes to\n    your inbox" in sidebar
         # A plain form: no SendFox script or address, and the strict security
         # rules are unchanged (forms may go only to this site).
         assert "sendfox.com" not in page.text.lower()
@@ -135,6 +137,7 @@ def test_signup_box_on_every_page(signup):
     assert page.count('class="signup-form"') == 1 and "signup-form" not in _sidebar(page)
     assert "noindex" not in page and '<link rel="canonical"' in page
     assert "SendFox" in page  # where the address goes
+    assert "The newsletter starts only\n    after you confirm." in page
     assert "github" not in page.lower()
     levels = [int(n) for n in re.findall(r"<h([1-6])[\s>]", page)]
     assert levels[0] == 1 and all(b <= a + 1 for a, b in pairwise(levels)), levels
@@ -147,7 +150,7 @@ def test_signup_box_on_every_page(signup):
 def test_signup_pitch_follows_the_newsletter_days(signup, monkeypatch):
     _set(monkeypatch, sendfox_api_token=TOKEN, newsletter_days=(0, 2, 4))
     assert "every Monday, Wednesday and Friday." in signup.get("/").text
-    assert "comes on Monday, Wednesday or Friday" in signup.get("/newsletter?signup=ok").text
+    assert "next email on Monday, Wednesday or Friday." in signup.get("/newsletter?signup=ok").text
     _set(monkeypatch, sendfox_api_token=TOKEN, newsletter_days=tuple(range(7)))
     assert "The top Guam stories by email every day." in signup.get("/").text
     _set(monkeypatch, sendfox_api_token=TOKEN, newsletter_days=())
@@ -167,7 +170,8 @@ def test_signup_adds_the_address_to_the_sendfox_list(signup, fake_sendfox):
     assert contact.headers["authorization"] == f"Bearer {TOKEN}"
     assert str(contact.url) == "https://api.sendfox.com/contacts"
     page = signup.get(sent.headers["location"]).text
-    assert "you&#39;re signed up" in page and "The next email comes on Tuesday or Friday" in page
+    assert "check your inbox" in page and "confirm your address" in page
+    assert "the newsletter starts with the next email on Tuesday or Friday." in page
     # The list is looked up once, not for every sign-up.
     signup.post("/newsletter", data={"email": "two@example.com"}, headers=FROM_SITE)
     assert [r.url.path for r in fake_sendfox.requests].count("/lists") == 1

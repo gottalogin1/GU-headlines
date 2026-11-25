@@ -1437,12 +1437,13 @@ def _from_this_site(request: Request) -> bool:
 
 def _signup_results() -> dict[str, tuple[bool, str]]:
     days = settings.newsletter_days
-    when = f"The next email comes on {_days_text(days, 'or')}. " if 0 < len(days) < 7 else ""
+    when = f" on {_days_text(days, 'or')}" if 0 < len(days) < 7 else ""
     return {
         "ok": (
             True,
-            f"Thanks, you're signed up. {when}If an email asks you to confirm your address,"
-            " open it and confirm, so the newsletter can reach you.",
+            "Almost done: check your inbox. We've sent you an email to confirm your address."
+            f" Open it and confirm, and the newsletter starts with the next email{when}."
+            " If it isn't there in a few minutes, look in your spam or promotions folder.",
         ),
         "invalid": (
             False,

@@ -14,6 +14,9 @@
 <section class="site-note signup-page">
   <h2>{{ 'Sign up with another address' if result and result.ok else 'Sign up' }}</h2>
   {% with field_id = "newsletter-email" %}{% include "_signup.html" %}{% endwith %}
+  <p class="small"><strong>Confirm your address:</strong> after you sign up, you get an email to
+    confirm your email address. Open it in your inbox and confirm. The newsletter starts only
+    after you confirm.</p>
   <p class="small">Each email has the top stories since the last one: the headline, the photo and
     the first lines of each story, with a link to the full story on the news site that published it.
     It's free, and every email has a link to unsubscribe.</p>
