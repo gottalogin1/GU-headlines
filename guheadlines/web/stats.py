@@ -23,7 +23,7 @@ from sqlalchemy import BigInteger, Date, Integer, column, select, values
 from sqlalchemy.dialects.postgresql import insert
 
 from ..db import session_scope
-from ..models import Article, PageViews, Referrers, StoryClicks
+from ..models import SPONSOR_CLICKS, Article, PageViews, Referrers, StoryClicks
 from ..scraper.text import GUAM_TZ
 
 log = logging.getLogger(__name__)
@@ -103,6 +103,9 @@ class Counts:
 
     def click(self, article_id: int) -> None:
         self._add(self._clicks, article_id)
+
+    def sponsor_click(self) -> None:
+        self._add(self._views, SPONSOR_CLICKS)
 
     def referrer(self, site: str) -> None:
         self._add(self._referrers, site)

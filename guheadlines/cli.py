@@ -736,6 +736,35 @@ def cmd_alert_test(args, settings: Settings) -> None:
     print("Test alert sent. It shows in your Discord channel within a few seconds.")
 
 
+def cmd_sendfox_check(args, settings: Settings) -> None:
+    """Show the SendFox account of SENDFOX_API_TOKEN, its lists, and the list
+    that sign-ups from the website join."""
+    from . import sendfox
+
+    if not settings.sendfox_api_token:
+        raise SystemExit(
+            "SENDFOX_API_TOKEN is empty, so the newsletter sign-up box is off. Set it in .env "
+            "(see .env.example), then run: docker compose up -d"
+        )
+    try:
+        me = sendfox.account(settings)
+        found = sendfox.lists(settings)
+    except sendfox.SignupError as exc:
+        raise SystemExit(f"SendFox did not answer as expected: {exc}") from None
+    print(f"SendFox account: {me.get('email') or me.get('name') or '(no email shown)'}")
+    print("Lists:" if found else "Lists: none yet. Make one in SendFox (Audience > Lists).")
+    for item in found:
+        print(f"  {item.id:>10}  {item.name}")
+    try:
+        picked = sendfox.pick_list(settings.sendfox_list, found)
+    except sendfox.SignupError as exc:
+        raise SystemExit(f"Problem: {exc}") from None
+    if picked is None:
+        print("Sign-ups join no list (the account has none), only your contacts.")
+    else:
+        print(f'Sign-ups from the website join the list "{picked.name}" ({picked.id}).')
+
+
 def main(argv: list[str] | None = None) -> None:
     settings = get_settings()
     setup_logging(settings)
@@ -788,6 +817,7 @@ def main(argv: list[str] | None = None) -> None:
     events.add_argument("--limit", type=int, default=6, help="with --check: events to show")
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
+    sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("reclassify", help="re-apply categories.yaml to all stored articles")
     sub.add_parser("sources", help="list configured sources")
@@ -816,6 +846,7 @@ def main(argv: list[str] | None = None) -> None:
         "jobs": cmd_jobs,
         "events": cmd_events,
         "alert-test": cmd_alert_test,
+        "sendfox-check": cmd_sendfox_check,
         "weather": cmd_weather,
     }[args.command]
     handler(args, settings)

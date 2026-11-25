@@ -1,0 +1,14 @@
+{# The sponsor spot: one picture ad sold directly to a local business, set by
+   SPONSOR_IMAGE, SPONSOR_LINK and SPONSOR_ALT (docs/settings.md#sponsor-spot).
+   The picture is served from this site (web/sponsor.py): no outside script,
+   cookie or request. While the visitor stats are on, the link passes through
+   /go/sponsor, which counts the click for the stats page. #}
+<section class="panel sponsor" aria-label="Sponsor">
+  <h2>Sponsor</h2>
+  {% set img %}<img src="{{ sponsor.src }}" width="{{ sponsor.width }}" height="{{ sponsor.height }}" alt="{{ sponsor.alt }}" decoding="async">{% endset %}
+  {% if sponsor.href %}
+  <a href="{{ sponsor.href }}" target="_blank" rel="{{ sponsor.rel }}">{{ img }}</a>
+  {% else %}
+  {{ img }}
+  {% endif %}
+</section>

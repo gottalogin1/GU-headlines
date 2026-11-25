@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     SEARCH_CONFIG,
+    SPONSOR_CLICKS,
     Article,
     Event,
     EventCalendar,
@@ -578,7 +579,8 @@ def event_calendars(session: Session, since: datetime) -> list[dict]:
 def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
     """Page views and story clicks from the Guam day `since` to today, for the
     stats page (see web/stats.py)."""
-    viewed = PageViews.day >= since
+    # Page addresses start with "/"; SPONSOR_CLICKS counts the sponsor clicks.
+    viewed = (PageViews.day >= since) & PageViews.path.startswith("/")
     clicked = StoryClicks.day >= since
     views = func.sum(PageViews.views).label("views")
     clicks = func.sum(StoryClicks.clicks).label("clicks")
@@ -624,6 +626,11 @@ def visitor_stats(session: Session, since: date, top: int = 20) -> dict:
             .group_by(PageViews.path)
             .order_by(views.desc(), PageViews.path)
         ).all(),
+        "sponsor_clicks": session.scalar(
+            select(func.coalesce(func.sum(PageViews.views), 0)).where(
+                PageViews.day >= since, PageViews.path == SPONSOR_CLICKS
+            )
+        ),
         "referrers": session.execute(
             select(Referrers.site, visits)
             .where(Referrers.day >= since)

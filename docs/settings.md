@@ -234,6 +234,87 @@ Open `https://your-domain/ads.txt` in a browser (put your own domain in).
   regulations** in AdSense. Google shows the message, and the site needs no
   change.
 
+## Sponsor spot
+
+Besides AdSense, you can sell one ad spot yourself, for example to a local
+business, and keep all of the money. The sponsor's picture is shown at the top
+of the right-hand column of every page, under the word "Sponsor", above the
+AdSense ad. On a phone, the column comes after the stories. A click on the
+picture opens the sponsor's website in a new tab. Until you set it up, there
+is no sponsor spot.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SPONSOR_IMAGE` | *(empty)* | The file name of the sponsor's picture in the `config/sponsor` folder, such as `ad.jpg`. A JPG, PNG, WebP or GIF file (a GIF shows only its first picture). Empty: no sponsor spot. |
+| `SPONSOR_LINK` | *(empty)* | The web address that the picture opens, starting with `https://`. Empty: the picture has no link. |
+| `SPONSOR_ALT` | *(empty)* | What the picture says, in a few words, for people who cannot see it and for search engines. Empty: "Sponsor: " and the name of the sponsor's website. |
+
+**How to set it up**
+
+1. Get the picture from the sponsor: a JPG or PNG file. The best size is 600
+   pixels wide and 500 pixels high, the usual "300 x 250" ad at twice the
+   size, for sharp phone screens. Other sizes work too: the site shows the
+   picture as wide as the column (300 pixels), or smaller if the picture is
+   smaller. Give the file a short name without spaces, such as `ad.jpg`.
+2. Copy the file to the `config/sponsor` folder in the GU Headlines folder on
+   your server. From Windows, in PowerShell, in the folder with the picture
+   (with your own user name, server address and folder; `pwd` in the
+   GU Headlines folder on the server shows its full name):
+
+   ```
+   scp ad.jpg root@203.0.113.10:/root/GU-headlines/config/sponsor/
+   ```
+
+   A file-copy program such as WinSCP or FileZilla (SFTP) also works, with
+   the same address, user name and password as ssh. Git ignores the pictures
+   in this folder, so the automatic update never changes or removes them.
+3. Add the settings to `.env` and run `docker compose up -d`:
+
+   ```
+   SPONSOR_IMAGE=ad.jpg
+   SPONSOR_LINK=https://www.example.com/specials
+   SPONSOR_ALT=Island Coffee: two iced coffees for 5 dollars, Hagatna
+   ```
+
+4. Open your site: the picture is at the top of the right-hand column.
+
+To change the picture, copy the new file over the old one with the same name.
+It shows within a few minutes, without a restart. To stop the ad, make
+`SPONSOR_IMAGE` empty and run `docker compose up -d`.
+
+**If the picture does not show**
+
+Run `docker compose logs web | grep SPONSOR`. The lines say what is wrong:
+
+- "there is no file": the name in `SPONSOR_IMAGE` and the file name are not
+  the same (capitals count: `Ad.JPG` is not `ad.jpg`), or the file is not in
+  `config/sponsor`.
+- "not a picture that the site can read": the file is not a JPG, PNG, WebP or
+  GIF picture, even if its name ends that way. Ask the sponsor for a JPG or PNG.
+- "Permission denied": the website cannot read the file. In the GU Headlines
+  folder, run `chmod 644 config/sponsor/*`.
+
+No line at all: check that `SPONSOR_IMAGE` has only the file name (with
+`.jpg`, `.png`, `.webp` or `.gif` at the end), and that you ran
+`docker compose up -d` after you changed `.env`.
+
+**What it does**
+- The site serves the picture itself, from its own address
+  (`/sponsor.webp`): no outside script, cookie or request. The security rules
+  (Content-Security-Policy) do not change, and neither do the PageSpeed scores.
+- The site makes a small WebP copy of the picture, at most 600 pixels wide, so
+  a big file from the sponsor does not slow the pages down. The page gives the
+  picture's size, so nothing jumps when it comes in.
+- With the [visitor stats](#visitor-stats) on, the link first opens
+  `/go/sponsor` on your site, which counts the click and sends the reader on
+  to the sponsor at once. The stats page then shows a **Sponsor spot** part:
+  the page views in the period (the picture is on every page), the sponsor
+  clicks, and the clicks per 1,000 views. These are numbers to give the
+  sponsor. Search engines are told not to follow the link (`rel="sponsored"`,
+  as Google asks for paid links).
+- The disclaimer on the Sources page gets a paragraph that says that the
+  picture is a paid ad and not an endorsement.
+
 ## Visitor stats
 
 GU Headlines can count page views and story clicks, and show them on a private
@@ -314,6 +395,8 @@ connecting SendFox step by step.
 | `NEWSLETTER_DAYS` | `tue,fri` | The days of the week when the worker makes a new edition of the feed. Day names in English, or their first three letters, with commas. Empty: no feed. |
 | `NEWSLETTER_TIME` | `10:00` | The time of the edition, in Guam time, on a 24-hour clock. Make it about two hours before the email goes out. |
 | `NEWSLETTER_STORIES` | `12` | The number of stories in each edition (1 to 50). |
+| `SENDFOX_API_TOKEN` | *(empty)* | A SendFox API token. With it, every page has a newsletter sign-up box, and the site has a newsletter page (`/newsletter`). See [The sign-up box](newsletter.md#the-sign-up-box). Secret. |
+| `SENDFOX_LIST` | *(empty)* | The SendFox list that new readers join: its name or number. Empty: the account's only list. |
 
 ## Checking for news
 

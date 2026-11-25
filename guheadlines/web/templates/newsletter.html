@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{# The newsletter page (/newsletter): what the email is, the sign-up form,
+   and the result of a sign-up (?signup=...). #}
+{% block main %}
+<header class="page-head">
+  <h1>Newsletter</h1>
+  <p class="muted">{{ signup.pitch }}</p>
+</header>
+
+{% if result %}
+<p class="signup-result {{ 'ok' if result.ok else 'error' }}" role="status">{{ result.text }}</p>
+{% endif %}
+
+<section class="site-note signup-page">
+  <h2>{{ 'Sign up with another address' if result and result.ok else 'Sign up' }}</h2>
+  {% with field_id = "newsletter-email" %}{% include "_signup.html" %}{% endwith %}
+  <p class="small">Each email has the top stories since the last one: the headline, the photo and
+    the first lines of each story, with a link to the full story on the news site that published it.
+    It's free, and every email has a link to unsubscribe.</p>
+  <p class="muted small">Your email address is kept by SendFox, the service that sends the
+    newsletter, and is used only for this newsletter.</p>
+</section>
+{% endblock %}
