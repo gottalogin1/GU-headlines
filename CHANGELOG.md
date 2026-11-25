@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Faster photos on computers and tablets.** Each story's photo is now saved
+  twice on your server: the copy for phones, and a small copy 360 pixels wide
+  for larger screens, where the photo is drawn 228 pixels wide. Browsers load
+  only the copy they need, so on a computer a page of stories loads roughly
+  a quarter to a third of the photo bytes it did. Photos saved before this get their small copy
+  from the worker, a few thousand after each news check, newest first; until
+  then they show as before. When a story has no saved copy (for example the
+  `media` storage was not moved with the database), the site shows the news
+  site's own photo instead of a broken picture.
+- **A limit on the disk space for photos.** The new setting
+  `IMAGE_STORAGE_GB` (5 unless you change it; 0 for no limit) is the most
+  space the saved photos may use. Above it, the worker deletes the photos of
+  the oldest stories until they use 90% of it; those stories then show the
+  news site's own photo. The worker also deletes saved photos that no story
+  uses any more. `docker compose exec worker guheadlines photos` shows the
+  space used. No change to `.env` is needed, and the database is not
+  changed. See [Photos](docs/settings.md#photos).
 - **A month calendar on the Events page.** Above the list of upcoming events,
   a calendar shows the month's main events, at most 3 a day (with "+2 more"
   and so on), all-day events first. Events are colored by their calendar:
