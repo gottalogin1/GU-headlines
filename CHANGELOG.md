@@ -6,6 +6,22 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **A Weather page and the tides.** A new **Weather** link in the top bar
+  opens a page with the airport reading, sunrise, sunset and the moon, the
+  watches, warnings and advisories, the next 24 hours, the week's forecast,
+  the surf and rip current risk on each side of the island, the wind and
+  seas for boating, the typhoons, and links for being ready. Its **Tides**
+  part shows the next high or low tide and has three views to switch
+  between: Day (with a chart), Week and Month. The weather box on the home
+  page now lists today's high and low tides too, and links to the page. The
+  tides come from NOAA Tides & Currents (Apra Harbor), and the new parts of
+  the weather from the National Weather Service: both free, with no key.
+  Each part of the page links to where its data comes from. The new setting
+  `TIDE_STATION` picks the tide station, and an empty `TIDE_STATION=` turns
+  the tides off. When you update, you can add its line to your `.env` (see
+  [Getting the newest notes in .env](docs/settings.md#getting-the-newest-notes-in-env)),
+  or leave it out to use Apra Harbor. Nothing else to do: the database needs
+  no change.
 - **Automatic updates for a server.** `./scripts/auto-update.sh --install`
   makes the server check every 5 minutes for new commits on the `main`
   branch. When there are some, it makes a database backup, then rebuilds

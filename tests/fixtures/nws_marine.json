@@ -1,0 +1,14 @@
+{
+ "@context": {
+  "@version": "1.1",
+  "@vocab": "https://api.weather.gov/ontology#"
+ },
+ "@id": "https://api.weather.gov/products/586b2765-9971-4e03-a5ec-969a75851dd0",
+ "id": "586b2765-9971-4e03-a5ec-969a75851dd0",
+ "wmoCollectiveId": "FZMY50",
+ "issuingOffice": "PGUM",
+ "issuanceTime": "2026-11-24T18:54:00+00:00",
+ "productCode": "CWF",
+ "productName": "Coastal Waters Forecast",
+ "productText": "\n000\nFZMY50 PGUM 241854\nCWFGUM\n\nCoastal Waters Forecast for the Mariana Islands\nNational Weather Service Tiyan GU\n454 AM ChST Wed Nov 25 2026\n\nMarianas Waters out to 40 nautical miles\n\nPMZ150-251000-\n454 AM ChST Wed Nov 25 2026\n\n.Synopsis for Marianas Waters...\nModerate to fresh trade winds and combined seas of 6 to 8 feet \nare expected through tonight. Then, a developing trade-wind surge\nwill produce moderate to strong winds and build seas to 7 to 10 \nfeet, leading to hazardous conditions for small craft Thursday \nthrough Friday. \n\n$$\n\nPMZ151>154-251000-\nMARIANAS COASTAL WATERS-\n454 AM ChST Wed Nov 25 2026\n\n...SMALL CRAFT ADVISORY WILL EXPIRE AT 5 AM CHST EARLY THIS\nMORNING...\n\n.TODAY...East wind 15 kt. Seas 6 to 8 ft. Wave Detail: East 7 ft\nat 9 seconds, east 3 ft at 5 seconds and north 3 ft at 8 seconds.\n.TONIGHT...East wind 15 to 20 kt. Seas 6 to 8 ft. Wave Detail:\nEast 7 ft at 9 seconds, east 4 ft at 6 seconds and north 2 ft at\n8 seconds. \n.THURSDAY...East wind 15 to 25 kt. Seas 7 to 9 ft. Wave Detail: \nEast 7 ft at 9 seconds, east 5 ft at 6 seconds and north 2 ft at \n8 seconds.\n.THURSDAY NIGHT...East wind 20 kt with gusts to 30 kt near heavier\nshowers. Seas 8 to 10 ft. Wave Detail: East 8 ft at 8 seconds, east \n5 ft at 6 seconds and north 2 ft at 8 seconds. Scattered showers with\nisolated thunderstorms.\n.FRIDAY...East wind 15 to 20 kt with gusts to 30 kt near heavier\nshowers. Seas 7 to 10 ft. Wave Detail: East 8 ft at 8 seconds, east \n5 ft at 6 seconds and north 2 ft at 8 seconds. A chance of showers \nwith a slight chance of thunderstorms. \n.SATURDAY...East wind 15 to 20 kt. Seas 6 to 8 ft. Wave Detail: East\n7 ft at 9 seconds, east 4 ft at 6 seconds and northwest 2 ft at 10 \nseconds. A chance of showers with a slight chance of thunderstorms. \n.SUNDAY...East wind 15 to 20 kt. Seas 6 to 8 ft. Wave Detail: East 6\nft at 9 seconds, east 4 ft at 6 seconds and northwest 2 ft at 10 \nseconds. A chance of showers with a slight chance of\nthunderstorms. \n\n$$\n"
+}
