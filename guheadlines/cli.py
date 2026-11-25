@@ -248,7 +248,7 @@ def cmd_worker(args, settings: Settings) -> None:
             log.exception("events check failed")
 
     def check_alerts() -> None:
-        """Alerts for news sites and job boards that stopped working."""
+        """Alerts for sources that stopped working or went quiet."""
         if not settings.discord_webhook_url:
             return
         from .alerts import check_sources
@@ -258,13 +258,29 @@ def cmd_worker(args, settings: Settings) -> None:
         except ConfigError:
             boards = []
         try:
+            calendars = load_events_config(settings.config_dir)
+        except ConfigError:
+            calendars = []
+        try:
             check_sources(
                 settings,
                 [s.slug for s in config.sources if s.collected],
                 [b.slug for b in boards if b.collected],
+                [c.slug for c in calendars if c.collected],
             )
         except Exception:
             log.exception("alert check failed")
+
+    def check_keywords() -> None:
+        """Alerts for new stories that mention the words in ALERT_KEYWORDS."""
+        if not (settings.discord_webhook_url and settings.alert_keywords):
+            return
+        from .alerts import check_keywords as check
+
+        try:
+            check(settings, config.muted)
+        except Exception:
+            log.exception("keyword alert check failed")
 
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
@@ -290,9 +306,12 @@ def cmd_worker(args, settings: Settings) -> None:
     )
     if settings.discord_webhook_url:
         log.info(
-            "alerts on: a news site or job board that has not worked for %d hours is reported",
+            "alerts on: a source that has not worked for %d hours, or a news site that went "
+            "quiet, is reported",
             settings.alert_after_hours,
         )
+        if settings.alert_keywords:
+            log.info("keyword alerts on for: %s", ", ".join(settings.alert_keywords))
     if settings.weather_interval_minutes:
         threading.Thread(
             target=_weather_loop, args=(settings, stop), name="weather", daemon=True
@@ -309,6 +328,7 @@ def cmd_worker(args, settings: Settings) -> None:
         ).start()
     if settings.scrape_on_start:
         run_once()
+        check_keywords()
         run_jobs_if_due()
         run_events_if_due()
         check_alerts()
@@ -322,6 +342,7 @@ def cmd_worker(args, settings: Settings) -> None:
         if stop.wait(delay):
             break
         run_once(catch_up=kind == "catch-up")
+        check_keywords()
         if kind == "regular":
             run_jobs_if_due()
             run_events_if_due()

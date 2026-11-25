@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -994,3 +995,43 @@ def test_the_websites_that_visits_come_from_are_counted(counting):
     # Most visits first; a tie in name order.
     assert rows[1].startswith('<td>facebook.com</td><td class="num">2</td><td class="num">20%')
     assert rows[2].startswith('<td>google.com</td><td class="num">2</td><td class="num">20%')
+
+
+def test_stats_page_shows_source_health(counting):
+    from sqlalchemy import select
+
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        kuam = session.scalar(select(Source).where(Source.slug == "kuam"))
+        kuam.last_success_at = now - timedelta(days=2)
+        kuam.last_error = "HTTP 403 Forbidden"
+        post = session.scalar(select(Source).where(Source.slug == "postguam"))
+        post.last_run_at = post.last_success_at = now
+    login = {"authorization": "Basic " + base64.b64encode(b":a long stats password").decode()}
+    page = counting.get("/stats", headers=login).text
+    assert '<h2 class="section-title" id="health">Source health</h2>' in page
+    top, health = page.split('id="health"', 1)
+    assert "KUAM News" in health and "HTTP 403 Forbidden" in health
+    assert '<span class="error">Failing</span>' in health
+    # The Post's only story is 2 hours old: working, quiet after 30 days
+    # (too few stories to tell).
+    post_row = health.split("The Guam Daily Post", 1)[1].split("</tr>", 1)[0]
+    assert "Working" in post_row and "30 days" in post_row
+    # The problems are named at the top of the page.
+    assert "1 source needs a look:" in top and "KUAM News (failing)" in top
+    assert "Discord alerts are off (DISCORD_WEBHOOK_URL is empty)." in health
+    assert "Keyword alerts: off (ALERT_KEYWORDS is empty)." in health
+
+
+def test_stats_page_names_the_alert_words(counting, monkeypatch):
+    _set(
+        monkeypatch,
+        stats_password="a long stats password",
+        discord_webhook_url="https://discord.com/api/webhooks/1/x",
+        alert_keywords=("typhoon", "power outage"),
+    )
+    login = {"authorization": "Basic " + base64.b64encode(b":a long stats password").decode()}
+    health = counting.get("/stats", headers=login).text.split('id="health"', 1)[1]
+    assert "Keyword alerts: a new story that mentions typhoon, power outage is posted" in health
+    assert "A site that fails for 24 hours, or goes quiet, is posted in Discord." in health
+    assert "needs a look" not in health

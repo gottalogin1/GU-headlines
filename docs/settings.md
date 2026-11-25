@@ -241,7 +241,9 @@ page of your site, `/stats`, behind a password. The page shows the totals for
 today, the last 7, 30 or 90 days or the last year, a chart for each day, the
 websites that readers come from, the stories readers opened most, the clicks
 for each news source, the views and clicks for each topic, and the most viewed
-pages. Until you set a password, nothing is counted.
+pages. At the bottom, **Source health** shows how each news site, job board
+and event calendar is doing (see [Source health](maintenance.md#source-health)).
+Until you set a password, nothing is counted.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -435,8 +437,9 @@ docker compose up -d
 
 | Setting | Default | What it does |
 |---|---|---|
-| `DISCORD_WEBHOOK_URL` | (empty) | The secret webhook link of a Discord channel. Alerts are posted there: a news site or job board that stopped working, the site not answering, automatic updates. Empty: no alerts. See [Alerts in Discord](maintenance.md#alerts-in-discord). |
-| `ALERT_AFTER_HOURS` | `24` | How many hours a news site or job board must fail before its alert is posted. The minimum is 1. |
+| `DISCORD_WEBHOOK_URL` | (empty) | The secret webhook link of a Discord channel. Alerts are posted there: a news site, job board or event calendar that stopped working, a news site that went quiet, new stories with your keywords, the site not answering, automatic updates. Empty: no alerts. See [Alerts in Discord](maintenance.md#alerts-in-discord). |
+| `ALERT_AFTER_HOURS` | `24` | How many hours a news site, job board or event calendar must fail before its alert is posted. The minimum is 1. |
+| `ALERT_KEYWORDS` | (empty) | Words or phrases, with a comma between them, such as `typhoon, shooting, power outage`. A new story whose headline or intro mentions one is posted in Discord. Empty: no keyword alerts. See [Keyword alerts](maintenance.md#keyword-alerts). |
 
 ## Troubleshooting output
 

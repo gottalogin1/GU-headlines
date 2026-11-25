@@ -19,7 +19,7 @@ from guheadlines.alerts import (
     send_test_alert,
 )
 from guheadlines.db import session_scope
-from guheadlines.models import AlertState, JobSource, Source
+from guheadlines.models import AlertState, Article, JobSource, Source
 from guheadlines.settings import get_settings
 
 NOW = datetime(2026, 11, 24, 6, 0, tzinfo=timezone.utc)  # 4:00 PM in Guam
@@ -240,3 +240,149 @@ def test_alert_test_command(monkeypatch, capsys):
     monkeypatch.setattr("guheadlines.alerts.send_test_alert", lambda settings: False)
     with pytest.raises(SystemExit, match="could not be sent"):
         cli.cmd_alert_test(None, _settings())
+
+
+# ---------------------------------------------------------- keyword alerts
+
+
+def test_keyword_words_from_the_setting(monkeypatch):
+    from guheadlines.settings import load_settings
+
+    monkeypatch.setenv("ALERT_KEYWORDS", ' "typhoon", Shooting ,, power  outage, typhoon, * ')
+    assert load_settings().alert_keywords == ("typhoon", "Shooting", "power  outage")
+    monkeypatch.setenv("ALERT_KEYWORDS", "")
+    assert load_settings().alert_keywords == ()
+
+
+def test_keyword_patterns():
+    from guheadlines.alerts import fold, keyword_patterns
+
+    def found(words, text):
+        return [word for word, pattern in keyword_patterns(words) if pattern.search(fold(text))]
+
+    words = ["Typhoon", "shooting", "power outage", "evacuat*", "Hagåtña", "U.S."]
+    assert found(words, "TYPHOON'S winds reach Rota") == ["Typhoon"]
+    assert found(words, "Two typhoons form east of Guam") == ["Typhoon"]
+    assert found(words, "Police look into shootings") == ["shooting"]
+    assert found(words, "GPA: Power\noutages expected tonight") == ["power outage"]
+    assert found(words, "Evacuation centers open") == ["evacuat*"]
+    assert found(words, "Hagatna mayor speaks") == ["Hagåtña"]
+    assert found(words, "U.S. Navy ship arrives") == ["U.S."]
+    # Only whole words.
+    assert found(words, "Typhoonish weather; sharpshooting contest; empowerment") == []
+    assert keyword_patterns(["", " * "]) == []
+
+
+def _story(source_id, title, intro=None, found=NOW, published=None, url=None):
+    with session_scope() as session:
+        session.add(
+            Article(
+                source_id=source_id,
+                url=url or f"https://www.kuam.com/story/{abs(hash(title))}",
+                title=title,
+                intro=intro,
+                published_at=published or found,
+                first_seen_at=found,
+            )
+        )
+
+
+def test_keyword_alert_once_per_story(clean_db):
+    from guheadlines.alerts import check_keywords
+
+    settings = _settings(alert_keywords=("typhoon", "shooting"))
+    outbox = Outbox()
+    with session_scope() as session:
+        kuam = Source(slug="kuam", name="KUAM News")
+        session.add(kuam)
+        session.flush()
+        kuam_id = kuam.id
+    _story(kuam_id, "Typhoon watch for Guam", url="https://www.kuam.com/story/1")
+    _story(kuam_id, "Council meets on budget")  # no word
+    _story(kuam_id, "Old typhoon story", published=NOW - timedelta(days=3))  # not news now
+    _story(kuam_id, "Typhoon seen 7 hours ago", found=NOW - timedelta(hours=7))  # too late
+    # Muted stories are left out, like on the site.
+    _story(kuam_id, "Chamber of Commerce talks typhoon prep")
+    muted = ("chamber of commerce",)
+
+    assert check_keywords(settings, muted, now=NOW, transport=outbox.transport()) == 1
+    assert outbox.texts() == [
+        "🔔 **A new story mentions typhoon**\n"
+        "Typhoon watch for Guam\nKUAM News · typhoon\nhttps://www.kuam.com/story/1"
+    ]
+    # Phone notifications on, and nobody is mentioned.
+    assert outbox.sent[0]["flags"] == 4 and outbox.sent[0]["allowed_mentions"] == {"parse": []}
+
+    # Not twice.
+    later = NOW + timedelta(minutes=5)
+    assert check_keywords(settings, muted, now=later, transport=outbox.transport()) == 0
+    assert len(outbox.sent) == 1
+
+    # The next ones come together, with the words each one has.
+    _story(kuam_id, "Shooting in Dededo", "Police say the typhoon shelter was closed.", found=later)
+    _story(kuam_id, "Second shooting", found=later, url="https://www.kuam.com/story/3")
+    assert check_keywords(settings, muted, now=later, transport=outbox.transport()) == 2
+    text = outbox.texts()[1]
+    assert text.startswith("🔔 **2 new stories mention typhoon and shooting**\n")
+    assert "Shooting in Dededo\nKUAM News · typhoon, shooting\n" in text
+    assert "Second shooting\nKUAM News · shooting\nhttps://www.kuam.com/story/3" in text
+
+    # Remembered for a day, then forgotten (they are too old to come back).
+    from guheadlines.models import KeywordAlert
+
+    check_keywords(settings, muted, now=later + timedelta(days=2), transport=outbox.transport())
+    with session_scope() as session:
+        assert session.scalars(select(KeywordAlert)).all() == []
+
+
+def test_keyword_alert_that_fails_is_tried_again(clean_db):
+    from guheadlines.alerts import check_keywords
+
+    settings = _settings(alert_keywords=("typhoon",))
+    with session_scope() as session:
+        kuam = Source(slug="kuam", name="KUAM News")
+        session.add(kuam)
+        session.flush()
+        kuam_id = kuam.id
+    _story(kuam_id, "Typhoon watch for Guam")
+    assert check_keywords(settings, now=NOW, transport=Outbox(status=500).transport()) == 0
+    outbox = Outbox()
+    assert check_keywords(settings, now=NOW, transport=outbox.transport()) == 1
+    # Nothing without words or without a webhook.
+    _story(kuam_id, "Typhoon warning for Guam")
+    for off in (_settings(alert_keywords=()), _settings(discord_webhook_url="")):
+        assert check_keywords(off, now=NOW, transport=outbox.transport()) == 0
+    assert len(outbox.sent) == 1
+
+
+def test_keyword_alert_fits_in_one_discord_message():
+    from guheadlines.alerts import MAX_MESSAGE, Mention, discord_text, keyword_alert
+
+    mentions = [
+        Mention(
+            f"Typhoon update number {n} for **all** of_Guam",
+            "Pacific Island Times",
+            f"https://www.pacificislandtimes.com/post/{'x' * 80}{n}",
+            ["typhoon"],
+        )
+        for n in range(30)
+    ]
+    text = discord_text(keyword_alert(mentions))
+    assert len(text) <= MAX_MESSAGE and not text.endswith("…")  # nothing cut off
+    assert text.startswith("🔔 **30 new stories mention typhoon**\n")
+    shown = text.count("pacificislandtimes.com")
+    assert 5 <= shown < 30
+    assert text.endswith(f"…and {30 - shown} more.")
+    # Headlines can't make bold or other Markdown.
+    assert "Typhoon update number 0 for \\*\\*all\\*\\* of\\_Guam" in text
+    assert keyword_alert(
+        [Mention("# Breaking", "KUAM", "https://k/1", ["breaking"])]
+    ).message.startswith("\\# Breaking")
+
+
+def test_test_alert_names_the_keywords():
+    outbox = Outbox()
+    send_test_alert(_settings(alert_keywords=("typhoon", "shooting")), outbox.transport())
+    send_test_alert(_settings(alert_keywords=()), outbox.transport())
+    assert "Keyword alerts are on for: typhoon, shooting." in outbox.texts()[0]
+    assert "Keyword alerts are off (ALERT_KEYWORDS is empty)." in outbox.texts()[1]

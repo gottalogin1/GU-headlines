@@ -84,8 +84,13 @@ class Settings:
     # Alerts are posted to the Discord channel of this webhook link
     # (https://discord.com/api/webhooks/...). Empty: no alerts. See alerts.py.
     discord_webhook_url: str = ""
-    # A news site or job board that has not worked for this many hours gets an alert.
+    # A news site, job board or event calendar that has not worked for this
+    # many hours gets an alert.
     alert_after_hours: int = 24
+    # Words and phrases: a new story whose headline or intro mentions one of
+    # them is posted in Discord (see alerts.check_keywords). Empty: no
+    # keyword alerts.
+    alert_keywords: tuple[str, ...] = ()
     # How often the worker reads the weather (NWS alerts, forecast and airport
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
@@ -171,6 +176,14 @@ def _tide_station(value: str | None, default: str) -> str:
     return value if re.fullmatch(r"[A-Za-z0-9]{1,16}", value) else ""
 
 
+def _words(value: str | None) -> tuple[str, ...]:
+    """ALERT_KEYWORDS "typhoon, shooting, power outage" -> ("typhoon",
+    "shooting", "power outage"). Commas separate the words; quotes around one
+    are dropped, and so are repeats."""
+    words = (part.strip().strip("\"'").strip() for part in (value or "").split(","))
+    return tuple(dict.fromkeys(word for word in words if word.strip("*")))
+
+
 DAY_NAMES = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
@@ -252,6 +265,7 @@ def load_settings() -> Settings:
         google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
+        alert_keywords=_words(env.get("ALERT_KEYWORDS")),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         tide_station=_tide_station(env.get("TIDE_STATION"), defaults.tide_station),
         stats_password=env.get("STATS_PASSWORD", "").strip(),

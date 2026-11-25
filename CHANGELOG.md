@@ -6,6 +6,27 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Source health on the stats page, and an alert when a news site goes
+  quiet.** The private stats page (`/stats`) now ends with **Source health**:
+  for each news site, whether it is working, failing (with the error) or
+  quiet, its newest story, its new stories in the last 7 days and when it was
+  last checked; and the same for the job boards and event calendars. A note
+  at the top of the page names the sources that need a look. A news site is
+  **quiet** when its checks work but it has had no new story for twice its
+  longest wait between stories in the two months before (at least 2 days):
+  its feed may have changed so that the stories are no longer found. Discord
+  gets one alert when a site goes quiet and one when it has new stories
+  again. Event calendars that stop working now get alerts too, like news
+  sites and job boards. See [Source health](docs/maintenance.md#source-health).
+- **Keyword alerts in Discord.** Put words in the new `ALERT_KEYWORDS`
+  setting, such as `typhoon, shooting, power outage`, and a message comes in
+  your Discord channel when a new story's headline or intro mentions one,
+  with the headline, the news site and the link. Each story comes once;
+  several at once come in one message. Case and accents don't matter, only
+  whole words count (`shooting` also finds `shootings`), and `evacuat*` finds
+  every word that starts with `evacuat`. See
+  [Keyword alerts](docs/maintenance.md#keyword-alerts). When you update, the
+  database gets one small new table, by itself.
 - **A month calendar on the Events page.** Above the list of upcoming events,
   a calendar shows the month's main events, at most 3 a day (with "+2 more"
   and so on), all-day events first. Events are colored by their calendar:

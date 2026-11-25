@@ -762,3 +762,7 @@ a.cal-day:focus-visible { outline-offset: -3px; border-radius: 0; }
 .stats-axis { display: flex; justify-content: space-between; margin-top: 6px; }
 .stats-days { margin: 14px 0 0; }
 .stats-days summary { margin: 0 4px 10px; color: var(--link); cursor: pointer; }
+.stats-alert { margin: 14px 4px 0; }
+.stats-health + .stats-health { margin-top: 16px; }
+.stats-health td:nth-child(n+3) { white-space: nowrap; }
+.stats-keywords { margin-top: 14px; }

@@ -31,6 +31,12 @@
   </span>
 </nav>
 
+{% if problems %}
+<p class="stats-alert"><span class="error">⚠ {{ problems|length }} {{ "source needs" if problems|length == 1 else "sources need" }} a look:</span>
+  {% for h in problems %}{{ h.name }} ({{ h.status }}){{ ", " if not loop.last }}{% endfor %}.
+  <a href="#health">See Source health</a></p>
+{% endif %}
+
 <dl class="job-facts stats-totals">
   <div><dt>Page views</dt><dd>{{ "{:,}".format(views) }}</dd></div>
   <div><dt>Story clicks</dt><dd>{{ "{:,}".format(clicks) }}</dd></div>
@@ -133,4 +139,55 @@
 </table>
 </div>
 {% else %}<p class="muted section-note">No page views yet in this period.</p>{% endif %}
+
+<h2 class="section-title" id="health">Source health</h2>
+<p class="muted section-note">How each news site the worker reads is doing right now (not only in the period above).
+  <strong>Failing</strong>: its latest check went wrong.
+  <strong>Quiet</strong>: its checks work, but it has had no new story for longer than the "Quiet after" time.
+  That time is twice its longest wait between two stories in the two months before its newest story, and at least 2 days
+  (at least 30 days for a site with fewer than 5 stories in those two months).
+  A quiet site's feed or pages may have changed, or it may have stopped posting.
+  {% if settings.discord_webhook_url %}A site that fails for {{ settings.alert_after_hours }} hours, or goes quiet, is posted in Discord.{% else %}Discord alerts are off (DISCORD_WEBHOOK_URL is empty).{% endif %}</p>
+{% if news_health %}
+<div class="table-wrap stats-health">
+<table class="status-table compact">
+  <thead><tr><th>News site</th><th>Status</th><th>Newest story</th><th>Quiet after</th><th>Last check</th><th class="num" title="New stories found in the last 7 days">7 days</th></tr></thead>
+  <tbody>
+  {% for h in news_health %}
+  <tr>
+    <td>{{ h.name }}{% if h.status == "failing" and h.last_error %}<div class="error small" title="{{ h.last_error }}">{{ h.last_error|truncate(160) }}</div>{% endif %}</td>
+    <td>{% if h.status == "failing" %}<span class="error">Failing</span>{% if h.last_success_at %}<div class="muted small">worked {{ h.last_success_at|rel_time }}</div>{% else %}<div class="muted small">never worked</div>{% endif %}
+      {% elif h.status == "quiet" %}<span class="error">Quiet</span>
+      {% elif h.status == "unchecked" %}<span class="muted">Not checked yet</span>
+      {% else %}Working{% endif %}</td>
+    <td>{% if h.newest %}<span title="{{ h.newest|fmt_datetime }}">{{ h.newest|rel_time }}</span>{% else %}<span class="muted">none yet</span>{% endif %}</td>
+    <td>{{ h.quiet_after|duration }}</td>
+    <td>{% if h.last_run_at %}<span title="{{ h.last_run_at|fmt_datetime }}">{{ h.last_run_at|rel_time }}</span>{% else %}<span class="muted">never</span>{% endif %}</td>
+    <td class="num">{{ "{:,}".format(h.week) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% if feed_health %}
+<div class="table-wrap stats-health">
+<table class="status-table compact">
+  <thead><tr><th>Job board or calendar</th><th>Status</th><th>Last check</th><th class="num">Found</th></tr></thead>
+  <tbody>
+  {% for h in feed_health %}
+  <tr>
+    <td>{{ h.name }} <span class="muted small">{{ h.kind }}</span>{% if h.status == "failing" and h.last_error %}<div class="error small" title="{{ h.last_error }}">{{ h.last_error|truncate(160) }}</div>{% endif %}</td>
+    <td>{% if h.status == "failing" %}<span class="error">Failing</span>{% if h.last_success_at %}<div class="muted small">worked {{ h.last_success_at|rel_time }}</div>{% else %}<div class="muted small">never worked</div>{% endif %}
+      {% elif h.status == "unchecked" %}<span class="muted">Not checked yet</span>
+      {% else %}Working{% endif %}</td>
+    <td>{% if h.last_run_at %}<span title="{{ h.last_run_at|fmt_datetime }}">{{ h.last_run_at|rel_time }}</span>{% else %}<span class="muted">never</span>{% endif %}</td>
+    <td class="num">{% if h.found is not none %}{{ "{:,}".format(h.found) }}{% else %}<span class="muted">–</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<p class="muted section-note stats-keywords">Keyword alerts: {% if settings.alert_keywords and settings.discord_webhook_url %}a new story that mentions {{ settings.alert_keywords|join(", ") }} is posted in Discord.{% elif settings.alert_keywords %}off, because DISCORD_WEBHOOK_URL is empty.{% else %}off (ALERT_KEYWORDS is empty).{% endif %}</p>
 {% endblock %}
