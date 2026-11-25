@@ -31,6 +31,7 @@ from sqlalchemy import select
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .. import health
 from ..config import (
     AppConfig,
     CalendarConfig,
@@ -551,6 +552,7 @@ def domain(url: str | None) -> str:
 
 
 templates.env.filters.update(
+    duration=health.duration,
     fmt_datetime=fmt_datetime,
     fmt_time=fmt_time,
     event_when=event_when,
@@ -1373,6 +1375,14 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
     since = datetime.now(GUAM_TZ).date() - timedelta(days=days - 1)
     with session_scope() as session:
         data = queries.visitor_stats(session, since)
+        news_health = health.news_health(
+            session, [s.slug for s in config.sources if s.collected], datetime.now(timezone.utc)
+        )
+        feed_health = health.feed_health(
+            session,
+            [b.slug for b in jobs_config_cache.get() if b.collected],
+            [c.slug for c in events_config_cache.get() if c.collected],
+        )
     daily = [
         {
             "day": day,
@@ -1419,6 +1429,9 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         referrers=data["referrers"][:20],
         visits=sum(row.visits for row in data["referrers"]),
         topics=sorted(topics, key=lambda t: (-t["clicks"], -t["views"])),
+        news_health=news_health,
+        feed_health=feed_health,
+        problems=[h for h in [*news_health, *feed_health] if h.status in ("failing", "quiet")],
     )
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"

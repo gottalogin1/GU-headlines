@@ -1,7 +1,7 @@
 """Government bids and requests for proposals for the Bids page: bid_sources and bids.
 
-Revision ID: 0010_bids
-Revises: 0009_newsletter
+Revision ID: 0011_bids
+Revises: 0010_keyword_alerts
 Create Date: 2026-11-25
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0010_bids"
-down_revision = "0009_newsletter"
+revision = "0011_bids"
+down_revision = "0010_keyword_alerts"
 branch_labels = None
 depends_on = None
 
