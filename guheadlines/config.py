@@ -536,3 +536,106 @@ def load_events_config(config_dir: Path) -> list[CalendarConfig]:
     except yaml.YAMLError as exc:
         raise ConfigError(f"events.yaml: invalid YAML: {exc}") from exc
     return parse_events_config(data)
+
+
+@dataclass
+class BidSourceConfig:
+    """One source in bids.yaml: a government page that lists open bids and
+    requests for proposals (see config/bids.yaml and docs/bids.md)."""
+
+    slug: str
+    name: str
+    homepage: str | None = None
+    # notices.guam.gov listing pages, narrowed to the procurement topics.
+    notices: list[str] = field(default_factory=list)
+    # Pages with a table of bids, one row each.
+    table: list[str] = field(default_factory=list)
+    # Read each open bid's own page for its due date when the table has none.
+    details: bool = False
+    # The agency asking for the bids, when a bid doesn't say (a table's rows never do).
+    agency: str | None = None
+    # How many days after it was posted a bid without a due date stays listed.
+    undated_days: int = 30
+    # Leave out bids whose title, number or agency matches one of these (regexes, any case).
+    exclude: list[re.Pattern[str]] = field(default_factory=list)
+    # The file's own `exclude`, which applies to every source (and to descriptions too).
+    exclude_everywhere: list[re.Pattern[str]] = field(default_factory=list)
+    enabled: bool = True
+    request_delay: float | None = None
+    ignore_robots: bool = False
+    # Why this source can't be collected. It is never read, and not shown on the site.
+    cannot_scrape: str | None = None
+
+    @property
+    def collected(self) -> bool:
+        return self.enabled and not self.cannot_scrape
+
+    @property
+    def addresses(self) -> list[str]:
+        return self.notices + self.table
+
+    def excluded(self, *labels: str | None) -> bool:
+        return any(p.search(label) for p in self.exclude for label in labels if label)
+
+    def excluded_everywhere(self, *texts: str | None) -> bool:
+        return any(p.search(text) for p in self.exclude_everywhere for text in texts if text)
+
+
+_BID_INPUTS = ("notices", "table")
+
+
+def parse_bids_config(data: dict) -> list[BidSourceConfig]:
+    sources: list[BidSourceConfig] = []
+    seen: set[str] = set()
+    everywhere = _compile([str(p) for p in _as_list((data or {}).get("exclude"))], "bids.yaml")
+    for raw in _as_list((data or {}).get("sources")):
+        slug = str(raw.get("slug", "")).strip()
+        where = f"bids.yaml [{slug or '?'}]"
+        if not _SLUG_RE.match(slug):
+            raise ConfigError(f"{where}: invalid or missing slug")
+        if slug in seen:
+            raise ConfigError(f"{where}: duplicate slug")
+        seen.add(slug)
+        if not raw.get("name"):
+            raise ConfigError(f"{where}: missing name")
+        urls = {
+            key: [str(u).strip() for u in _as_list(raw.get(key)) if str(u).strip()]
+            for key in _BID_INPUTS
+        }
+        try:
+            undated_days = int(raw.get("undated_days", 30))
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"{where}: undated_days must be a whole number") from exc
+        if undated_days < 1:
+            raise ConfigError(f"{where}: undated_days must be at least 1")
+        source = BidSourceConfig(
+            slug=slug,
+            name=str(raw["name"]),
+            homepage=raw.get("homepage"),
+            **urls,
+            details=bool(raw.get("details", False)),
+            agency=str(raw["agency"]).strip() if raw.get("agency") else None,
+            undated_days=undated_days,
+            exclude=_compile([str(p) for p in _as_list(raw.get("exclude"))], where),
+            exclude_everywhere=everywhere,
+            enabled=bool(raw.get("enabled", True)),
+            request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
+            ignore_robots=bool(raw.get("ignore_robots", False)),
+            cannot_scrape=_reason(raw.get("cannot_scrape")),
+        )
+        if source.collected and not any(urls.values()):
+            raise ConfigError(f"{where}: needs notices or table")
+        sources.append(source)
+    return sources
+
+
+def load_bids_config(config_dir: Path) -> list[BidSourceConfig]:
+    """config/bids.yaml; no file means no sources."""
+    path = config_dir / "bids.yaml"
+    if not path.exists():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"bids.yaml: invalid YAML: {exc}") from exc
+    return parse_bids_config(data)

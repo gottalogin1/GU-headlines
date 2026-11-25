@@ -39,6 +39,7 @@ from ..config import (
     AppConfig,
     CalendarConfig,
     ConfigError,
+    load_bids_config,
     load_config,
     load_events_config,
     load_jobs_config,
@@ -62,7 +63,7 @@ from ..weather import (
     weather_page,
 )
 from . import event_calendar, queries, seo, sponsor, stats
-from .queries import MARK_END, MARK_START, EventFilters, Filters, JobFilters
+from .queries import MARK_END, MARK_START, BidFilters, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
 settings = get_settings()
@@ -296,7 +297,7 @@ config_cache = _ConfigCache()
 
 
 class _ListConfigCache:
-    """jobs.yaml or events.yaml, re-read at most once a minute (a broken edit
+    """jobs.yaml, events.yaml or bids.yaml, re-read at most once a minute (a broken edit
     keeps the last good copy; a broken file at startup means an empty list
     rather than a broken site)."""
 
@@ -318,6 +319,7 @@ class _ListConfigCache:
 
 jobs_config_cache: _ListConfigCache = _ListConfigCache(load_jobs_config, "jobs")
 events_config_cache: _ListConfigCache = _ListConfigCache(load_events_config, "events")
+bids_config_cache: _ListConfigCache = _ListConfigCache(load_bids_config, "bids")
 
 
 class _TTLCache:
@@ -457,6 +459,25 @@ def event_when(event) -> str:
     return text
 
 
+def bid_due(bid) -> str:
+    """When a bid is due: "Tue, Dec 1, 2026, 10:00 AM ChST", or the day alone
+    when the source gives no time."""
+    local = to_local(bid.due_at)
+    if not local:
+        return ""
+    day = f"{_short_day(local.date())}, {local.year}"
+    return f"{day}, {fmt_time(local)} ChST" if bid.due_time else day
+
+
+def due_in(dt: datetime | None) -> str:
+    """How long until a bid is due, in Guam days: "today", "tomorrow", "in 6 days"."""
+    local = to_local(dt)
+    if not local:
+        return ""
+    days = (local.date() - datetime.now(GUAM_TZ).date()).days
+    return "today" if days <= 0 else "tomorrow" if days == 1 else f"in {days} days"
+
+
 def event_time(event, day: date) -> str:
     """The short label beside an event under `day`: its start time, "All day",
     or "Ongoing" for an event that began on an earlier day."""
@@ -556,6 +577,8 @@ templates.env.tests.update(note=is_note)
 templates.env.globals.update(
     settings=settings,
     event_time=event_time,
+    bid_due=bid_due,
+    due_in=due_in,
     months=MONTHS,
     static_url=static_url,
     story_link=story_link,
@@ -1323,6 +1346,51 @@ def events_feed(request: Request, calendar: str = Query("", max_length=60)):
             "X-Robots-Tag": "noindex",
         },
     )
+
+
+@app.get("/bids", response_class=HTMLResponse)
+def bids(
+    request: Request,
+    q: str = Query("", max_length=200),
+    source: str = Query("", max_length=60),
+    agency: str = Query("", max_length=200),
+):
+    sources_config = bids_config_cache.get()
+    bid_filters = BidFilters(
+        q=q.strip(), source=source.strip() or None, agency=agency.strip() or None
+    )
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        listing = queries.list_bids(session, bid_filters, now)
+        sources = queries.bid_sources(session, now)
+    # Sources that can't be collected are not shown.
+    collected = {s.slug for s in sources_config if s.collected}
+    sources = [s for s in sources if s["source"].slug in collected]
+    return render(
+        request,
+        "bids.html",
+        bids=listing.items,
+        agencies=listing.agencies,
+        bid_filters=bid_filters,
+        sources=sources,
+        now=now,
+        title="Bids and RFPs",
+        description=_bids_description([s["source"].name for s in sources]),
+        active_nav="bids",
+        canonical={"source": bid_filters.source},
+        # A word search or an agency is a search page; a source's own list
+        # is worth finding.
+        robots="noindex, follow" if bid_filters.q or bid_filters.agency else None,
+        breadcrumbs=[("Bids and RFPs", None)],
+        show_ad=True,
+    )
+
+
+def _bids_description(sources: list[str]) -> str:
+    text = "Open Government of Guam bids and requests for proposals, with their due dates"
+    if sources:
+        text += f", from {_names(sources)}"
+    return text + ". Every bid links to the agency or portal that published it."
 
 
 def _names(names: list[str]) -> str:

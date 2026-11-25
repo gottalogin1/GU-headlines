@@ -692,9 +692,10 @@ def web(clean_db):
 
     from guheadlines.db import session_scope
     from guheadlines.models import Event, EventCalendar
-    from guheadlines.web.app import app, sidebar_cache
+    from guheadlines.web.app import app, sidebar_cache, sitemap_cache
 
     sidebar_cache._data.clear()
+    sitemap_cache._data.clear()
     now = datetime.now(timezone.utc)
     today = datetime.now(GUAM_TZ).date()
 

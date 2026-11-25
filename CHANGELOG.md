@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **A Bids page.** A new **Bids** link lists the Government of Guam's open
+  bids and requests for proposals, soonest due first: what each is for, its
+  number, the agency, when offers are due (Guam time, with the days left),
+  the day it was posted and links to the notice and its PDF. It reads
+  notices.guam.gov (its IFB, RFP and emergency procurement topics, which
+  GSA, the Airport, the Port, GCC and other agencies use) and the bid lists
+  of the Power Authority and GHURA (on the OpenGov Guam portal), the
+  hospital, Waterworks and the Port. Bids leave the page once their due date
+  has passed or their source lists them as closed, cancelled or awarded; a
+  bid posted in two places is shown once, crediting both. Sole-source and
+  hearing notices are left out. Search by word, or narrow to one agency or
+  source. The sources are in the new `config/bids.yaml`, read every
+  `BIDS_INTERVAL_HOURS` (default 6), and `guheadlines bids --check` tries
+  them. See [Bids and RFPs](docs/bids.md). When you update, the database
+  gets two new tables, by itself, and the page works without a change to
+  `.env`. To keep the top bar on one line with Bids and Outages, the
+  **Sources** link moved to the bottom of every page, beside About this site.
 - **An Outages page.** The new **Outages** link in the top bar opens a page
   of the power outages that the Guam Power Authority announces (from
   GuamALERTS), the water outages that the Guam Waterworks Authority

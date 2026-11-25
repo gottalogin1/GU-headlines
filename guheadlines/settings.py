@@ -85,6 +85,8 @@ class Settings:
     # A free Google API key with the Google Calendar API turned on, for the
     # calendars in events.yaml that are public Google Calendars.
     google_calendar_api_key: str = ""
+    # How often the worker reads the bid and proposal lists in config/bids.yaml.
+    bids_interval_hours: int = 6
     # Alerts are posted to the Discord channel of this webhook link
     # (https://discord.com/api/webhooks/...). Empty: no alerts. See alerts.py.
     discord_webhook_url: str = ""
@@ -310,6 +312,7 @@ def load_settings() -> Settings:
         usajobs_email=env.get("USAJOBS_EMAIL", "").strip(),
         events_interval_hours=max(1, _int(env.get("EVENTS_INTERVAL_HOURS"), 3)),
         google_calendar_api_key=env.get("GOOGLE_CALENDAR_API_KEY", "").strip(),
+        bids_interval_hours=max(1, _int(env.get("BIDS_INTERVAL_HOURS"), 6)),
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         alert_keywords=_words(env.get("ALERT_KEYWORDS")),

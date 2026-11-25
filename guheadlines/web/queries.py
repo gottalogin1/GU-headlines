@@ -22,10 +22,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from ..bids.readers import number_key
 from ..models import (
     SEARCH_CONFIG,
     SPONSOR_CLICKS,
     Article,
+    Bid,
+    BidSource,
     Event,
     EventCalendar,
     Job,
@@ -605,6 +608,111 @@ def event_calendars(session: Session, since: datetime) -> list[dict]:
         .order_by(EventCalendar.name)
     ).all()
     return [{"calendar": r[0], "upcoming": r.upcoming} for r in rows]
+
+
+# ------------------------------------------------------------------- bids
+
+
+@dataclass
+class BidFilters:
+    q: str = ""
+    source: str | None = None
+    agency: str | None = None
+
+
+@dataclass
+class BidListing:
+    # {"bid", "source_slug", "source_name", "source_homepage", "document_url",
+    #  "also": [{"name", "url"}]}, soonest due first, those without a due date last.
+    items: list[dict]
+    # (agency, open bids) of the bids matching the words and source, most first.
+    agencies: list[tuple[str, int]]
+
+
+def _open_bids(now: datetime):
+    """Bids still listed by their source whose due date hasn't passed."""
+    return and_(
+        Bid.removed_at.is_(None),
+        or_(Bid.due_at.is_(None), Bid.due_at >= now),
+        BidSource.enabled.is_(True),
+    )
+
+
+def _bid_rank(item: dict) -> tuple:
+    """Which listing of a bid posted in two places is shown: the one with a
+    due date (and time), then one with its document, then the agency's own."""
+    bid = item["bid"]
+    return (
+        bid.due_at is not None,
+        bid.due_time,
+        bool(bid.document_url),
+        not bid.uid.startswith("notice:"),
+    )
+
+
+def list_bids(session: Session, f: BidFilters, now: datetime) -> BidListing:
+    """Every open bid matching the filters. A bid listed by two sources (an
+    agency's own list and the public notices portal) is shown once, crediting
+    both."""
+    stmt = (
+        select(
+            Bid,
+            BidSource.slug.label("slug"),
+            BidSource.name.label("source_name"),
+            BidSource.homepage.label("homepage"),
+        )
+        .join(BidSource, BidSource.id == Bid.source_id)
+        .where(_open_bids(now))
+    )
+    if f.source:
+        stmt = stmt.where(BidSource.slug == f.source)
+    if f.q:
+        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(" ", Bid.title, Bid.number, Bid.kind, Bid.agency, Bid.description)
+        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    far = datetime.max.replace(tzinfo=timezone.utc)
+    groups: dict[str, list[dict]] = {}
+    for row in session.execute(stmt):
+        bid = row[0]
+        item = {
+            "bid": bid,
+            "source_slug": row.slug,
+            "source_name": row.source_name,
+            "source_homepage": row.homepage,
+        }
+        key = number_key(bid.number, bid.agency) or f"{row.slug}|{bid.uid}"
+        groups.setdefault(key, []).append(item)
+    items = []
+    for group in groups.values():
+        group.sort(key=_bid_rank, reverse=True)
+        shown = dict(group[0])
+        others = group[1:]
+        shown["document_url"] = shown["bid"].document_url or next(
+            (o["bid"].document_url for o in others if o["bid"].document_url), None
+        )
+        shown["also"] = [
+            {"name": o["source_name"], "url": o["bid"].url}
+            for o in others
+            if o["source_slug"] != shown["source_slug"]
+        ]
+        items.append(shown)
+    agencies = Counter(i["bid"].agency for i in items if i["bid"].agency)
+    if f.agency:
+        items = [i for i in items if i["bid"].agency == f.agency]
+    items.sort(key=lambda i: (i["bid"].due_at or far, i["bid"].title.lower(), i["bid"].id))
+    return BidListing(items, sorted(agencies.items(), key=lambda a: (-a[1], a[0])))
+
+
+def bid_sources(session: Session, now: datetime) -> list[dict]:
+    """Each bid source with its open bids, for the Bids page's source list."""
+    rows = session.execute(
+        select(BidSource, func.count(Bid.id).filter(_open_bids(now)).label("open"))
+        .outerjoin(Bid, Bid.source_id == BidSource.id)
+        .where(BidSource.enabled.is_(True))
+        .group_by(BidSource.id)
+        .order_by(BidSource.name)
+    ).all()
+    return [{"source": r[0], "open": r.open} for r in rows]
 
 
 # ------------------------------------------------------------ visitor stats

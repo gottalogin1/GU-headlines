@@ -141,7 +141,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 0 6px; }
 /* Two rows: brand, search and the theme switch on top, the sections below.
    The sections wrap onto more lines rather than scroll, so every link
-   (Archive, Jobs, Sources at the end) stays visible at any width. */
+   (Archive, Jobs ... Outages at the end) stays visible at any width. */
 .bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   padding: 12px 14px;
@@ -165,7 +165,9 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
   padding-top: 8px; border-top: 1px solid var(--line);
 }
 .nav a {
-  padding: 7px 10px; border-radius: 999px; white-space: nowrap;
+  /* 7px a side keeps every section on one line on a laptop screen (the
+     Sources page is linked from the footer to leave room for the others). */
+  padding: 7px 7px; border-radius: 999px; white-space: nowrap;
   color: var(--text-soft); font-weight: 600; font-size: .9rem;
   transition: background-color .15s ease, color .15s ease;
 }
@@ -753,6 +755,19 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 @media (max-width: 640px) {
   .job-filter .job-words { grid-column: 1 / -1; }
   .job-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- bids ---------- */
+.bid-filter .bid-words { grid-column: span 2; }
+.bid-kind {
+  margin: 0 0 4px; font-size: .72rem; font-weight: 750; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.bid-number { font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.due-in { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.due-in.due-soon { color: var(--text-soft); font-weight: 700; }
+@media (max-width: 640px) {
+  .bid-filter .bid-words { grid-column: 1 / -1; }
 }
 
 /* ---------- events ---------- */

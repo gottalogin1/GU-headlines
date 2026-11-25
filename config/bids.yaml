@@ -1,0 +1,119 @@
+# Government of Guam bids and requests for proposals for the Bids page.
+#
+# When a government agency wants to buy something (vehicles, supplies,
+# construction, services), it usually has to ask companies for offers in
+# public. The two common ways:
+#   Invitation for Bid (IFB)      the agency says exactly what it wants, and
+#                                 the lowest price from a qualified company wins.
+#   Request for Proposals (RFP)   the agency describes a need, companies
+#                                 propose how they'd meet it, and the best
+#                                 proposal wins (not only on price).
+# Each one has a due date: offers must reach the agency by then.
+#
+# The worker reads these sources every BIDS_INTERVAL_HOURS (default 6). Only
+# open bids are shown: a bid leaves the page by itself once its due date has
+# passed, or when its source lists it as closed, cancelled or awarded. Changes
+# to this file take effect on the next check. Try a source (nothing is saved)
+# with:
+#     docker compose exec worker guheadlines bids --check --source <slug>
+#
+# A source is read from one or more inputs. Each input is a kind of address:
+#   notices   a notices.guam.gov listing, the Government of Guam's public
+#             notices portal, narrowed to its bid and proposal topics. Many
+#             agencies post their bids there.
+#   table     a web page with a table of bids, one row per bid. Its columns
+#             are found by their headings (number, title or description, issue
+#             date, due date or closing date, status), so most bid tables work
+#             without any other setting.
+#
+# Other options:
+#   homepage      the source's own page, linked from the Bids page
+#   agency        the agency asking for the bids, for a table (its rows don't
+#                 say). Use the agency's full name, like "Port Authority of
+#                 Guam": the same bid posted in two places is shown once, and
+#                 the name helps tell two agencies' bid numbers apart.
+#   details       true: for a bid the table lists without a due date, read the
+#                 bid's own page for one (at most 15 pages a check; a due date
+#                 found once is kept, so each page is read only once)
+#   undated_days  how many days after it was posted a bid without a due date
+#                 stays on the page (default 30). Some notices only give the
+#                 due date inside their PDF.
+#   exclude       leave out bids whose title, number or agency matches one of
+#                 these patterns (regular expressions, any upper/lower case)
+#   request_delay seconds between requests to this site
+#   ignore_robots read this site even where its robots.txt disallows it
+#   cannot_scrape why this source can't be collected; it is never read and
+#                 not shown on the site. Delete the line to try it again.
+#   enabled       false to pause a source (its bids leave the page)
+#
+# Sole-source notices (an agency buying from one named company, so there is
+# nothing to bid on) are always left out. Public hearing notices are not
+# collected: the notices input only reads the bid and proposal topics.
+#
+# Looked at but not added: the General Services Agency's own bid page (its
+# bids are on notices.guam.gov too, and its page has no due dates), Guam
+# Community College's bid page (PDF links only; it posts on notices.guam.gov
+# too), the Guam Legislature's procurement page (rarely used), and the
+# Airport's and Invest Guam's websites (their firewalls turn away automated
+# visitors; the Airport posts its bids on notices.guam.gov). No bid lists were
+# found for Public Works, the Department of Education or the University of
+# Guam.
+
+# Leave out, from every source, bids whose title, number, agency or
+# description matches one of these patterns (any upper/lower case).
+exclude:
+  - "chamber of commerce"
+  - "guam chamber"
+
+sources:
+  - slug: notices
+    name: GovGuam public notices
+    homepage: https://notices.guam.gov/
+    # The portal's list, narrowed to the topics IFB (59), RFP (62) and
+    # emergency procurement (86). Each check reads up to 6 pages of it (60
+    # notices, newest first). A bid's later notices ("2nd Notice of ...")
+    # replace its earlier ones.
+    notices: https://notices.guam.gov/notices?view=list&topic_id%5B%5D=59&topic_id%5B%5D=62&topic_id%5B%5D=86
+    # The portal is also read for the Events page; a few seconds between
+    # requests keeps both checks gentle on it.
+    request_delay: 3
+    exclude:
+      # The Power Authority's standing notice that points to its own bid list
+      # (read below, as "gpa").
+      - "continuous formal tenders"
+      - "\\bhearings?\\b"
+
+  - slug: gpa
+    name: Guam Power Authority
+    homepage: https://go.opengovguam.com/tenders/tenders_list-standalone/gpa?tender_status=Available
+    # The Power Authority's bid list, on the OpenGov Guam portal.
+    table: https://go.opengovguam.com/tenders/tenders_list-standalone/gpa?tender_status=Available
+    agency: Guam Power Authority
+
+  - slug: ghura
+    name: Guam Housing and Urban Renewal Authority
+    homepage: https://go.opengovguam.com/bids/bids_list_ghura/ghura?bid_status=Open
+    # GHURA's bid list, on the OpenGov Guam portal. It lists closed bids too;
+    # those are left out by their status.
+    table: https://go.opengovguam.com/bids/bids_list_ghura/ghura?bid_status=Open
+    agency: Guam Housing and Urban Renewal Authority
+
+  - slug: gmha
+    name: Guam Memorial Hospital Authority
+    homepage: https://www.gmha.org/procurement/
+    table: https://www.gmha.org/procurement/
+    agency: Guam Memorial Hospital Authority
+
+  - slug: gwa
+    name: Guam Waterworks Authority
+    homepage: https://guamwaterworks.org/bids/
+    table: https://guamwaterworks.org/bids/
+    agency: Guam Waterworks Authority
+
+  - slug: port
+    name: Port Authority of Guam
+    homepage: https://portofguam.com/bids-and-rfps
+    table: https://portofguam.com/bids-and-rfps
+    agency: Port Authority of Guam
+    # The Port's list has no due dates; each bid's own page has its "Close Date".
+    details: true
