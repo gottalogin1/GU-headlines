@@ -391,11 +391,12 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
 .ad-form .btn { margin-top: 16px; }
 .ad-days { border: 0; margin: 0; padding: 0; }
 .ad-days legend { font-size: .72rem; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
-.ad-day-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; }
+.ad-day-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 10px; }
 .ad-day { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--input-bg); cursor: pointer; font-size: .92rem; }
 .ad-day input { width: 18px; height: 18px; margin: 0; accent-color: var(--fill); flex: none; }
 .ad-day:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ad-day.is-taken { cursor: default; color: var(--muted); background: transparent; }
+.ad-day-taken { display: block; font-size: .78rem; }
 .ad-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px; margin-top: 16px; }
 .ad-fields .field p { margin: 0; }
 .field textarea {

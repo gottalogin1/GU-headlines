@@ -66,11 +66,12 @@
     <fieldset class="ad-days">
       <legend>{{ "Weeks, Monday to Sunday" if o.unit == "week" else "Editions" }}</legend>
       <div class="ad-day-list">
-      {% for day, taken in f.days %}
+      {% for day, last, taken in f.days %}
       {% set iso = day.isoformat() %}
       <label class="ad-day{{ ' is-taken' if taken }}">
         <input type="checkbox" name="day" value="{{ iso }}"{{ ' disabled' if taken }}{{ ' checked' if iso in (v.days or []) and not taken }}>
-        <span>{% if o.unit == "week" %}Week of {{ day.strftime("%b") }} {{ day.day }}{% else %}{{ day.strftime("%a, %b") }} {{ day.day }}{% endif %}{% if taken %} <span class="muted">· booked</span>{% endif %}</span>
+        <span>{% if last %}{{ day.strftime("%b") }}&nbsp;{{ day.day }} – {{ last.strftime("%b") }}&nbsp;{{ last.day }}{% else %}{{ day.strftime("%a, %b") }}&nbsp;{{ day.day }}{% endif %}
+          {%- if taken %}<span class="ad-day-taken">Booked</span>{% endif %}</span>
       </label>
       {% endfor %}
       </div>

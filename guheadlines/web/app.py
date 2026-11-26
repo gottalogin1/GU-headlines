@@ -1948,15 +1948,18 @@ def _list_words(words: list[str]) -> str:
     return ", ".join(words[:-1]) + f" and {words[-1]}"
 
 
-def ad_when(booking: AdBooking) -> str:
+def ad_when(booking: AdBooking, first: bool = False) -> str:
     """When a booked ad shows: "the weeks of Dec 7 and Dec 14, 2026", "the
-    editions of Tue, Dec 8 and Fri, Dec 11"."""
+    editions of Tue, Dec 8 and Fri, Dec 11" ("The ..." with `first`, to start
+    a sentence)."""
     days = sorted(booking.days)
     if booking.kind == ads.SITE:
         words = [f"{d:%b} {d.day}" for d in days]
-        return f"the week{'s' if len(days) > 1 else ''} of {_list_words(words)}, {days[-1].year}"
-    words = [_short_day(d) for d in days]
-    return f"the edition{'s' if len(days) > 1 else ''} of {_list_words(words)}"
+        text = f"the week{'s' if len(days) > 1 else ''} of {_list_words(words)}, {days[-1].year}"
+    else:
+        words = [_short_day(d) for d in days]
+        text = f"the edition{'s' if len(days) > 1 else ''} of {_list_words(words)}"
+    return "T" + text[1:] if first else text
 
 
 templates.env.globals.update(ad_when=ad_when, money=ads.money, ad_names=AD_NAMES)
@@ -2017,7 +2020,11 @@ def _advertise_page(
         for offer in offers:
             days = ads.choices(settings, offer.kind, now)
             held = ads.taken(session, offer.kind, days)
-            forms.append({"offer": offer, "days": [(d, d in held) for d in days]})
+            # (day, last day of its week or None, taken)
+            last = timedelta(days=6) if offer.kind == ads.SITE else None
+            forms.append(
+                {"offer": offer, "days": [(d, last and d + last, d in held) for d in days]}
+            )
     response = render(
         request,
         "advertise.html",

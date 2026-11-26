@@ -25,7 +25,7 @@
   <h2 id="booking-title">{{ ad_names[booking.kind] }} <span class="badge">{{ labels[booking.status] }}</span></h2>
   <dl class="job-facts">
     <div><dt>Business</dt><dd>{{ booking.business }}</dd></div>
-    <div><dt>When</dt><dd>{{ ad_when(booking)|capitalize }}</dd></div>
+    <div><dt>When</dt><dd>{{ ad_when(booking, True) }}</dd></div>
     <div><dt>Total</dt><dd>{{ money(booking.amount_cents) }}</dd></div>
     <div><dt>Website</dt><dd>{{ booking.link|domain }}</dd></div>
   </dl>

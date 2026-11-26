@@ -40,7 +40,7 @@
     <span class="badge">{{ "Finished" if finished else labels[b.status] }}</span></h2>
   <dl class="job-facts">
     <div><dt>What</dt><dd>{{ ad_names[b.kind] }}</dd></div>
-    <div><dt>When</dt><dd>{{ ad_when(b)|capitalize }}</dd></div>
+    <div><dt>When</dt><dd>{{ ad_when(b, True) }}</dd></div>
     <div><dt>Amount</dt><dd>{{ money(b.amount_cents) }}{% if b.paid_at %}, paid {{ b.paid_at|fmt_datetime }}{% endif %}</dd></div>
     <div><dt>Email</dt><dd><a href="mailto:{{ b.email }}">{{ b.email }}</a></dd></div>
     <div><dt>Website</dt><dd><a href="{{ b.link|safe_url }}" target="_blank" rel="noopener nofollow">{{ b.link|domain }} ↗</a></dd></div>
