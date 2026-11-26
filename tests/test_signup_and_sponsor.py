@@ -167,6 +167,11 @@ def test_signup_adds_the_address_to_the_sendfox_list(signup, fake_sendfox):
     )
     assert sent.status_code == 303 and sent.headers["location"] == "/newsletter?signup=ok"
     assert fake_sendfox.contacts == [{"email": "reader@example.com", "lists": [11]}]
+    # Counted for the weekly report (reports.py), even with the visitor stats off.
+    from guheadlines.models import NEWSLETTER_SIGNUPS
+    from guheadlines.web import stats
+
+    assert [path for _, path in stats.counts._views] == [NEWSLETTER_SIGNUPS]
     contact = fake_sendfox.requests[-1]
     assert contact.headers["authorization"] == f"Bearer {TOKEN}"
     assert str(contact.url) == "https://api.sendfox.com/contacts"
