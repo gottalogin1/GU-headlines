@@ -35,6 +35,7 @@ from ..models import (
     Job,
     JobSource,
     Listing,
+    ListingRenewal,
     NewsletterEdition,
     PageViews,
     Referrers,
@@ -952,7 +953,7 @@ def listings(
 def listings_for_review(session: Session, now: datetime) -> dict:
     """The review page's lists: waiting for review, waiting for payment
     (unpaid ones are deleted after a week), on the site now, and the
-    payments of the last 30 days that were not given back."""
+    payments (renewals too) of the last 30 days that were not given back."""
     waiting = session.scalars(select(Listing).where(Listing.status == REVIEW).order_by(Listing.id))
     unpaid = session.scalars(
         select(Listing).where(Listing.status == UNPAID).order_by(Listing.id.desc()).limit(50)
@@ -965,10 +966,15 @@ def listings_for_review(session: Session, now: datetime) -> dict:
             Listing.paid_at >= now - timedelta(days=30), Listing.refunded_at.is_(None)
         )
     ).one()
+    renewed, renewed_cents = session.execute(
+        select(func.count(), func.coalesce(func.sum(ListingRenewal.amount_cents), 0)).where(
+            ListingRenewal.paid_at >= now - timedelta(days=30)
+        )
+    ).one()
     return {
         "waiting": list(waiting),
         "unpaid": list(unpaid),
         "live": list(live),
-        "paid": count,
-        "cents": cents,
+        "paid": count + renewed,
+        "cents": cents + renewed_cents,
     }

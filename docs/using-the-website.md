@@ -239,6 +239,14 @@ page is the poster's way back: there are no accounts. Each listing waits for
 the site's owner to approve it on `/admin/listings` before it shows; a
 rejected listing's payment is given back.
 
+A classified ad, a featured job post and a business's featured upgrade end
+by themselves after their number of days. A few days before, the poster gets
+one email with a link to that private page, where **Renew** pays the same
+price again through PayPal for as many days more (see
+[Renewal reminders](settings.md#renewal-reminders)). A business that booked
+an ad on the Advertise page gets the same kind of email, and its booking's
+page has a **Run this ad again** form.
+
 ## The Sources page
 
 The **Sources** link at the bottom of every page opens a page that starts with **Why this site

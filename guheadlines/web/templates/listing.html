@@ -24,8 +24,14 @@
   {% elif l.status == "live" %}
     <h2>On the site</h2>
     <p>Your listing is on <a href="{% if l.kind == 'event' and l.event_id %}/events/{{ l.event_id }}{% else %}{{ kind.page }}{% endif %}">{% if l.kind == "event" %}the Events page{% elif l.kind == "job" %}the Jobs page{% elif l.kind == "business" %}the business directory{% else %}the Classifieds page{% endif %}</a>.
-    {% if l.kind == "business" %}{% if upgraded(l, now) %}It is featured until {{ l.live_until|fmt_day }}, and then stays as a basic entry.{% endif %}
+    {% if l.kind == "business" %}{% if upgraded(l, now) %}It is featured until {{ l.live_until|fmt_day }}, and then stays as a basic entry.{% elif l.featured and l.live_until %}Its featured upgrade ended on {{ l.live_until|fmt_day }}, so it shows as a basic entry.{% endif %}
     {% elif l.live_until %}{% if l.live_until > now %}It shows until {{ l.live_until|fmt_day }}.{% else %}It ended on {{ l.live_until|fmt_day }}.{% endif %}{% endif %}</p>
+    {% if renewal %}
+    <h2 id="renew" class="listing-renew">Keep it on the site longer</h2>
+    <p>Pay <strong>{{ renewal.cents|money }}</strong> with PayPal for <strong>{{ renewal.days }} days more</strong>{% if l.kind == "business" %} of the featured upgrade{% endif %}. The days are added to {% if l.live_until and l.live_until > now %}the end date{% else %}today{% endif %}. It needs no new review.</p>
+    <p><a class="btn pay-link" href="/listing/{{ l.id }}/{{ l.key }}/renew">Renew for {{ renewal.cents|money }} with PayPal</a></p>
+    {% if renewal.reminder %}<p class="muted small">We also send one email to the address that you paid with on PayPal, a few days before it ends, with a link to this page.</p>{% endif %}
+    {% endif %}
   {% elif l.status == "rejected" %}
     <h2>Not accepted</h2>
     <p>Sorry, this listing could not be accepted.{% if l.note %} The reason: {{ l.note }}{% endif %}

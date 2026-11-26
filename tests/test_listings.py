@@ -13,11 +13,11 @@ import httpx
 import pytest
 from conftest import make_jpeg
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 
-from guheadlines import listings, paypal
+from guheadlines import listings, mail, paypal, renewals
 from guheadlines.db import session_scope
-from guheadlines.models import FEATURED_CALENDAR, Event, EventCalendar, Listing
+from guheadlines.models import FEATURED_CALENDAR, Event, EventCalendar, Listing, ListingRenewal
 from guheadlines.scraper.text import GUAM_TZ
 from guheadlines.settings import load_settings
 
@@ -78,6 +78,7 @@ class FakePayPal:
                 "amount": {"currency_code": "USD", "value": value},
             }
             answer["purchase_units"] = [{"payments": {"captures": [capture]}}]
+            answer["payer"] = {"email_address": "buyer@example.com"}
         return answer
 
     def approve(self, order_id: str) -> None:
@@ -588,3 +589,182 @@ def test_price_settings(monkeypatch):
     assert site.classified_price_cents == 750 and site.business_upgrade_days == 30
     assert listings.is_on(site, "classified") and not listings.is_on(site, "job")
     assert listings.money(750) == "$7.50" and listings.money(5000) == "$50"
+
+
+# ---------------------------------------------------------------- renewals
+
+
+def _live(client, fake, kind="classified", **fields) -> Listing:
+    listing = _new(client, kind, **(fields or CLASSIFIED))
+    assert _pay(client, fake, listing) == "ok"
+    _review(client, listing.id, "approve")
+    return _get(listing.id)
+
+
+def _renew(client, fake, listing: Listing, approve: bool = True) -> str:
+    """Press "Renew", approve on PayPal, and come back; returns the result."""
+    page = f"/listing/{listing.id}/{listing.key}"
+    to_paypal = client.get(f"{page}/renew", follow_redirects=False)
+    assert to_paypal.status_code == 303 and "paypal.com" in to_paypal.headers["location"]
+    order_id = to_paypal.headers["location"].split("token=")[1]
+    if approve:
+        fake.approve(order_id)
+    back = client.get(f"{page}/renewed", params={"token": order_id}, follow_redirects=False)
+    assert back.status_code == 303
+    return back.headers["location"].split("renewed=")[1]
+
+
+def _end(listing_id: int, when: datetime) -> None:
+    with session_scope() as session:
+        session.execute(update(Listing).where(Listing.id == listing_id).values(live_until=when))
+
+
+def test_a_classified_ad_is_renewed_through_paypal(client, fake_paypal):
+    waiting = _new(client, "classified", **CLASSIFIED)
+    _pay(client, fake_paypal, waiting)
+    page = f"/listing/{waiting.id}/{waiting.key}"
+    assert "/renew" not in client.get(page).text  # not on the site yet
+    assert client.get(f"{page}/renew", follow_redirects=False).headers["location"] == page
+    assert _get(waiting.id).email == "buyer@example.com"  # from PayPal
+    _review(client, waiting.id, "approve")
+    live = _get(waiting.id)
+    text = client.get(page).text
+    assert "Renew for $5 with PayPal" in text and "30 days more" in text
+
+    # Back from PayPal without paying: nothing changes.
+    assert _renew(client, fake_paypal, live, approve=False) == "unfinished"
+    assert _get(live.id).live_until == live.live_until
+    assert _renew(client, fake_paypal, live) == "ok"
+    order = fake_paypal.orders["ORDER-3"]["body"]
+    unit = order["purchase_units"][0]
+    assert unit["amount"]["value"] == "5.00" and unit["custom_id"] == f"listing-{live.id}-renewal"
+    context = order["payment_source"]["paypal"]["experience_context"]
+    assert context["return_url"] == f"http://testserver{page}/renewed"
+    renewed = _get(live.id)
+    assert renewed.live_until - live.live_until == timedelta(days=30)
+    assert renewed.status == "live" and renewed.reviewed_at == live.reviewed_at
+    assert "See the new end date below" in client.get(f"{page}?renewed=ok").text
+    # A reload takes no more money and adds no more days.
+    captures = fake_paypal.captures
+    client.get(f"{page}/renewed?token=ORDER-3")
+    assert fake_paypal.captures == captures
+    assert _get(live.id).live_until == renewed.live_until
+    # An order that is not a renewal of this listing is not even sent to PayPal.
+    other = client.get(f"{page}/renewed?token=ORDER-1", follow_redirects=False)
+    assert other.headers["location"].endswith("renewed=unfinished")
+    assert fake_paypal.captures == captures
+    admin = client.get("/admin/listings", headers=ADMIN).text
+    assert "Paid in the last 30 days: <strong>$10</strong> from 2 payments" in admin
+
+    # Ended: off the Classifieds page, and a renewal counts from today.
+    _end(live.id, datetime.now(timezone.utc) - timedelta(days=3))
+    assert "Corolla" not in client.get("/classifieds").text
+    assert "It ended on" in client.get(page).text
+    assert _renew(client, fake_paypal, live) == "ok"
+    back = _get(live.id).live_until - datetime.now(timezone.utc)
+    assert timedelta(days=29, hours=23) < back <= timedelta(days=30)
+    assert "Corolla" in client.get("/classifieds").text
+
+
+def test_a_listing_taken_down_while_it_is_renewed_gets_its_money_back(client, fake_paypal):
+    live = _live(client, fake_paypal)
+    page = f"/listing/{live.id}/{live.key}"
+    to_paypal = client.get(f"{page}/renew", follow_redirects=False)
+    order_id = to_paypal.headers["location"].split("token=")[1]
+    fake_paypal.approve(order_id)
+    _review(client, live.id, "remove")
+    back = client.get(f"{page}/renewed?token={order_id}", follow_redirects=False)
+    assert back.headers["location"].endswith("renewed=gone")
+    assert fake_paypal.refunds == [f"CAP-{order_id}"]
+    with session_scope() as session:
+        assert session.scalars(select(ListingRenewal)).all() == []
+    assert "/renew" not in client.get(page).text
+
+
+def test_a_business_upgrade_can_be_renewed_but_an_event_cannot(client, fake_paypal):
+    business = _live(
+        client,
+        fake_paypal,
+        "business",
+        title="Zeta Pizza",
+        category="Restaurants and food",
+        location="Tamuning",
+        description="Wood-fired pizza, open late.",
+        plan="featured",
+    )
+    page = client.get(f"/listing/{business.id}/{business.key}").text
+    assert "Renew for $50 with PayPal" in page and "of the featured upgrade" in page
+    _end(business.id, datetime.now(timezone.utc) - timedelta(days=1))
+    page = client.get(f"/listing/{business.id}/{business.key}").text
+    assert "Its featured upgrade ended on" in page
+    assert _renew(client, fake_paypal, business) == "ok"
+    assert listings.upgraded(_get(business.id), datetime.now(timezone.utc))
+
+    day = datetime.now(GUAM_TZ).date() + timedelta(days=3)
+    event = _live(
+        client,
+        fake_paypal,
+        "event",
+        title="Hafa Adai Night Market",
+        name="Village Council",
+        date=day.isoformat(),
+        location="Chamorro Village, Hagåtña",
+    )
+    assert "/renew" not in client.get(f"/listing/{event.id}/{event.key}").text
+    orders = len(fake_paypal.orders)
+    client.get(f"/listing/{event.id}/{event.key}/renew")
+    assert len(fake_paypal.orders) == orders
+
+
+def _mail_settings(**values):
+    from guheadlines.web.app import settings as site
+
+    return dataclasses.replace(
+        site,
+        smtp_host="mail.example",
+        mail_from="GU Headlines <alerts@guamheadlines.example>",
+        site_url="https://guamheadlines.example",
+        **values,
+    )
+
+
+def test_a_reminder_email_goes_out_before_a_listing_ends(client, fake_paypal, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mail, "send", lambda settings, to, *email, **kw: sent.append((to, *email)))
+    live = _live(client, fake_paypal)
+    site = _mail_settings()
+    assert renewals.send_reminders(site) == 0  # 30 days to go
+    soon = live.live_until - timedelta(days=2)
+    assert renewals.send_reminders(dataclasses.replace(site, renewal_reminder_days=0), soon) == 0
+    assert renewals.send_reminders(dataclasses.replace(site, smtp_host=""), soon) == 0
+    assert renewals.send_reminders(site, soon) == 1
+    (to, subject, text, html) = sent[0]
+    assert to == "buyer@example.com"
+    assert subject.startswith("Your classified ad ends on ")
+    link = f"https://guamheadlines.example/listing/{live.id}/{live.key}"
+    assert f"Renew it here: {link}" in text and "renew it for $5" in text
+    assert f'href="{link}"' in html and "Renew for $5" in html
+    assert renewals.send_reminders(site, soon) == 0  # one email only
+    # After a renewal, the next end gets its own email.
+    _renew(client, fake_paypal, live)
+    assert _get(live.id).reminded_at is None
+    assert renewals.send_reminders(site, _get(live.id).live_until - timedelta(days=1)) == 1
+    # No email after the end.
+    _end(live.id, soon)
+    with session_scope() as session:
+        session.execute(update(Listing).values(reminded_at=None))
+    assert renewals.send_reminders(site, soon + timedelta(hours=1)) == 0
+
+
+def test_a_failed_reminder_is_tried_again(client, fake_paypal, monkeypatch):
+    def broken(*args, **kwargs):
+        raise mail.MailError("the email service answered 451")
+
+    monkeypatch.setattr(mail, "send", broken)
+    live = _live(client, fake_paypal)
+    soon = live.live_until - timedelta(days=1)
+    assert renewals.send_reminders(_mail_settings(), soon) == 0
+    assert _get(live.id).reminded_at is None
+    monkeypatch.setattr(mail, "send", lambda *args, **kwargs: None)
+    assert renewals.send_reminders(_mail_settings(), soon) == 1
+    assert _get(live.id).reminded_at == soon

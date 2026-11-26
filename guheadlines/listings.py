@@ -17,6 +17,10 @@ There are no user accounts. A listing goes so:
    FEATURED_CALENDAR, so it is on the Events page, its month calendar, the
    event's own page and the calendar feed), and a business without end (its
    upgrade for so many days).
+4. Before a classified ad, a job post or a business's upgrade ends, the
+   poster gets an email (renewals.py). On the poster's own page, the poster
+   can pay again through PayPal for as many days more. A renewal needs no
+   new review: the listing does not change.
 
 Listings are on while PayPal (PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET) and
 STATS_PASSWORD are set. A kind whose price is 0 is off.
@@ -39,7 +43,7 @@ from sqlalchemy.orm import Session
 
 from . import paypal
 from .alerts import fold
-from .models import FEATURED_CALENDAR, Event, EventCalendar, Listing
+from .models import FEATURED_CALENDAR, Event, EventCalendar, Listing, ListingRenewal
 from .scraper.images import ImageRejected, process_image
 from .scraper.text import GUAM_TZ
 from .settings import Settings
@@ -343,10 +347,17 @@ def create(
 
 
 def delete_stale(session: Session, now: datetime, media_dir: Path) -> int:
-    """Delete the listings that were never paid for, UNPAID_DAYS after they were made."""
+    """Delete the listings that were never paid for, UNPAID_DAYS after they
+    were made, and the renewals that were never paid for."""
+    cutoff = now - timedelta(days=UNPAID_DAYS)
+    session.execute(
+        delete(ListingRenewal).where(
+            ListingRenewal.paid_at.is_(None), ListingRenewal.created_at < cutoff
+        )
+    )
     old = session.execute(
         delete(Listing)
-        .where(Listing.status == UNPAID, Listing.created_at < now - timedelta(days=UNPAID_DAYS))
+        .where(Listing.status == UNPAID, Listing.created_at < cutoff)
         .returning(Listing.photo)
     ).all()
     for (photo,) in old:
@@ -400,7 +411,11 @@ def mark_paid(
                 update(Listing)
                 .where(Listing.id == listing_id, Listing.status == UNPAID)
                 .values(
-                    status=REVIEW, order_id=order_id, capture_id=capture.capture_id, paid_at=now
+                    status=REVIEW,
+                    order_id=order_id,
+                    capture_id=capture.capture_id,
+                    paid_at=now,
+                    email=capture.payer_email,
                 )
             ).rowcount
     except IntegrityError as exc:
@@ -482,3 +497,65 @@ def take_down(session: Session, listing_id: int, now: datetime) -> bool:
 def upgraded(listing: Listing, now: datetime) -> bool:
     """A business whose upgrade (photo, link and top spot) has not ended."""
     return bool(listing.featured and listing.live_until and listing.live_until > now)
+
+
+# --------------------------------------------------------------- renewals
+
+
+def renewable(settings: Settings, listing: Listing) -> bool:
+    """A live listing that its poster can pay to keep on the site for more
+    days, also after it has ended: a classified ad, a job post, or a
+    business's upgrade. (A featured event shows until it is over.) Only
+    while that kind is for sale."""
+    if listing.status != LIVE or days(settings, listing.kind) is None:
+        return False
+    return is_on(settings, listing.kind) and (listing.kind != "business" or listing.featured)
+
+
+def start_renewal(
+    session: Session, listing_id: int, order_id: str, amount_cents: int, length: int
+) -> None:
+    """Remember the PayPal order of a "Renew" click: its price and its days."""
+    session.add(
+        ListingRenewal(
+            listing_id=listing_id, order_id=order_id, amount_cents=amount_cents, days=length
+        )
+    )
+
+
+def record_renewal(
+    session: Session, listing_id: int, order_id: str, capture: paypal.Capture, now: datetime
+) -> str:
+    """Record the payment of a renewal, and add its days to the listing: from
+    its end, or from now when it has ended. Returns "ok"; "done" when it was
+    recorded already; "gone" when the listing is not live any more (the
+    caller gives the money back). Raises PaymentMismatch when the payment is
+    not the renewal's price, or not of this listing's renewal."""
+    renewal = session.scalars(
+        select(ListingRenewal)
+        .where(ListingRenewal.order_id == order_id, ListingRenewal.listing_id == listing_id)
+        .with_for_update()
+    ).first()
+    if renewal is None or not capture.capture_id:
+        raise PaymentMismatch("not a payment of a renewal of this listing")
+    if renewal.paid_at is not None:
+        return "done"
+    if capture.amount_cents != renewal.amount_cents or capture.currency != paypal.CURRENCY:
+        raise PaymentMismatch(
+            f"paid {capture.amount_cents} {capture.currency}, the price is"
+            f" {renewal.amount_cents} {paypal.CURRENCY}"
+        )
+    listing = session.get(Listing, listing_id, with_for_update=True)
+    if listing is None or listing.status != LIVE:
+        session.delete(renewal)
+        return "gone"
+    start = max(listing.live_until or now, now)
+    listing.live_until = start + timedelta(days=renewal.days)
+    listing.reminded_at = None
+    listing.email = capture.payer_email or listing.email
+    renewal.capture_id, renewal.paid_at = capture.capture_id, now
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise PaymentMismatch("this payment was recorded for another renewal") from exc
+    return "ok"
