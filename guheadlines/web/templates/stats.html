@@ -62,11 +62,12 @@
 </details>
 {% endif %}
 
-{% if settings.sponsor_image or sponsor_clicks %}
+{% if settings.sponsor_image or sponsor_clicks or advertise %}
 <h2 class="section-title">Sponsor spot</h2>
 <p class="muted section-note">The sponsor's picture is at the top of the right-hand column of every page
   (below the stories on phones), so it was on every page view. A click counts when a reader follows the
-  picture to the sponsor's website. If you changed the sponsor in this period, the numbers include both.</p>
+  picture to the sponsor's website. If you changed the sponsor in this period, the numbers include both.
+  {%- if advertise %} Ads that businesses book are on the <a href="/advertise/review">Ad bookings</a> page.{% endif %}</p>
 <dl class="job-facts stats-totals">
   <div><dt>Page views</dt><dd>{{ "{:,}".format(views) }}</dd></div>
   <div><dt>Sponsor clicks</dt><dd>{{ "{:,}".format(sponsor_clicks) }}</dd></div>

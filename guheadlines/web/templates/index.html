@@ -33,11 +33,18 @@
 </div>
 {% endif %}
 
+{# The second ad unit goes after this many stories, when more stories follow. #}
+{% set ad_after = 5 %}
+{% set stories_ad = show_ad and settings.adsense_stories_slot and result.items|length > ad_after %}
+{% set shown = namespace(count=0) %}
 {% for label, items in groups %}
 {% set first_day = loop.first %}
 <section class="day">
   <h2 class="day-label">{{ label }}</h2>
-  {% for item in items %}{{ card(item, category_names, first=first_day and loop.first) }}{% endfor %}
+  {% for item in items %}{{ card(item, category_names, first=first_day and loop.first) }}
+  {%- set shown.count = shown.count + 1 %}
+  {%- if stories_ad and shown.count == ad_after %}{% include "_ad_stories.html" %}{% endif %}
+  {%- endfor %}
 </section>
 {% endfor %}
 

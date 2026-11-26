@@ -225,10 +225,12 @@ def sitemap_entries(
     events: Iterable[int] = (),
     outages: bool = False,
     listings: Iterable[str] = (),
+    advertise: bool = False,
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events
     and each upcoming event's page (`events`: their IDs), bids, the Weather page (when
-    `weather` is on), the Outages page (when `outages` is on), the Sources page, and
+    `weather` is on), the Outages page (when `outages` is on), the Advertise page
+    (when `advertise` is on), the Sources page, and
     the archive down to each day that has stories, and the pages of paid
     listings that are on (`listings`: their paths). `data` comes from
     queries.sitemap_data; `sources` are the slugs of news sources to list."""
@@ -250,6 +252,8 @@ def sitemap_entries(
         entries.append((url("/weather"), None))
     if outages:
         entries.append((url("/outages"), None))
+    if advertise:
+        entries.append((url("/advertise"), None))
     entries.append((url("/status"), None))
     if data["days"]:
         entries.append((url("/archive"), latest))

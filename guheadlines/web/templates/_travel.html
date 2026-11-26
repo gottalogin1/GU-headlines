@@ -1,0 +1,14 @@
+{# The "Plan a trip" box on the Weather and Events pages: the affiliate links
+   that are set (AFFILIATE_*_LINK, docs/settings.md#affiliate-links).
+   rel="sponsored" tells search engines that these are paid links, as Google
+   asks. The note under the links tells readers the same. #}
+<section class="panel travel" aria-labelledby="travel-title">
+  <h2 id="travel-title">Plan a trip</h2>
+  <ul class="facets">
+    {% for link in travel %}
+    <li><a href="{{ link.href }}" target="_blank" rel="sponsored noopener">{{ link.label }} ↗</a></li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Affiliate links: if you book through one, this site can earn a small
+    commission, at no extra cost to you.</p>
+</section>

@@ -10,6 +10,8 @@ lxml==6.1.3
 pillow==13.0.0
 psycopg[binary]==3.3.6
 python-dateutil==2.9.0.post0
+# Reads the Advertise page's booking form, which carries the sponsor's picture.
+python-multipart==0.0.33
 PyYAML==6.0.3
 SQLAlchemy==2.1.1
 trafilatura==2.2.0

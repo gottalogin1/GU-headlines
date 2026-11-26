@@ -62,9 +62,12 @@
   <div class="wrap layout">
     <main id="main">{% block main %}{% endblock %}</main>
     <aside class="sidebar">
-      {% if sponsor %}{% include "_sponsor.html" %}{% endif %}
+      {% if sponsor %}{% include "_sponsor.html" %}
+      {% elif "site" in advertise %}{% include "_sponsor_open.html" %}{% endif %}
       {% if show_ad %}{% include "_ad.html" %}{% endif %}
+      {% if travel %}{% include "_travel.html" %}{% endif %}
       {% if signup and show_signup %}{% include "_signup_box.html" %}{% endif %}
+      {% if settings.paypal_donate_link %}{% include "_donate.html" %}{% endif %}
       {% block sidebar %}{% include "_sidebar.html" %}{% endblock %}
     </aside>
   </div>
@@ -78,6 +81,7 @@
       {%- if signup %} · <a href="/newsletter">Newsletter</a>{% endif %}
       {%- if offers.classified %} · <a href="/classifieds">Classifieds</a>{% endif %}
       {%- if offers.business %} · <a href="/directory">Business directory</a>{% endif %}
+      {%- if advertise %} · <a href="/advertise">Advertise</a>{% endif %}
     </div>
   </footer>
 </body>

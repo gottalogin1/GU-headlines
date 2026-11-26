@@ -31,10 +31,11 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import alerts, gas, health, listings, paypal, sendfox
+from .. import ads, alerts, gas, health, listings, paypal, sendfox
 from ..config import (
     AppConfig,
     CalendarConfig,
@@ -47,12 +48,13 @@ from ..config import (
 from ..db import session_scope
 from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
-from ..models import CATCH_UP_NOTE, FEATURED_CALENDAR, Article, Listing, Source
+from ..models import CATCH_UP_NOTE, FEATURED_CALENDAR, AdBooking, Article, Listing, Source
 from ..newsletter import schedule_text
 from ..outages import EPA_URL, GPA_TROUBLE_PHONE, GPA_URL, GWA_DISPATCH_PHONE, GWA_URL, outages_page
 from ..scraper.images import SMALL_WIDTH, ImageRejected, small_image_path
 from ..scraper.text import GUAM_TZ, truncate
 from ..settings import DAY_NAMES, get_settings
+from ..settings import _web_address as web_address
 from ..weather import (
     GUAM_RADAR_URL,
     JTWC_URL,
@@ -668,8 +670,43 @@ def gas_prices(config) -> list[gas.Price]:
     return gas.latest_prices([gas.Story(**row) for row in rows])
 
 
+def advertising() -> list[ads.Offer]:
+    """What the Advertise page sells (ads.py), or [] while it is off. It needs
+    a price, PayPal (paypal.py), and STATS_PASSWORD, which opens the owner's
+    review page."""
+    if not (settings.stats_password and paypal.enabled(settings)):
+        return []
+    return ads.offers(settings)
+
+
+# This week's booked ad is looked for on every page, so it is kept for a minute.
+ad_cache = _TTLCache(ttl=60)
+
+
+def booked_site_ad() -> AdBooking | None:
+    """The approved ad booked for this week's sponsor spot (ads.py), if any."""
+
+    def find() -> AdBooking | None:
+        with session_scope() as session:
+            return ads.site_ad(session, datetime.now(GUAM_TZ).date())
+
+    return ad_cache.get("site", find)
+
+
 def sponsor_ad() -> dict | None:
-    """The sponsor spot (_sponsor.html), or None while SPONSOR_IMAGE has no picture."""
+    """The sponsor spot (_sponsor.html): this week's booked ad, else the
+    picture in SPONSOR_IMAGE; None when there is neither."""
+    booked = booked_site_ad()
+    if booked is not None and booked.picture:
+        return {
+            "src": f"/sponsor.webp?v=b{booked.id}",
+            "width": booked.picture_width,
+            "height": booked.picture_height,
+            "alt": booked.words,
+            # /go/ad/<id> counts the click (while the visitor stats are on).
+            "href": f"/go/ad/{booked.id}",
+            "rel": "nofollow sponsored noopener",
+        }
     picture = sponsor.picture(settings)
     if picture is None:
         return None
@@ -684,6 +721,25 @@ def sponsor_ad() -> dict | None:
         "href": "/go/sponsor" if counted else link,
         "rel": "nofollow sponsored noopener" if counted else "sponsored noopener",
     }
+
+
+# The lines of the "Plan a trip" box (_travel.html), each with the setting
+# that holds its affiliate link.
+TRAVEL_LINKS = (
+    ("Hotels", "affiliate_hotels_link"),
+    ("Flights", "affiliate_flights_link"),
+    ("Tours and activities", "affiliate_tours_link"),
+    ("Car rentals", "affiliate_cars_link"),
+)
+
+
+def travel_links() -> list[dict]:
+    """The "Plan a trip" box: one line for each affiliate link that is set."""
+    return [
+        {"label": label, "href": getattr(settings, name)}
+        for label, name in TRAVEL_LINKS
+        if getattr(settings, name)
+    ]
 
 
 def _days_text(days: tuple[int, ...], word: str) -> str:
@@ -746,6 +802,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
     context.setdefault("title", None)
     count_view = context.pop("count_view", True)
     show_signup = context.pop("show_signup", True)
+    show_travel = context.pop("show_travel", False)
     # The ad block, on the pages that ask for it, once AdSense is set up.
     show_ad = context.pop("show_ad", False) and bool(
         settings.adsense_client and settings.adsense_slot
@@ -774,9 +831,12 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "show_ad": show_ad,
             "csp_nonce": nonce,
             "sponsor": sponsor_ad(),
+            # What the Advertise page sells ("site", "newsletter"): its links show.
+            "advertise": [offer.kind for offer in advertising()],
             "signup": signup_info(),
             "show_signup": show_signup,
             "offers": paid_listings(),
+            "travel": travel_links() if show_travel else None,
             "weather": (
                 for_page(
                     weather_reports(),
@@ -1073,6 +1133,7 @@ def status(request: Request):
         sources=sources,
         uncollectable=config.uncollectable_sources,
         runs=runs,
+        affiliate_links=bool(travel_links()),
         title="Sources",
         active_nav="status",
         canonical={},
@@ -1098,6 +1159,7 @@ def weather_view(request: Request):
         active_nav="weather",
         canonical={},
         breadcrumbs=[("Weather", None)],
+        show_travel=True,
     )
 
 
@@ -1252,6 +1314,7 @@ def events(
         robots="noindex, follow" if event_filters.q or month or day else None,
         breadcrumbs=[("Events", None)],
         show_ad=True,
+        show_travel=True,
     )
 
 
@@ -1333,6 +1396,7 @@ def event_page(request: Request, event_id: int):
         breadcrumbs=[("Events", "/events"), (event.title, None)],
         structured=[structured] if structured else None,
         show_ad=True,
+        show_travel=True,
     )
 
 
@@ -1482,24 +1546,56 @@ def go_sponsor(request: Request):
 
 @app.get("/sponsor.webp")
 def sponsor_picture(v: str = Query("", max_length=20)):
-    """The sponsor's picture: the small WebP copy that web/sponsor.py makes."""
-    picture = sponsor.picture(settings)
-    if picture is None:
-        raise HTTPException(404)
+    """The sponsor's picture: this week's booked ad (ads.py), else the small
+    WebP copy of SPONSOR_IMAGE that web/sponsor.py makes."""
+    booked = booked_site_ad()
+    if booked is not None and booked.picture:
+        version, data = f"b{booked.id}", booked.picture
+    else:
+        picture = sponsor.picture(settings)
+        if picture is None:
+            raise HTTPException(404)
+        version, data = picture.version, picture.data
     # The page's address for it carries the version, so a new picture gets a new address.
-    cache = "public, max-age=31536000, immutable" if v == picture.version else "public, max-age=300"
+    cache = "public, max-age=31536000, immutable" if v == version else "public, max-age=300"
     return Response(
-        picture.data,
+        data,
         media_type="image/webp",
         headers={"Cache-Control": cache, "X-Robots-Tag": "noindex"},
     )
 
 
+@app.get("/go/ad/{booking_id}")
+def go_ad(request: Request, booking_id: int):
+    """Count a click on a booked ad (the sponsor spot, or the sponsor line in
+    the newsletter), then send the reader on to the business's website. Only
+    an approved booking's own address is used."""
+    if not 1 <= booking_id < 2**31:
+        raise HTTPException(404)
+    with session_scope() as session:
+        booking = ads.approved(session, booking_id)
+        link, kind = (safe_url(booking.link), booking.kind) if booking else ("", None)
+    if not link:
+        raise HTTPException(404)
+    if settings.stats_password and stats.is_reader(request):
+        stats.counts.ad_click(booking_id)
+        if kind == ads.SITE:  # also in the stats page's "Sponsor spot" box
+            stats.counts.sponsor_click()
+    return RedirectResponse(
+        link, status_code=302, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
+    )
+
+
 @app.get("/go/{article_id}")
-def go(request: Request, article_id: int):
+def go(
+    request: Request,
+    article_id: int,
+    from_: str = Query("", alias="from", max_length=20),
+):
     """Count a click on a story's link, then send the reader on to the story.
     Only a stored story's own address is used, so nobody can make a link here
-    that leads to another site."""
+    that leads to another site. The links in the newsletter end in
+    ?from=newsletter, so the clicks from the emails are counted too."""
     if not 1 <= article_id < 2**63:
         raise HTTPException(404)
     with session_scope() as session:
@@ -1508,6 +1604,8 @@ def go(request: Request, article_id: int):
         raise HTTPException(404)
     if settings.stats_password and stats.is_reader(request):
         stats.counts.click(article_id)
+        if from_ == "newsletter":
+            stats.counts.newsletter_click()
     return RedirectResponse(
         link, status_code=302, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
     )
@@ -1591,6 +1689,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/events": "Events",
         "/weather": "Weather",
         "/outages": "Outages",
+        "/advertise": "Advertise",
         "/status": "Sources",
         "/search": "Search",
         "/classifieds": "Classifieds",
@@ -1656,6 +1755,9 @@ def robots(request: Request):
         # Each poster's own page of a paid listing, and the review page.
         "Disallow: /listing/\n"
         "Disallow: /admin/\n"
+        # A booking's own page and the owner's review page (the Advertise page
+        # itself, /advertise, is for everyone).
+        "Disallow: /advertise/\n"
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
     )
@@ -1706,6 +1808,7 @@ def sitemap(request: Request):
             for kind in ("classified", "business")
             if listings.is_on(settings, kind)
         ],
+        advertise=bool(advertising()),
     )
     return Response(
         seo.sitemap_xml(entries),
@@ -1732,6 +1835,10 @@ def newsletter_feed(request: Request):
         raise HTTPException(404)
     with session_scope() as session:
         formed_at, rows = queries.newsletter_edition(session, _muted()) or (None, [])
+        # The sponsor line that a business booked for this edition (ads.py).
+        booked = None
+        if formed_at:
+            booked = ads.newsletter_ad(session, formed_at.astimezone(GUAM_TZ).date())
     base = seo.base_url(request)
     items = []
     for row in rows:
@@ -1739,6 +1846,8 @@ def newsletter_feed(request: Request):
         link = story_link(a)  # /go/<id> while visitor stats are on
         if not link:
             continue
+        if link.startswith("/go/"):
+            link += "?from=newsletter"  # counted as a click from the newsletter
         photo = f"{base}/media/{a.image_path}" if a.image_path else safe_url(a.image_url)
         items.append(
             {
@@ -1763,6 +1872,18 @@ def newsletter_feed(request: Request):
         schedule=schedule_text(settings.newsletter_days, settings.newsletter_time),
         formed=format_datetime(formed_at.astimezone(GUAM_TZ)) if formed_at else None,
         items=items,
+        sponsor=(
+            {
+                "business": _xml_text(booked.business),
+                "words": _xml_text(booked.words),
+                "link": f"{base}/go/ad/{booked.id}",
+                "domain": domain(booked.link),
+                # One for each edition, so the email service sees it as new each time.
+                "guid": f"{base}/advertise#ad-{booked.id}-{formed_at.astimezone(GUAM_TZ):%Y-%m-%d}",
+            }
+            if booked
+            else None
+        ),
     )
     return Response(
         xml,
@@ -2335,6 +2456,542 @@ async def review_listing(request: Request, listing_id: int):
     result = await run_in_threadpool(_review, request, listing_id, action, note)
     return RedirectResponse(
         f"/admin/listings?done={result}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+# ------------------------------------------------------------ advertising
+# The Advertise page: businesses book the sponsor spot by the week, or the
+# newsletter's sponsor line by the edition, and pay through PayPal; the owner
+# approves each ad on /advertise/review. See ads.py.
+
+booking_limit = SignupLimit(per_address=10, total=60)
+# The booking form with its picture, and a little room for the other fields.
+MAX_BOOKING_BODY = ads.MAX_PICTURE_BYTES + 64 * 1024
+# The numbers on the Advertise page are counted again at most every ten minutes.
+audience_cache = _TTLCache(ttl=600)
+
+AD_NAMES = {ads.SITE: "Sponsor spot", ads.NEWSLETTER: "Newsletter sponsor"}
+
+
+def _list_words(words: list[str]) -> str:
+    if len(words) <= 1:
+        return "".join(words)
+    return ", ".join(words[:-1]) + f" and {words[-1]}"
+
+
+def ad_when(booking: AdBooking, first: bool = False) -> str:
+    """When a booked ad shows: "the weeks of Dec 7 and Dec 14, 2026", "the
+    editions of Tue, Dec 8 and Fri, Dec 11" ("The ..." with `first`, to start
+    a sentence)."""
+    days = sorted(booking.days)
+    if booking.kind == ads.SITE:
+        words = [f"{d:%b} {d.day}" for d in days]
+        text = f"the week{'s' if len(days) > 1 else ''} of {_list_words(words)}, {days[-1].year}"
+    else:
+        words = [_short_day(d) for d in days]
+        text = f"the edition{'s' if len(days) > 1 else ''} of {_list_words(words)}"
+    return "T" + text[1:] if first else text
+
+
+templates.env.globals.update(ad_when=ad_when, money=ads.money, ad_names=AD_NAMES)
+
+
+def _ad_form_values(form, offer: ads.Offer, now: datetime) -> tuple[dict, dict]:
+    """The booking form's fields, cleaned, and the problems with them (words
+    for the business, by field name)."""
+    text = lambda name, limit: " ".join(str(form.get(name) or "").split())[:limit]  # noqa: E731
+    link = str(form.get("link") or "").strip()[:2000]
+    if link and "://" not in link and re.fullmatch(r"[\w-]+(\.[\w-]+)+(/\S*)?", link):
+        link = "https://" + link  # "example.com" as most people type it
+    values = {
+        "business": text("business", 200),
+        "email": str(form.get("email") or "").strip()[:300],
+        "link": link,
+        "words": text("words", 1000),
+        "days": [str(d) for d in form.getlist("day")][:60],
+    }
+    allowed = {d.isoformat(): d for d in ads.choices(settings, offer.kind, now)}
+    values["picked"] = sorted({allowed[d] for d in values["days"] if d in allowed})
+    errors = {}
+    if not values["picked"]:
+        errors["days"] = f"Pick at least one {offer.unit}."
+    if not 2 <= len(values["business"]) <= ads.MAX_BUSINESS:
+        errors["business"] = f"Give the business's name (up to {ads.MAX_BUSINESS} letters)."
+    if len(values["email"]) > 254 or not _EMAIL.fullmatch(values["email"]):
+        errors["email"] = "That doesn't look like an email address."
+    if not web_address(values["link"]):
+        errors["link"] = "Give the full address of the website, such as https://example.com."
+    longest = ads.MAX_WORDS[offer.kind]
+    if offer.kind == ads.SITE and not 3 <= len(values["words"]) <= longest:
+        errors["words"] = (
+            f"Say what the picture shows, in up to {longest} letters, for people who can't see it."
+        )
+    if offer.kind == ads.NEWSLETTER and not 10 <= len(values["words"]) <= longest:
+        errors["words"] = f"Write the sponsor line, from 10 to {longest} letters."
+    if ads.refused([values["business"], values["link"], values["words"]], _muted()):
+        errors["form"] = "Sorry, this ad can't be booked on this site."
+    return values, errors
+
+
+def _advertise_page(
+    request: Request,
+    *,
+    status_code: int = 200,
+    form_kind: str | None = None,
+    values: dict | None = None,
+    errors: dict | None = None,
+) -> HTMLResponse:
+    offers = advertising()
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(GUAM_TZ).date()
+    with session_scope() as session:
+        ads.release_expired(session, now)
+        numbers = audience_cache.get(str(today), lambda: ads.audience(session, today))
+        forms = []
+        for offer in offers:
+            days = ads.choices(settings, offer.kind, now)
+            held = ads.taken(session, offer.kind, days)
+            # (day, last day of its week or None, taken)
+            last = timedelta(days=6) if offer.kind == ads.SITE else None
+            forms.append(
+                {"offer": offer, "days": [(d, last and d + last, d in held) for d in days]}
+            )
+    response = render(
+        request,
+        "advertise.html",
+        status_code=status_code,
+        title="Advertise",
+        description=(
+            f"Put your business in front of Guam readers on {settings.site_name}: the sponsor"
+            " spot on every page, or the sponsor line in the newsletter. See the real numbers,"
+            " book online and pay with PayPal."
+        ),
+        canonical={},
+        robots="noindex, follow" if status_code != 200 else None,
+        breadcrumbs=[("Advertise", None)],
+        numbers=numbers,
+        forms=forms,
+        form_kind=form_kind,
+        values=values or {},
+        errors=errors or {},
+        newsletter_schedule=(
+            schedule_text(settings.newsletter_days, settings.newsletter_time)
+            if settings.newsletter_days
+            else ""
+        ),
+        hold_minutes=ads.HOLD_MINUTES,
+        max_picture_mb=ads.MAX_PICTURE_BYTES // (1024 * 1024),
+    )
+    # The open weeks change as businesses book them.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.get("/advertise", response_class=HTMLResponse)
+def advertise(request: Request):
+    """What a business can buy, the site's real numbers, and the booking forms."""
+    if not advertising():
+        raise HTTPException(404)
+    return _advertise_page(request)
+
+
+@app.post("/advertise")
+async def advertise_book(request: Request):
+    """The booking form: check it, hold the weeks, and send the business to
+    its booking's own page, where it pays."""
+    offers = {offer.kind: offer for offer in advertising()}
+    if not offers:
+        raise HTTPException(404)
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the booking form on the site.", status_code=403)
+    length = request.headers.get("content-length", "")
+    if not length.isdigit() or int(length) > MAX_BOOKING_BODY:
+        return PlainTextResponse(
+            f"Too large: the picture can be at most {ads.MAX_PICTURE_BYTES // 2**20} MB.",
+            status_code=413,
+        )
+    async with request.form(max_files=1, max_fields=40, max_part_size=16 * 1024) as form:
+        offer = offers.get(str(form.get("kind") or ""))
+        if offer is None:
+            return RedirectResponse("/advertise", status_code=303)
+        if form.get("website"):
+            # The field that people don't see: a robot filled it in.
+            return RedirectResponse("/advertise", status_code=303)
+        now = datetime.now(timezone.utc)
+        values, errors = _ad_form_values(form, offer, now)
+        picture = None
+        upload = form.get("picture")
+        if offer.kind == ads.SITE:
+            if not isinstance(upload, UploadFile) or not upload.filename:
+                errors["picture"] = "Choose the picture for the sponsor spot."
+            elif not errors:
+                data = await upload.read(ads.MAX_PICTURE_BYTES + 1)
+                try:
+                    picture = await run_in_threadpool(ads.picture_copy, data)
+                except ValueError as exc:
+                    errors["picture"] = str(exc)
+    if not errors and not booking_limit.allow(request.client.host if request.client else ""):
+        log.warning("ad booking refused: too many bookings in the last hour")
+        errors["form"] = "Too many bookings in a short time. Please try again in an hour."
+    if errors:
+        if offer.kind == ads.SITE and "picture" not in errors:
+            errors["picture"] = "Please choose the picture again."
+        return _advertise_page(
+            request, status_code=400, form_kind=offer.kind, values=values, errors=errors
+        )
+    try:
+        with session_scope() as session:
+            booking = ads.book(
+                session,
+                kind=offer.kind,
+                days=values["picked"],
+                business=values["business"],
+                email=values["email"],
+                link=values["link"],
+                words=values["words"],
+                price_cents=offer.price_cents,
+                picture=picture,
+                now=now,
+            )
+            code = booking.code
+            log.info("ad booking %d made (%s, not paid yet)", booking.id, offer.kind)
+    except ads.NotAvailable as exc:
+        names = [fmt_day(d) for d in exc.days]
+        errors["days"] = (
+            f"Sorry, someone else has just booked {_list_words(names)}. Please pick again."
+        )
+        return _advertise_page(
+            request, status_code=409, form_kind=offer.kind, values=values, errors=errors
+        )
+    return RedirectResponse(
+        f"/advertise/booking/{code}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+BOOKING_NOTES = {
+    "paid": (
+        True,
+        "Thank you, your payment went through. Your ad is waiting for a quick look before it"
+        " goes up. This page shows when it's approved.",
+    ),
+    "cancelled": (True, "The booking is cancelled, and nothing was charged."),
+    "taken": (
+        False,
+        "Sorry, while you were paying, someone else booked one of your dates. Nothing was"
+        " charged. Please book again on the Advertise page.",
+    ),
+    "stale": (
+        False,
+        "That payment was for an earlier try, so nothing was charged for it. Please press"
+        " the PayPal button again.",
+    ),
+    "declined": (
+        False,
+        "PayPal didn't finish the payment, so nothing was charged. Please try again, or pay"
+        " another way in PayPal.",
+    ),
+    "paypal": (
+        False,
+        "PayPal couldn't be reached just now, and nothing was charged. Please try again in a"
+        " few minutes.",
+    ),
+}
+
+
+def _private(response: Response) -> Response:
+    """For a booking's page and the owner's review page: never kept by a
+    browser or a search engine, and their addresses are not passed on."""
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+def _to_booking(code: str, note: str = "") -> RedirectResponse:
+    query = f"?note={note}" if note else ""
+    return RedirectResponse(
+        f"/advertise/booking/{code}{query}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/advertise/booking/{code}", response_class=HTMLResponse)
+def ad_booking_page(request: Request, code: str, note: str = Query("", max_length=20)):
+    """A booking's own page, which only the business that made it has the
+    address of: what it booked, the PayPal button, where it stands, and how
+    the ad has done."""
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        booking = ads.by_code(session, code)
+        if booking is None:
+            raise HTTPException(404)
+        if booking.status == "new":
+            ads.release_expired(session, now)
+            session.refresh(booking)
+        results = ads.results(session, booking, now.astimezone(GUAM_TZ).date())
+    found = BOOKING_NOTES.get(note)
+    response = render(
+        request,
+        "ad_booking.html",
+        title="Your ad booking",
+        robots="noindex, nofollow",
+        count_view=False,  # its address is a secret: it is not kept in the stats
+        booking=booking,
+        results=results,
+        expires_at=booking.created_at + timedelta(minutes=ads.HOLD_MINUTES),
+        can_pay=booking.status == "new" and paypal.enabled(settings),
+        message={"ok": found[0], "text": found[1]} if found else None,
+    )
+    return _private(response)
+
+
+@app.get("/advertise/booking/{code}/picture.webp")
+def ad_booking_picture(code: str):
+    with session_scope() as session:
+        booking = ads.by_code(session, code)
+        data = booking.picture if booking else None
+    if not data:
+        raise HTTPException(404)
+    return Response(
+        data,
+        media_type="image/webp",
+        headers={"Cache-Control": "private, max-age=3600", "X-Robots-Tag": "noindex"},
+    )
+
+
+def _is_paypal_page(url: str) -> bool:
+    """PayPal's own payment page (https, on paypal.com)."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    return parts.scheme == "https" and (host == "paypal.com" or host.endswith(".paypal.com"))
+
+
+@app.get("/advertise/booking/{code}/pay")
+def ad_booking_pay(request: Request, code: str):
+    """The PayPal button: make a PayPal order for the booking and send the
+    business to PayPal to pay. A plain link, not a form, because the security
+    rules let forms go only to this site."""
+    now = datetime.now(timezone.utc)
+    base = seo.base_url(request) + f"/advertise/booking/{code}"
+    with session_scope() as session:
+        booking = ads.by_code(session, code, lock=True)
+        if booking is None:
+            raise HTTPException(404)
+        ads.release_expired(session, now)
+        session.refresh(booking)
+        if booking.status != "new" or not paypal.enabled(settings):
+            return _to_booking(code)
+        try:
+            order = paypal.create_order(
+                settings,
+                amount_cents=booking.amount_cents,
+                description=f"{settings.site_name}: {AD_NAMES[booking.kind]}, {ad_when(booking)}",
+                custom_id=f"ad-booking-{booking.id}",
+                return_url=f"{base}/paid",
+                cancel_url=base,
+            )
+        except paypal.PayPalError as exc:
+            log.warning("ad booking %d: PayPal made no order: %s", booking.id, exc)
+            return _to_booking(code, "paypal")
+        if not _is_paypal_page(order.approve_url):
+            log.warning("ad booking %d: PayPal's page is not on paypal.com", booking.id)
+            return _to_booking(code, "paypal")
+        booking.paypal_order_id = order.id
+    return RedirectResponse(
+        order.approve_url, status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+def _booking_alert(booking: AdBooking, request: Request) -> alerts.Alert:
+    pending = " PayPal is still checking the payment." if booking.note else ""
+    return alerts.Alert(
+        title=f"{settings.site_name}: a new ad to approve",
+        message=(
+            f"{booking.business} paid {ads.money(booking.amount_cents)} for the"
+            f" {AD_NAMES[booking.kind].lower()}, {ad_when(booking)}.{pending} Approve it or turn"
+            f" it down: {seo.absolute_url(request, '/advertise/review')}"
+        ),
+        emoji="💵",
+    )
+
+
+@app.get("/advertise/booking/{code}/paid")
+def ad_booking_paid(request: Request, code: str, token: str = Query("", max_length=100)):
+    """Where PayPal sends the business back after it approves the payment
+    (?token=<the order>): take the money, and the booking waits for the owner."""
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        booking = ads.by_code(session, code, lock=True)
+        if booking is None:
+            raise HTTPException(404)
+        if booking.status not in ("new", "cancelled"):
+            return _to_booking(code)  # paid already (the page was loaded again)
+        if not token or token != booking.paypal_order_id:
+            return _to_booking(code, "stale")
+        # Not paid within the hold: its dates again, if they are still free.
+        if not ads.hold_again(session, booking):
+            return _to_booking(code, "taken")
+        try:
+            capture = paypal.capture_order(settings, token)
+        except paypal.PayPalError as exc:
+            log.warning("ad booking %d: PayPal did not take the payment: %s", booking.id, exc)
+            declined = exc.issue in ("INSTRUMENT_DECLINED", "ORDER_NOT_APPROVED")
+            return _to_booking(code, "declined" if declined else "paypal")
+        if capture.status not in ("COMPLETED", "PENDING"):
+            log.warning("ad booking %d: PayPal says the payment is %s", booking.id, capture.status)
+            return _to_booking(code, "declined")
+        wrong_amount = capture.amount_cents not in (None, booking.amount_cents)
+        wrong = wrong_amount or capture.currency not in (None, paypal.CURRENCY)
+        if wrong:
+            log.error(
+                "ad booking %d: PayPal took %s %s, not %s; giving it back",
+                booking.id,
+                capture.amount_cents,
+                capture.currency,
+                booking.amount_cents,
+            )
+            if capture.capture_id:
+                try:
+                    paypal.refund_capture(settings, capture.capture_id)
+                except paypal.PayPalError as exc:
+                    log.error("ad booking %d: refund failed: %s", booking.id, exc)
+            return _to_booking(code, "paypal")
+        ads.mark_paid(session, booking, capture.capture_id, now)
+        if capture.status == "PENDING":
+            booking.note = "PayPal is still checking this payment (PENDING): look in PayPal first."
+        log.info("ad booking %d paid: waiting for approval", booking.id)
+        alert = _booking_alert(booking, request)
+    threading.Thread(target=alerts.send, args=(settings, alert), daemon=True).start()
+    return _to_booking(code, "paid")
+
+
+@app.post("/advertise/booking/{code}/cancel")
+def ad_booking_cancel(request: Request, code: str):
+    """The business cancels a booking that it has not paid for."""
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the button on the booking's page.", status_code=403)
+    with session_scope() as session:
+        booking = ads.by_code(session, code, lock=True)
+        if booking is None:
+            raise HTTPException(404)
+        if booking.status != "new":
+            return _to_booking(code)
+        ads.cancel(session, booking, "Cancelled by the business.")
+    return _to_booking(code, "cancelled")
+
+
+def _login_needed() -> PlainTextResponse:
+    """The browser's login box. The same realm as /stats, so one login opens both."""
+    return PlainTextResponse(
+        "This page needs a password.",
+        status_code=401,
+        headers={
+            "WWW-Authenticate": 'Basic realm="Visitor stats", charset="UTF-8"',
+            "Cache-Control": "no-store",
+            "X-Robots-Tag": "noindex",
+        },
+    )
+
+
+REVIEW_NOTES = {
+    "approved": (True, "Approved. The ad shows in its weeks."),
+    "rejected": (True, "Turned down. PayPal is giving the money back."),
+    "rejected-kept": (True, "Turned down, without a refund through the site."),
+    "refund-failed": (
+        False,
+        "PayPal could not refund the payment, so nothing was changed. Refund it in PayPal"
+        ' (Activity, then the payment, then Issue a refund), then press "Turn down, refunded'
+        ' in PayPal".',
+    ),
+    "unchanged": (False, "Nothing to change: the booking had already moved on."),
+}
+
+
+@app.get("/advertise/review", response_class=HTMLResponse)
+def ad_review(
+    request: Request,
+    done: str = Query("", max_length=20),
+    booking: int = Query(0, ge=0, le=2**31),
+):
+    """The owner's list of booked ads, to approve or turn down (STATS_PASSWORD)."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _login_needed()
+    stats.counts.flush()
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(GUAM_TZ).date()
+    with session_scope() as session:
+        ads.release_expired(session, now)
+        rows = ads.for_review(session)
+        results = {b.id: ads.results(session, b, today) for b in rows}
+    found = REVIEW_NOTES.get(done)
+    response = render(
+        request,
+        "ad_review.html",
+        title="Ad bookings",
+        robots="noindex, nofollow",
+        count_view=False,
+        bookings=rows,
+        results=results,
+        today=today,
+        selling=advertising(),
+        last_day=ads.last_day,
+        message={"ok": found[0], "text": found[1], "booking": booking} if found else None,
+    )
+    return _private(response)
+
+
+@app.post("/advertise/review/{booking_id}")
+async def ad_review_decide(request: Request, booking_id: int):
+    """Approve a paid booking, or turn it down (PayPal refunds it)."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _login_needed()
+    if not _from_this_site(request) or not 1 <= booking_id < 2**31:
+        return PlainTextResponse("Please use the buttons on the review page.", status_code=403)
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > _MAX_SIGNUP_BODY:
+            return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
+    action = (form.get("action") or [""])[0]
+    note = " ".join((form.get("note") or [""])[0].split())[:500]
+
+    def decide() -> str:
+        now = datetime.now(timezone.utc)
+        with session_scope() as session:
+            found = session.get(AdBooking, booking_id, with_for_update=True)
+            if found is None:
+                raise HTTPException(404)
+            if action == "approve" and found.status == "paid":
+                ads.approve(found, now)
+                log.info("ad booking %d approved", found.id)
+                return "approved"
+            if action in ("reject", "reject-kept") and found.status in ("paid", "approved"):
+                if action == "reject" and found.paypal_capture_id:
+                    try:
+                        paypal.refund_capture(settings, found.paypal_capture_id)
+                    except paypal.PayPalError as exc:
+                        log.warning("ad booking %d: refund failed: %s", found.id, exc)
+                        return "refund-failed"
+                ads.reject(session, found, note, now)
+                log.info("ad booking %d turned down", found.id)
+                return "rejected" if action == "reject" else "rejected-kept"
+            return "unchanged"
+
+    result = await run_in_threadpool(decide)
+    ad_cache._data.clear()  # this web worker shows the change at once
+    return RedirectResponse(
+        f"/advertise/review?done={result}&booking={booking_id}#booking-{booking_id}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
     )
 
 

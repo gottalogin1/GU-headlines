@@ -1,8 +1,8 @@
 """Paid listings: classified ads, featured job posts, featured events and the
 business directory (listings.py).
 
-Revision ID: 0012_listings
-Revises: 0011_bids
+Revision ID: 0013_listings
+Revises: 0012_ad_bookings
 Create Date: 2026-11-25
 """
 
@@ -11,8 +11,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0012_listings"
-down_revision = "0011_bids"
+revision = "0013_listings"
+down_revision = "0012_ad_bookings"
 branch_labels = None
 depends_on = None
 
