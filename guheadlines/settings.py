@@ -139,6 +139,18 @@ class Settings:
     paypal_client_id: str = ""
     paypal_client_secret: str = ""
     paypal_mode: str = "sandbox"
+    # Paid listings (see listings.py): the price of each kind, in US cents
+    # (0 turns that kind off), and how many days it shows. A featured event
+    # shows until the event is over. A basic business entry is free; the
+    # upgrade (photo, link and top spot) costs business_upgrade_price_cents
+    # for business_upgrade_days.
+    classified_price_cents: int = 500
+    classified_days: int = 30
+    featured_job_price_cents: int = 2500
+    featured_job_days: int = 7
+    featured_event_price_cents: int = 1500
+    business_upgrade_price_cents: int = 5000
+    business_upgrade_days: int = 365
 
     @property
     def sources_file(self) -> Path:
@@ -271,6 +283,18 @@ def _clock(value: str | None, default: time) -> time:
     return time(hour, minute)
 
 
+def _cents(value: str | None, default: int) -> int:
+    """CLASSIFIED_PRICE "5", "5.00" or "$5" -> 500 (US cents). 0 is 0. The
+    default when the setting is missing, empty or not an amount from 0 to
+    10,000 dollars."""
+    text = (value or "").strip().lstrip("$").replace(",", "").strip()
+    if not re.fullmatch(r"\d{1,5}(\.\d{1,2})?", text):
+        return default
+    whole, _, part = text.partition(".")
+    cents = int(whole) * 100 + int((part + "00")[:2])
+    return cents if cents <= 1_000_000 else default
+
+
 def _paypal_mode(value: str | None) -> str:
     """PAYPAL_MODE: "live" for real payments; anything else is "sandbox"."""
     return "live" if (value or "").strip().lower() in ("live", "production") else "sandbox"
@@ -345,6 +369,25 @@ def load_settings() -> Settings:
         paypal_client_id=env.get("PAYPAL_CLIENT_ID", "").strip(),
         paypal_client_secret=env.get("PAYPAL_CLIENT_SECRET", "").strip(),
         paypal_mode=_paypal_mode(env.get("PAYPAL_MODE")),
+        classified_price_cents=_cents(env.get("CLASSIFIED_PRICE"), defaults.classified_price_cents),
+        classified_days=max(
+            1, min(365, _int(env.get("CLASSIFIED_DAYS"), defaults.classified_days))
+        ),
+        featured_job_price_cents=_cents(
+            env.get("FEATURED_JOB_PRICE"), defaults.featured_job_price_cents
+        ),
+        featured_job_days=max(
+            1, min(365, _int(env.get("FEATURED_JOB_DAYS"), defaults.featured_job_days))
+        ),
+        featured_event_price_cents=_cents(
+            env.get("FEATURED_EVENT_PRICE"), defaults.featured_event_price_cents
+        ),
+        business_upgrade_price_cents=_cents(
+            env.get("BUSINESS_UPGRADE_PRICE"), defaults.business_upgrade_price_cents
+        ),
+        business_upgrade_days=max(
+            1, min(3650, _int(env.get("BUSINESS_UPGRADE_DAYS"), defaults.business_upgrade_days))
+        ),
     )
 
 

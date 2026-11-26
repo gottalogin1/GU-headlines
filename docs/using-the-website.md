@@ -213,6 +213,32 @@ page once their due date has passed. Use **Words**, **Agency** and
 of open bids and a red **⚠** when its last check failed. More in
 [Bids and RFPs](bids.md).
 
+## Classifieds, the business directory and featured listings
+
+These parts show once PayPal and `STATS_PASSWORD` are set (see
+[Paid listings](settings.md#paid-listings)). The **Buy, sell and find local**
+box in the sidebar and the links at the bottom of every page open them.
+
+- **Classifieds** lists ads that people on Guam paid for: for sale, cars and
+  trucks, housing, services and wanted. Each ad shows its section, title,
+  price, village, a phone number or email for buyers, a few lines and a photo
+  when there is one. Use **Words** and **Section** to narrow the list.
+  **Post an ad** opens the form.
+- **Business directory** lists Guam businesses by category and village.
+  Featured entries come first, with a photo and a link to the business's
+  website; the others follow by name. **Add your business** opens the form.
+- **Featured job posts** are pinned at the top of the Jobs page, with a gold
+  **Featured** tag. **Post a job** opens the form.
+- **Featured events** are at the top of the Events page and on the home page,
+  in gold on the month calendar, and in the calendar subscription, until the
+  event is over. **Feature your event** opens the form.
+
+After the form, the poster sees a private page with the listing and a **Pay
+with PayPal** link (with a PayPal account or a card). The address of that
+page is the poster's way back: there are no accounts. Each listing waits for
+the site's owner to approve it on `/admin/listings` before it shows; a
+rejected listing's payment is given back.
+
 ## The Sources page
 
 The **Sources** link at the bottom of every page opens a page that starts with **Why this site

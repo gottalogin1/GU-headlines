@@ -6,6 +6,31 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Paid listings through PayPal: classifieds, a business directory, and
+  featured jobs and events.** People can post a classified ad (for sale,
+  cars and trucks, housing, services, wanted) on a new **Classifieds** page;
+  employers can pin a job at the top of the Jobs page; organizers can feature
+  an event at the top of the Events page, in gold on the month calendar and
+  on the home page until it is over; businesses get a free entry in a new
+  **Business directory**, and a paid upgrade with a photo, a website link and
+  a place at the top. Nobody needs an account: the form leads to a private
+  page for the listing with a **Pay with PayPal** link (a PayPal account or a
+  card), and each listing waits for you on `/admin/listings` (your
+  `STATS_PASSWORD`) before it shows. Reject gives the money back through
+  PayPal. Discord tells you when a listing waits (with
+  `DISCORD_WEBHOOK_URL`). The pages load no PayPal script, so PageSpeed and
+  the security rules stay as they were. Links to the new pages are in a
+  sidebar box and at the bottom of every page (the top bar is full). Prices
+  and days are settings: `CLASSIFIED_PRICE` (default 5 dollars),
+  `CLASSIFIED_DAYS` (30), `FEATURED_JOB_PRICE` (25), `FEATURED_JOB_DAYS` (7),
+  `FEATURED_EVENT_PRICE` (15), `BUSINESS_UPGRADE_PRICE` (50) and
+  `BUSINESS_UPGRADE_DAYS` (365). It all stays off until you set
+  `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `STATS_PASSWORD`; the steps
+  are in `.env.example` (PayPal and Paid listings) and
+  [Paid listings](docs/settings.md#paid-listings). Test with
+  `PAYPAL_MODE=sandbox` first, and check the values with
+  `guheadlines paypal-check`. When you update, the database gets a new table
+  by itself.
 - **A Bids page.** A new **Bids** link lists the Government of Guam's open
   bids and requests for proposals, soonest due first: what each is for, its
   number, the agency, when offers are due (Guam time, with the days left),

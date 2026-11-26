@@ -98,6 +98,14 @@
     SendFox, the service that sends the emails, and is used only for the newsletter. Every email has
     a link to unsubscribe.</p>
   {% endif %}
+  {% if offers %}
+  <p><strong>Paid listings.</strong> Classified ads, entries in the business directory, and job
+    posts and events marked "Featured" are posted by the people and businesses they are about,
+    who pay for them (a basic directory entry is free). Each one is checked before it shows, but
+    {{ site }} does not check every claim in them, and they do not imply an endorsement by
+    {{ site }} or by the news outlets listed. Payments go through PayPal; {{ site }} never sees
+    card details.</p>
+  {% endif %}
   {% if sponsor %}
   <p><strong>Sponsor.</strong> The picture marked "Sponsor" is a paid ad from a local business. It
     does not imply an endorsement by {{ site }} or by the news outlets listed, and {{ site }} is not

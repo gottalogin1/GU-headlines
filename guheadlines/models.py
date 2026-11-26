@@ -411,3 +411,71 @@ class NewsletterEdition(Base):
     # The scheduled time of the edition (NEWSLETTER_DAYS at NEWSLETTER_TIME).
     formed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     article_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False)
+
+
+# The event calendar that holds the featured events that organizers pay for
+# (see listings.py). It is not in events.yaml, and the events pipeline leaves
+# it on.
+FEATURED_CALENDAR = "featured"
+
+
+class Listing(Base):
+    """A listing that someone posts on the site and pays for (see listings.py):
+    a classified ad, a featured job post, a featured event, or a business in
+    the directory (a basic entry is free). Fields a kind does not use are
+    left empty."""
+
+    __tablename__ = "listings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # "classified", "job", "event" or "business"
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    # "unpaid", "review" (paid, or free, and waiting for the owner of the
+    # site), "live", "rejected" or "removed" (taken down after it was live)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    # The secret part of the poster's own page (/listing/<id>/<key>).
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    # What is sold, the job title, the event's name or the business's name.
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    # The section of a classified ad, or the category of a business.
+    category: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+    # The village or address, or the event's place.
+    location: Mapped[str | None] = mapped_column(Text)
+    # The asking price of a classified ad, or the pay of a job.
+    price: Mapped[str | None] = mapped_column(Text)
+    # The employer of a job, or the organizer of an event.
+    name: Mapped[str | None] = mapped_column(Text)
+    # A phone number, an email address or "how to apply", shown as text.
+    contact: Mapped[str | None] = mapped_column(Text)
+    # A website, the page to apply on, or the event's own page.
+    link: Mapped[str | None] = mapped_column(Text)
+    # The photo, under the media folder (listings/<random>.webp).
+    photo: Mapped[str | None] = mapped_column(Text)
+    photo_width: Mapped[int | None] = mapped_column(Integer)
+    photo_height: Mapped[int | None] = mapped_column(Integer)
+    # An event's time; all_day when only the date is given.
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    all_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # A business that paid for the upgrade (photo, link and top spot).
+    featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The price, in US cents (0: free), and the PayPal order and payment.
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    order_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    capture_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Until when a live listing shows (classified ads and job posts), or until
+    # when a business's upgrade lasts. Empty: no end.
+    live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The featured event's copy on the events calendar, once approved.
+    event_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("events.id", ondelete="SET NULL")
+    )
+    # Why it was not accepted, for the poster's own page.
+    note: Mapped[str | None] = mapped_column(Text)

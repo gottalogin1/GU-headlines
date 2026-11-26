@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_listing.html" import card %}
+{# The poster's own page for a paid listing (/listing/<id>/<key>): how it
+   looks, the PayPal link while it is unpaid, and where it is now. Only
+   people with the address can open it. #}
+{% block main %}
+{% set l = listing %}
+<header class="page-head">
+  <h1>Your {{ kind.name|lower }}</h1>
+  <p class="muted">Keep this page's address to come back to your listing: <span class="feed-address">{{ address }}</span></p>
+</header>
+
+{% if result %}<p class="signup-result {{ 'ok' if result.ok else 'error' }}" role="status">{{ result.text }}</p>{% endif %}
+
+<section class="panel listing-status">
+  {% if l.status == "unpaid" %}
+    <h2>Pay to send it for review</h2>
+    <p>Check your listing below. If it is right, pay <strong>{{ l.amount_cents|money }}</strong> with PayPal: with a PayPal account, or with a card as a guest. PayPal then brings you back here.</p>
+    <p><a class="btn pay-link" href="/listing/{{ l.id }}/{{ l.key }}/pay">Pay {{ l.amount_cents|money }} with PayPal</a></p>
+    <p class="muted small">Each listing is checked before it shows, usually within a day. If it is not accepted, the payment is given back. To change something, <a href="/post/{{ l.kind }}">fill in the form again</a>; a listing that is never paid for is deleted after a week.</p>
+  {% elif l.status == "review" %}
+    <h2>Waiting for review</h2>
+    <p>{% if l.paid_at %}Paid {{ l.amount_cents|money }} on {{ l.paid_at|fmt_day }}. {% endif %}Your listing is checked before it shows, usually within a day. Come back to this page to see when it is on the site.</p>
+  {% elif l.status == "live" %}
+    <h2>On the site</h2>
+    <p>Your listing is on <a href="{% if l.kind == 'event' and l.event_id %}/events/{{ l.event_id }}{% else %}{{ kind.page }}{% endif %}">{% if l.kind == "event" %}the Events page{% elif l.kind == "job" %}the Jobs page{% elif l.kind == "business" %}the business directory{% else %}the Classifieds page{% endif %}</a>.
+    {% if l.kind == "business" %}{% if upgraded(l, now) %}It is featured until {{ l.live_until|fmt_day }}, and then stays as a basic entry.{% endif %}
+    {% elif l.live_until %}{% if l.live_until > now %}It shows until {{ l.live_until|fmt_day }}.{% else %}It ended on {{ l.live_until|fmt_day }}.{% endif %}{% endif %}</p>
+  {% elif l.status == "rejected" %}
+    <h2>Not accepted</h2>
+    <p>Sorry, this listing could not be accepted.{% if l.note %} The reason: {{ l.note }}{% endif %}
+    {% if l.refunded_at %} Your payment was given back to you through PayPal on {{ l.refunded_at|fmt_day }}.{% endif %}</p>
+  {% else %}
+    <h2>Taken down</h2>
+    <p>This listing is no longer on the site.</p>
+  {% endif %}
+</section>
+
+<h2 class="section-title">How it looks</h2>
+{{ card(l, now) }}
+{% endblock %}

@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block main %}
 {% set e = item.event %}
+{% set paid = item.calendar_slug == featured_calendar %}
 <header class="page-head">
   <p class="crumbs"><a href="/events">Events</a></p>
+  {% if paid %}<div class="tags"><span class="tag tag-featured">Featured event</span></div>{% endif %}
   <h1>{{ e.title }}</h1>
   <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}<span class="cal-dot{% if color %} cal-{{ color }}{% endif %}" aria-hidden="true"></span>{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
 </header>
@@ -17,7 +19,7 @@
     {% if e.url or e.agenda_url %}
     <p class="job-links">
       {% if e.url %}
-      <a class="read-link" href="{{ e.url|safe_url }}" target="_blank" rel="noopener">Details at <span class="read-domain">{{ e.url|domain }}</span>
+      <a class="read-link" href="{{ e.url|safe_url }}" target="_blank" rel="{{ 'sponsored noopener' if paid else 'noopener' }}">Details at <span class="read-domain">{{ e.url|domain }}</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
       </a>
       {% endif %}

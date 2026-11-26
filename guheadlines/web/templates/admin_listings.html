@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_listing.html" import card %}
+{# The owner's review page for paid listings (/admin/listings, behind
+   STATS_PASSWORD). The buttons post to /admin/listings/<id>. #}
+
+{% macro facts(l) %}
+<p class="muted small review-facts">
+  #{{ l.id }} · {{ listing_kinds[l.kind].name }}{% if l.kind == "business" %} ({{ "featured" if l.featured else "basic, free" }}){% endif %}
+  · sent {{ l.created_at|fmt_datetime }}
+  {% if l.paid_at %}· paid {{ l.amount_cents|money }} {{ l.paid_at|fmt_datetime }} (PayPal {{ l.capture_id }}){% endif %}
+  {% if l.live_until and l.status == "live" %}· shows until {{ l.live_until|fmt_day }}{% endif %}
+  · <a href="/listing/{{ l.id }}/{{ l.key }}">poster's page</a>
+</p>
+{% endmacro %}
+
+{% block main %}
+<header class="page-head">
+  <h1>Paid listings</h1>
+  <p class="muted">Paid in the last 30 days: <strong>{{ cents|money }}</strong> from {{ paid }} {{ "listing" if paid == 1 else "listings" }} (refunds left out). Payments arrive in your PayPal account.</p>
+</header>
+
+{% if message %}<p class="signup-result" role="status">{{ message }}</p>{% endif %}
+
+<h2 class="section-title">Waiting for review ({{ waiting|length }})</h2>
+{% if not waiting %}<p class="muted section-note">Nothing to review.</p>{% endif %}
+{% for l in waiting %}
+<div class="review-item">
+  {{ facts(l) }}
+  {{ card(l, now) }}
+  <div class="review-actions">
+    <form action="/admin/listings/{{ l.id }}" method="post">
+      <input type="hidden" name="action" value="approve">
+      <button class="btn" type="submit">Approve</button>
+    </form>
+    <form class="review-reject" action="/admin/listings/{{ l.id }}" method="post">
+      <input type="hidden" name="action" value="reject">
+      <label class="visually-hidden" for="note-{{ l.id }}">Reason for the poster</label>
+      <input id="note-{{ l.id }}" type="text" name="note" maxlength="300" placeholder="Reason, shown to the poster (optional)">
+      <button class="btn btn-quiet" type="submit">Reject{% if l.capture_id %} and give the money back{% endif %}</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<h2 class="section-title">On the site ({{ live|length }})</h2>
+{% if not live %}<p class="muted section-note">No paid listings are on the site.</p>{% endif %}
+<div class="table-wrap">
+<table class="status-table">
+  <tbody>
+  {% for l in live %}
+  <tr>
+    <td><strong>{{ l.title }}</strong><br><span class="muted small">{{ listing_kinds[l.kind].name }}{% if l.live_until %} · until {{ l.live_until|fmt_day }}{% endif %} · <a href="/listing/{{ l.id }}/{{ l.key }}">poster's page</a></span></td>
+    <td class="num">
+      <form action="/admin/listings/{{ l.id }}" method="post">
+        <input type="hidden" name="action" value="remove">
+        <button class="btn btn-quiet" type="submit">Take down</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="section-title">Waiting for payment ({{ unpaid|length }})</h2>
+<p class="muted section-note">Sent, but not paid yet. They are deleted after a week. If someone says they paid, "Check with PayPal" asks PayPal again.</p>
+{% if unpaid %}
+<div class="table-wrap">
+<table class="status-table">
+  <tbody>
+  {% for l in unpaid %}
+  <tr>
+    <td><strong>{{ l.title }}</strong><br><span class="muted small">{{ listing_kinds[l.kind].name }} · {{ l.amount_cents|money }} · sent {{ l.created_at|fmt_datetime }}</span></td>
+    <td class="num">{% if l.order_id %}
+      <form action="/admin/listings/{{ l.id }}" method="post">
+        <input type="hidden" name="action" value="check">
+        <button class="btn btn-quiet" type="submit">Check with PayPal</button>
+      </form>{% else %}<span class="muted small">Not sent to PayPal</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>How review works</h2>
+  <p class="small"><strong>Approve</strong> puts the listing on the site at once. Classified ads and job posts then show for their days; featured events until they are over.</p>
+  <p class="small"><strong>Reject</strong> gives a paid listing's money back through PayPal, and shows your reason on the poster's page.</p>
+  <p class="small"><strong>Take down</strong> removes a live listing without a refund. To refund it too, use the payment in your PayPal account.</p>
+</section>
+{% endblock %}

@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from ..bids.readers import number_key
+from ..listings import LIVE, REVIEW, UNPAID
 from ..models import (
     SEARCH_CONFIG,
     SPONSOR_CLICKS,
@@ -33,6 +34,7 @@ from ..models import (
     EventCalendar,
     Job,
     JobSource,
+    Listing,
     NewsletterEdition,
     PageViews,
     Referrers,
@@ -895,3 +897,75 @@ def newsletter_edition(
     rows = _rows(session, stmt)
     by_id = {row["article"].id: row for row in rows}
     return edition.formed_at, [by_id[i] for i in edition.article_ids if i in by_id]
+
+
+# --------------------------------------------------------------- listings
+
+
+def _showing(now: datetime):
+    """Paid listings (listings.py) that are on the site now."""
+    return and_(
+        Listing.status == LIVE,
+        or_(Listing.live_until.is_(None), Listing.live_until > now),
+    )
+
+
+def listings(
+    session: Session,
+    kind: str,
+    now: datetime,
+    *,
+    q: str = "",
+    category: str | None = None,
+    page: int = 1,
+    per_page: int = 30,
+) -> Page:
+    """The listings of one kind on the site now: upgraded businesses first,
+    then by name; the other kinds newest first."""
+    stmt = select(Listing).where(Listing.kind == kind, _showing(now))
+    if category:
+        stmt = stmt.where(Listing.category == category)
+    if q:
+        pattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(
+            " ",
+            Listing.title,
+            Listing.name,
+            Listing.category,
+            Listing.location,
+            Listing.description,
+        )
+        stmt = stmt.where(func.unaccent(words).ilike(func.unaccent(pattern)))
+    total = _count(session, stmt)
+    if kind == "business":
+        top = and_(Listing.featured.is_(True), Listing.live_until > now)
+        order = (top.desc(), func.lower(Listing.title), Listing.id)
+    else:
+        order = (Listing.reviewed_at.desc(), Listing.id.desc())
+    stmt = stmt.order_by(*order).limit(per_page).offset((page - 1) * per_page)
+    return Page(list(session.scalars(stmt)), total, page, per_page)
+
+
+def listings_for_review(session: Session, now: datetime) -> dict:
+    """The review page's lists: waiting for review, waiting for payment
+    (unpaid ones are deleted after a week), on the site now, and the
+    payments of the last 30 days that were not given back."""
+    waiting = session.scalars(select(Listing).where(Listing.status == REVIEW).order_by(Listing.id))
+    unpaid = session.scalars(
+        select(Listing).where(Listing.status == UNPAID).order_by(Listing.id.desc()).limit(50)
+    )
+    live = session.scalars(
+        select(Listing).where(_showing(now)).order_by(Listing.kind, Listing.reviewed_at.desc())
+    )
+    count, cents = session.execute(
+        select(func.count(), func.coalesce(func.sum(Listing.amount_cents), 0)).where(
+            Listing.paid_at >= now - timedelta(days=30), Listing.refunded_at.is_(None)
+        )
+    ).one()
+    return {
+        "waiting": list(waiting),
+        "unpaid": list(unpaid),
+        "live": list(live),
+        "paid": count,
+        "cents": cents,
+    }

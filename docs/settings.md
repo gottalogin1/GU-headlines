@@ -429,6 +429,45 @@ sends the buyer back to your site, and the server takes the money (it
 buyer nothing. Each step can be done again safely: the server asks PayPal to
 do the same request only once. A refund gives all of a payment back.
 
+## Paid listings
+
+People and businesses can pay through PayPal to put a listing on the site:
+
+- **Classified ads** on the Classifieds page (`/classifieds`): for sale, cars
+  and trucks, housing, services and wanted.
+- **Featured job posts**, pinned at the top of the Jobs page.
+- **Featured events**, at the top of the Events page, in gold on the month
+  calendar, on the home page, in the calendar feed (`/events.ics`) and with an
+  event page of their own, until the event is over.
+- **Business directory** (`/directory`): a basic entry is free; the featured
+  upgrade adds a photo and a website link and puts the entry at the top.
+
+Nobody needs an account. The form leads to a private page for the listing (its
+address has a secret part), with a "Pay with PayPal" link. Each listing then
+waits for you on `/admin/listings` (the same password as `/stats`). Approve
+puts it on the site; reject gives the money back through PayPal and shows your
+reason on the poster's page; take down removes a live listing. With
+`DISCORD_WEBHOOK_URL` set, Discord tells you when a listing waits. Unpaid
+listings are deleted after a week. Paid links carry `rel="sponsored"` for
+search engines, and the Sources page tells visitors that these listings are
+paid.
+
+The listings need `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and
+`STATS_PASSWORD`. Without them, the pages and the "Post" buttons do not show.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `CLASSIFIED_PRICE` | `5` | US dollars for a classified ad. `0`: no Classifieds page. |
+| `CLASSIFIED_DAYS` | `30` | Days a classified ad shows after you approve it (1 to 365). |
+| `FEATURED_JOB_PRICE` | `25` | US dollars for a featured job post. `0`: none offered. |
+| `FEATURED_JOB_DAYS` | `7` | Days a featured job post stays pinned (1 to 365). |
+| `FEATURED_EVENT_PRICE` | `15` | US dollars for a featured event, shown until it is over. `0`: none offered. |
+| `BUSINESS_UPGRADE_PRICE` | `50` | US dollars for the featured upgrade of a directory entry. `0`: no directory. |
+| `BUSINESS_UPGRADE_DAYS` | `365` | Days the upgrade lasts (1 to 3650); then the entry stays as a basic one. |
+
+Write prices without the `$` sign (Docker Compose changes values that contain
+it). A new price applies to listings sent after `docker compose up -d`.
+
 ## Checking for news
 
 | Setting | Default | What it does |

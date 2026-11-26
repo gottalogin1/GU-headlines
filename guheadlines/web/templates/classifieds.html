@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% from "_listing.html" import classified %}
+{# Classified ads that people on Guam post and pay for (listings.py). #}
+{% block main %}
+<header class="page-head">
+  <h1>Classifieds</h1>
+  <p class="muted">Things for sale, cars, housing, services and wanted ads from people on Guam.</p>
+  {% if offers.classified %}
+  <p class="post-offer"><a class="btn" href="/post/classified">Post an ad</a> <span class="muted small">{{ offers.classified.price }} for {{ offers.classified.days }} days, paid with PayPal</span></p>
+  {% endif %}
+</header>
+
+<form class="search-form" action="/classifieds" method="get">
+  <div class="field">
+    <label for="cq">Words</label>
+    <input id="cq" type="search" name="q" value="{{ q }}" placeholder="e.g. Toyota, Dededo, couch" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="ccat">Section</label>
+    <select id="ccat" name="category">
+      <option value="">All sections</option>
+      {% for name in choices %}<option {% if category == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if q or category %}<a class="reset" href="/classifieds">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(result.total) }} {{ "ad" if result.total == 1 else "ads" }}{% if category %} in {{ category }}{% endif %}{% if q %} matching “{{ q }}”{% endif %}</h2>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No ads here yet</h2>
+  <p>{% if offers.classified %}Be the first: <a href="/post/classified">post an ad</a>.{% else %}Check back soon.{% endif %}</p>
+</div>
+{% endif %}
+
+{% for l in result.items %}{{ classified(l) }}{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>About the classifieds</h2>
+  <p class="small">The people who post these ads pay a small fee, and each ad is checked before it shows. {{ settings.site_name }} does not sell or vouch for the items or services.</p>
+  <p class="small">Meet in a public place, check before you pay, and never send money to someone you have not met.</p>
+</section>
+{% include "_sidebar.html" %}
+{% endblock %}

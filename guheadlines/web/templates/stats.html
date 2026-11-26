@@ -20,6 +20,7 @@
   <p class="muted">Counted on this server, as totals for each Guam day: no cookies, no IP addresses.
     Search engines, link previews and other robots are left out. The newest counts can take a
     minute to show.</p>
+  {% if offers or to_review %}<p><a href="/admin/listings">Paid listings</a>{% if to_review %}: <strong>{{ to_review }}</strong> waiting for review{% endif %}</p>{% endif %}
 </header>
 
 <nav class="pagination" aria-label="Period">
