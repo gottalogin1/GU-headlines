@@ -25,6 +25,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,7 +33,7 @@ from markupsafe import Markup, escape
 from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
-from starlette.middleware.gzip import GZipMiddleware
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .. import ads, alerts, gas, health, listings, mail, paypal, renewals, sendfox
@@ -65,7 +66,7 @@ from ..weather import (
     for_page,
     weather_page,
 )
-from . import event_calendar, queries, seo, sponsor, stats
+from . import backups, event_calendar, queries, seo, sponsor, stats
 from .queries import MARK_END, MARK_START, BidFilters, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -242,9 +243,15 @@ app = FastAPI(
     title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 )
 app.add_middleware(RejectNulMiddleware)
-# Pages are mostly text and shrink to a fraction of their size; photos are
-# already compressed and left alone.
-app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+# Pages are mostly text and shrink to a fraction of their size; photos (and
+# backup downloads, which are mostly photos) are already compressed and left
+# alone.
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1024,
+    compresslevel=6,
+    exclude_content_types=(*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/x-tar"),
+)
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount(
     "/static",
@@ -597,7 +604,7 @@ templates.env.filters.update(
     safe_url=safe_url,
 )
 templates.env.tests.update(note=is_note)
-templates.env.filters.update(money=listings.money)
+templates.env.filters.update(money=listings.money, human_size=backups.human_size)
 templates.env.globals.update(
     settings=settings,
     event_time=event_time,
@@ -1722,10 +1729,55 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         feed_health=feed_health,
         problems=[h for h in [*news_health, *feed_health] if h.status in ("failing", "quiet")],
         to_review=to_review,
+        backups=backups.find(settings.backup_dir),
+        backup_status=backups.read_status(settings.backup_dir),
+        backup_problem=backups.download_problem(settings, request.url.scheme),
+        backup_time_text=backups.clock_text(settings.backup_time),
     )
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
+
+
+@app.get("/stats/backups/{file_name}")
+def backup_download(request: Request, file_name: str):
+    """One nightly backup as a .tar file (STATS_PASSWORD, over https only)."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _password_prompt()
+    problem = backups.download_problem(settings, request.url.scheme)
+    if problem:
+        return PlainTextResponse(problem, status_code=403, headers={"Cache-Control": "no-store"})
+    found = backups.FILE_NAME.fullmatch(file_name)
+    prepared = backups.prepare(settings.backup_dir, found[1]) if found else None
+    if prepared is None:
+        raise HTTPException(404)
+    size, body = prepared
+    who = request.client.host if request.client else "an unknown address"
+    log.warning("backup %s downloaded from %s", found[1], who)
+    # A backup holds every password of the site: say so in Discord each time,
+    # so a download that wasn't you does not go unnoticed.
+    alert = alerts.Alert(
+        title=f"{settings.site_name}: a backup was downloaded",
+        message=(
+            f"The backup {file_name} was downloaded from the stats page, from the address {who}."
+            " If that wasn't you, change STATS_PASSWORD in .env now, and the passwords and"
+            " keys in .env (a backup holds them all)."
+        ),
+        emoji="📦",
+    )
+    threading.Thread(target=alerts.send, args=(settings, alert), daemon=True).start()
+    return StreamingResponse(
+        body,
+        media_type="application/x-tar",
+        headers={
+            "Content-Length": str(size),
+            "Content-Disposition": f'attachment; filename="{file_name}"',
+            "Cache-Control": "private, no-store",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
+    )
 
 
 @app.get("/healthz")

@@ -34,6 +34,24 @@ release, see [Updating](docs/maintenance.md#updating).
   address in the booking. Needs email (`SMTP_HOST`, `MAIL_FROM`) and
   `SITE_DOMAIN` or `SITE_URL`. Database change: migration `0015_renewals`
   (runs by itself when the site starts).
+- **The whole site is backed up every night.** A new `backup` container
+  saves the database, the photos, `.env`, the `config` folder, Caddy's
+  certificates and (with your own email server) the mailboxes, mail accounts,
+  DKIM key and webmail settings, every night at 3:00 AM Guam time
+  (`BACKUP_TIME`), and keeps 14 nights (`BACKUP_KEEP_DAYS`) in
+  `backups/site`. A photo kept by several nights is stored once, so the
+  nights cost little more space than one copy. Nothing to set up: it starts
+  with the site, and makes its first backup a few minutes after it starts.
+  The stats page lists the backups with a **Download** button (one `.tar`
+  file with everything; over https and with a `STATS_PASSWORD` of at least 12
+  characters only, and each download is posted in Discord).
+  `./scripts/site-backup.sh` backs up now (`now`), lists the backups
+  (`list`), makes one file to copy elsewhere (`export`), and puts a backup
+  back with one command (`restore`), all of it or only some parts, on the
+  same server or on a new one (where it also makes `.env` from the backup).
+  A backup is skipped when it would leave less than 1 GB free, and
+  `auto-update.sh` posts in Discord when a backup fails or none has run for a
+  day. See [Backups](docs/maintenance.md#backups).
 - **Your own email server, with webmail.** Turn it on with
   `COMPOSE_PROFILES=mail` and `MAIL_HOSTNAME=mail.guamheadlines.com` in
   `.env`, and you get email addresses at your domain, webmail at
@@ -47,8 +65,8 @@ release, see [Updating](docs/maintenance.md#updating).
   starts it all (`setup`), lists the DNS records to add with your own values
   and which ones are in place (`dns`), and adds mailboxes and aliases, changes
   passwords, sends a test email and unblocks addresses. Automatic updates
-  download new versions of the mail server once a week, and `backup.sh` saves
-  the mailboxes (kept 7 days). It also needs DNS records and reverse DNS from
+  download new versions of the mail server once a week, and the nightly backup
+  saves the mailboxes. It also needs DNS records and reverse DNS from
   your server company; [Your own email server](docs/email-server.md) walks
   through every step. Nothing changes until you turn it on.
 - **Paid listings through PayPal: classifieds, a business directory, and
@@ -337,6 +355,10 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- `scripts/backup.sh` (the quick database backup before each automatic
+  update) keeps its files 7 days instead of 30, as the nightly backups keep
+  14 days of everything. It no longer saves the mailboxes: the nightly
+  backup does.
 - **Sources page: how this site compares with search engines.** "Why this
   site exists" now adds that search engines such as Google read the full
   text of every article they index, while this site keeps only the

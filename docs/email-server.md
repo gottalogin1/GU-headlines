@@ -269,18 +269,16 @@ week (they bring security fixes) and restarts them. Mail that arrives during
 those few seconds waits at the sender and comes a little later. To update now:
 `./scripts/mail.sh update`.
 
-**Backups.** The nightly backup (`scripts/backup.sh`, see
-[maintenance.md](maintenance.md#backups)) also saves the mailboxes and the mail
-server's settings (mailboxes, passwords, the DKIM key) to
-`backups/mail-<date>.tar.gz`, and keeps the last 7. Copy them off the server
-now and then, with the database backups. To put one back, stop the mail
-server, unpack the backup into its volumes, and start it again:
+**Backups.** The [nightly backup](maintenance.md#backups) saves the mailboxes
+and the mail server's settings (accounts, passwords, aliases, the DKIM key)
+with the rest of the site, and the webmail's settings and contacts too. To put
+back only the mail from a backup (a name from `./scripts/site-backup.sh list`):
 
 ```
-docker compose stop mailserver webmail
-docker compose run --rm --no-deps -T --entrypoint tar mailserver xzf - -C / < backups/mail-YYYYmmdd-HHMM.tar.gz
-docker compose up -d
+./scripts/site-backup.sh restore 2026-11-26-0300 mail webmail
 ```
+
+Mail that came after that backup is lost, so use the newest good backup.
 
 **Blocked addresses.** Fail2Ban blocks an address for a week after 6 wrong
 passwords in a week (in a mail app, for example). If that was you:

@@ -22,7 +22,9 @@
 #      bring security fixes, and restarts them.
 #   3. Watch. If the site does not answer in two rounds in a row (about 10
 #      minutes), it sends an alert, and another when the site answers again.
-#      The same when the news has not been checked for 3 hours.
+#      The same when the news has not been checked for 3 hours, and when the
+#      nightly backup (docs/maintenance.md#backups) failed or has not run
+#      for more than a day.
 #   4. Server checks (scripts/server-check.sh): disk space, memory, the https
 #      certificates and, with your own mail server on, the spam block lists;
 #      and once a week it deletes Docker's leftovers.
@@ -298,6 +300,57 @@ watch() {
     fi
 }
 
+# BACKUP_TIME= (empty) in .env: no nightly backups. A missing line means
+# the default, 03:00.
+backups_off() {
+    grep -q '^BACKUP_TIME=' .env 2>/dev/null && [ -z "$(env_value BACKUP_TIME)" ]
+}
+
+# The nightly backup (the "backup" service, scripts/backup-service.sh) writes
+# backups/site/status after each run. Alert when a backup failed (once for
+# each night), or when none has worked for more than a day (the service may
+# have stopped), and once more when backups work again.
+check_backup() {
+    local file=backups/site/status now result last time key since
+    backups_off && return 0
+    now=$(date +%s)
+    if [ ! -f "$file" ]; then
+        # A new server: the first backup comes a few minutes after the start.
+        [ -f "$STATE/backup-missing-since" ] || echo "$now" >"$STATE/backup-missing-since"
+        since=$(cat "$STATE/backup-missing-since")
+        case $since in '' | *[!0-9]*) since=$now ;; esac
+        [ $((now - since)) -ge 7200 ] || return 0
+        [ "$(cat "$STATE/backup-alerted" 2>/dev/null)" = missing ] && return 0
+        send_alert "⚠️" "$(site_label): no backup yet" \
+            "The nightly backup has not made a backup yet, though it should have made one a few minutes after the site started. To see why, run these on the server: \`docker compose ps backup\` and \`docker compose logs --tail 30 backup\`" &&
+            echo missing >"$STATE/backup-alerted"
+        return 0
+    fi
+    rm -f "$STATE/backup-missing-since"
+    result=$(sed -n 's/^result=//p' "$file")
+    time=$(sed -n 's/^time=//p' "$file")
+    last=$(sed -n 's/^last_ok=//p' "$file")
+    case $last in '' | *[!0-9]*) last=0 ;; esac
+    if [ "$result" = failed ]; then
+        key="failed $time"
+        [ "$(cat "$STATE/backup-alerted" 2>/dev/null)" = "$key" ] && return 0
+        say "the backup failed: $(sed -n 's/^message=//p' "$file")"
+        send_alert "⚠️" "$(site_label): the nightly backup failed" \
+            "$(sed -n 's/^message=//p' "$file")"$'\n'"The stats page shows the backups under \"Backups\". To try again now, run this on the server: \`./scripts/site-backup.sh now\`" &&
+            echo "$key" >"$STATE/backup-alerted"
+    elif [ $((now - last)) -gt $((26 * 3600)) ]; then
+        [ "$(cat "$STATE/backup-alerted" 2>/dev/null)" = old ] && return 0
+        say "no backup for $(((now - last) / 3600)) hours"
+        send_alert "⚠️" "$(site_label): no backup for $(((now - last) / 3600)) hours" \
+            "The nightly backup has not run. To see why, run these on the server: \`docker compose ps backup\` and \`docker compose logs --tail 30 backup\`" &&
+            echo old >"$STATE/backup-alerted"
+    elif [ -f "$STATE/backup-alerted" ]; then
+        send_alert "✅" "$(site_label): backups work again" \
+            "The nightly backup worked again: $(sed -n 's/^last_ok_name=//p' "$file")." quiet &&
+            rm -f "$STATE/backup-alerted"
+    fi
+}
+
 install_cron() {
     local line
     if ! command -v crontab >/dev/null; then
@@ -357,6 +410,7 @@ main() {
     update
     update_mail
     watch
+    check_backup
     # Its own file, so it can also be run by hand. "bash": see install_cron.
     bash scripts/server-check.sh --round
     if [ -t 1 ]; then # run by hand: say where things stand

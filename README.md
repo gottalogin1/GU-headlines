@@ -63,7 +63,7 @@ New versions are listed on the
 `GU-headlines` folder:
 
 ```sh
-./scripts/backup.sh            # a backup first, just in case
+./scripts/site-backup.sh now   # a backup first, just in case
 git pull
 docker compose up -d --build
 ```
@@ -132,7 +132,11 @@ that is always on can do this by itself after each change; see
   a sitemap lists every page worth finding, and links shared on social media
   show a preview card. See [Search engines](docs/maintenance.md#search-engines).
 - **Built to last**: a proper database (PostgreSQL), automatic database
-  upgrades, a backup script, and settings kept in plain text files.
+  upgrades, and settings kept in plain text files.
+- **Backed up every night**: the database, photos, settings, certificates and
+  mail, kept for 14 days on the server. Download one from the stats page, or
+  put one back (on the same server or a new one) with one command. See
+  [Backups](docs/maintenance.md#backups).
 
 ## The news sites
 
@@ -185,7 +189,9 @@ GU-headlines/
 ├── docker-compose.yml  tells Docker how to run everything
 ├── mail/               settings of your own mail server and webmail (optional)
 ├── scripts/
-│   ├── backup.sh       makes a database backup
+│   ├── site-backup.sh  backs up, exports and restores the whole site
+│   ├── backup-service.sh  what the nightly backup runs (inside Docker)
+│   ├── backup.sh       makes a quick database backup
 │   ├── auto-update.sh  keeps a server up to date and watched (optional)
 │   └── mail.sh         sets up and looks after your own mail server (optional)
 └── guheadlines/        the program itself (you don't need to touch this)

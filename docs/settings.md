@@ -445,7 +445,9 @@ today, the last 7, 30 or 90 days or the last year, a chart for each day, the
 websites that readers come from, the stories readers opened most, the clicks
 for each news source, the views and clicks for each topic, and the most viewed
 pages. At the bottom, **Source health** shows how each news site, job board
-and event calendar is doing (see [Source health](maintenance.md#source-health)).
+and event calendar is doing (see [Source health](maintenance.md#source-health)),
+and **Backups** lists the nightly backups, to download (see
+[Backups](maintenance.md#backups)).
 Until you set a password, nothing is counted.
 
 | Setting | Default | What it does |
@@ -930,7 +932,7 @@ docker compose up -d
 
 | Setting | Default | What it does |
 |---|---|---|
-| `DISCORD_WEBHOOK_URL` | (empty) | The secret webhook link of a Discord channel. Alerts are posted there: a news site, job board or event calendar that stopped working, a news site that went quiet, new stories with your keywords, the site not answering, automatic updates. Empty: no alerts. See [Alerts in Discord](maintenance.md#alerts-in-discord). |
+| `DISCORD_WEBHOOK_URL` | (empty) | The secret webhook link of a Discord channel. Alerts are posted there: a news site, job board or event calendar that stopped working, a news site that went quiet, new stories with your keywords, the site not answering, automatic updates, a nightly backup that failed, a backup downloaded from the stats page. Empty: no alerts. See [Alerts in Discord](maintenance.md#alerts-in-discord). |
 | `ALERT_AFTER_HOURS` | `24` | How many hours a news site, job board or event calendar must fail before its alert is posted. The minimum is 1. |
 | `ALERT_KEYWORDS` | (empty) | Words or phrases, with a comma between them, such as `typhoon, shooting, power outage`. A new story whose headline or intro mentions one is posted in Discord. Empty: no keyword alerts. See [Keyword alerts](maintenance.md#keyword-alerts). |
 | `REPORT_TIME` | `8:00` | When the reports are posted in Discord, Guam time. See [Reports](maintenance.md#reports). |
@@ -939,6 +941,16 @@ docker compose up -d
 | `DISK_ALERT_PERCENT` | `90` | Discord alert when the server's disk is this full, in percent. `0` turns it off. Read by `scripts/server-check.sh`; see [Server checks](maintenance.md#server-checks). |
 | `MEMORY_ALERT_PERCENT` | `90` | Discord alert when this much of the memory, in percent, has been in use for about 15 minutes. `0` turns it off. |
 | `CERT_ALERT_DAYS` | `14` | Discord alert when the site's (or the mail server's) https certificate ends within this many days. `0` turns it off. |
+
+## Backups
+
+The whole site is backed up every night by itself; see
+[Backups](maintenance.md#backups).
+
+| Setting | Default | What it does |
+|---|---|---|
+| `BACKUP_TIME` | `03:00` | When the nightly backup runs, in Guam time, on a 24-hour clock. Empty: no nightly backups (`./scripts/site-backup.sh now` still works). |
+| `BACKUP_KEEP_DAYS` | `14` | How many days each backup is kept, from 1 to 365. The newest backup is never deleted. Make it smaller if the disk gets full. |
 
 ## Troubleshooting output
 

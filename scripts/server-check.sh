@@ -175,7 +175,7 @@ check_disk() {
         if [ "$percent" -ge "$limit" ]; then
             [ -f "$key" ] && continue
             send_alert "💾" "$(site_label): disk $percent% full" \
-                "The server's disk ($mount) has only $(gb "$free") GB free of $(gb "$size") GB. When it is full, the database can't save new stories, and the site can stop."$'\n'"To see what takes the space, run these on the server: \`docker system df\` and \`du -sh backups\`. To free space: \`./scripts/server-check.sh --clean\` deletes Docker's leftovers, and a lower IMAGE_STORAGE_GB in .env keeps fewer photos. More: docs/maintenance.md#disk-space" &&
+                "The server's disk ($mount) has only $(gb "$free") GB free of $(gb "$size") GB. When it is full, the database can't save new stories, and the site can stop."$'\n'"To see what takes the space, run these on the server: \`docker system df\` and \`du -sh backups\`. To free space: \`./scripts/server-check.sh --clean\` deletes Docker's leftovers, a lower IMAGE_STORAGE_GB in .env keeps fewer photos, and a lower BACKUP_KEEP_DAYS keeps fewer backups. More: docs/maintenance.md#disk-space" &&
                 touch "$key"
         elif [ -f "$key" ] && [ "$percent" -le $((limit - 3)) ]; then
             send_alert "✅" "$(site_label): disk space OK again" \

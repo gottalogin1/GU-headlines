@@ -43,7 +43,7 @@ few commands; each one is explained.
 | **Terminal** | The window where you type commands. On Linux and Mac it is called *Terminal*; on Windows use *PowerShell*. |
 | **Command** | A line you type in the terminal and run by pressing **Enter**. In this guide commands are in grey boxes. Copy them exactly. |
 | **Docker** | A free program that runs GU Headlines and its database in sealed-off boxes called **containers**, so you don't have to install anything else. |
-| **Container** | One running part of GU Headlines. There are four: `db` (the database), `web` (the website), `worker` (the program that collects the news) and `caddy` (the front door that visitors talk to, which also handles https). |
+| **Container** | One running part of GU Headlines. There are five: `db` (the database), `web` (the website), `worker` (the program that collects the news), `caddy` (the front door that visitors talk to, which also handles https) and `backup` (which backs up the whole site every night). |
 | **`.env` file** | A small text file holding your settings, such as your database password. |
 | **Port** | A number that tells your browser which program on a computer to talk to. Web addresses use port 80 (`http://`) and port 443 (`https://`) unless they name another one, and so does GU Headlines. |
 
@@ -174,13 +174,13 @@ What happens:
 - `-d` ("detached") keeps it running in the background after the command
   finishes and after you close the terminal.
 
-When it finishes, check that all four parts are running:
+When it finishes, check that all five parts are running:
 
 ```sh
 docker compose ps
 ```
 
-You should see `db`, `web`, `worker` and `caddy`, each with a status of
+You should see `db`, `web`, `worker`, `caddy` and `backup`, each with a status of
 **Up** (`db` also shows **healthy**).
 
 ## 7. Open the website

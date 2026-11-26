@@ -5,7 +5,7 @@ page to run GU Headlines.
 
 **Contents**
 
-- [The four parts](#the-four-parts)
+- [The five parts](#the-five-parts)
 - [What happens every hour](#what-happens-every-hour)
 - [How search works](#how-search-works)
 - [All commands](#all-commands)
@@ -16,9 +16,9 @@ page to run GU Headlines.
 
 ---
 
-## The four parts
+## The five parts
 
-`docker compose up` starts four containers:
+`docker compose up` starts five containers:
 
 | Container | What it is | Details |
 |---|---|---|
@@ -26,6 +26,7 @@ page to run GU Headlines.
 | `web` | The website (Python, FastAPI) | Pages are built on the server; the only JavaScript is a few lines in the page that pick light or dark mode and run the switch. Serves saved photos from the `media` volume. Listens on port 8000 inside Docker's network only; visitors reach it through `caddy`. |
 | `worker` | The news collector | Runs on a clock-aligned schedule (`SCRAPE_INTERVAL_MINUTES`) and saves photos to the `media` volume. Also reads the job boards every `JOBS_INTERVAL_HOURS` (see [Jobs](jobs.md)), the event calendars every `EVENTS_INTERVAL_HOURS` (see [Events](events.md)), the bid lists every `BIDS_INTERVAL_HOURS` (see [Bids and RFPs](bids.md)) and then sends the bid alert emails (see [Bid alerts](bid-alerts.md)), the weather every `WEATHER_INTERVAL_MINUTES` in a thread of its own (see [Weather](settings.md#weather)), the power and water outage notices every `OUTAGES_INTERVAL_MINUTES` in another (see [Outages and gas prices](settings.md#outages-and-gas-prices)), makes each newsletter edition on `NEWSLETTER_DAYS` at `NEWSLETTER_TIME` in another thread (see [Newsletter feed](newsletter.md)), and after each news check tidies the saved photos: small copies of older photos, files no story uses, and the `IMAGE_STORAGE_GB` limit (see [Photos](settings.md#photos)). |
 | `caddy` | [Caddy](https://caddyserver.com), the front door | Answers on ports 80 and 443 (`HTTP_PORT`, `HTTPS_PORT`) and passes requests to `web:8000` with `X-Forwarded-For`/`-Proto`. With `SITE_DOMAIN` set it gets and renews a Let's Encrypt certificate (kept in the `caddy_data` volume) and redirects http to https; without it, plain http on port 80. Configured by `caddy/Caddyfile`. The website adds `Strict-Transport-Security` to responses served over https. With `MAIL_HOSTNAME` set it also serves the webmail at that name, and its certificate for that name is the mail server's too. |
+| `backup` | The nightly backup (`postgres:16-alpine`, the database's own image, running `scripts/backup-service.sh`) | Sleeps until `BACKUP_TIME` (Guam time), then saves the database (`pg_dump`), the `media` volume, `.env`, `config/`, the `caddy_data` volume and the mail volumes to `backups/site/<date>-<time>`, and deletes backups older than `BACKUP_KEEP_DAYS`. Photos that were in the backup before are hard links to it, so each night stores only the new ones. Writes `backups/site/status`, which the stats page and `scripts/auto-update.sh` read. The website mounts `backups/site` read-only to list the backups on `/stats` and stream one as a `.tar` (`web/backups.py`). `scripts/site-backup.sh` runs the same script with `docker compose run` to back up, export and restore. See [Backups](maintenance.md#backups). |
 | `mailserver`, `webmail` | Your own mail server ([docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/latest/): Postfix, Dovecot, Rspamd, Fail2Ban) and webmail ([Roundcube](https://roundcube.net/)) | Only with `COMPOSE_PROFILES=mail` (a Compose profile). The mail server publishes ports 25, 465, 587 and 993 and reads Caddy's Let's Encrypt certificate for `MAIL_HOSTNAME` from the `caddy_data` volume (read-only). Inside Docker that name is a network alias of the mail server, so the site (`SMTP_HOST`) and the webmail connect to it directly and the certificate matches. The webmail has no port; Caddy passes visits on. See [email-server.md](email-server.md). |
 
 `web` and `worker` are the same program (`guheadlines`) started with
@@ -228,5 +229,7 @@ guheadlines/
   schedule.py           when the worker wakes up next
 tests/                  pytest suite with saved sample pages in tests/fixtures
 .github/workflows/      CI, the live source check and releases
-scripts/backup.sh       database backup
+scripts/backup.sh       quick database backup (before each automatic update)
+scripts/site-backup.sh  back up, export and restore the whole site
+scripts/backup-service.sh  what the backup container runs
 ```

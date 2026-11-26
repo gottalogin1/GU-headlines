@@ -189,6 +189,14 @@ class Settings:
     # Renewal reminders (see renewals.py): how many days before a paid
     # listing or a booked ad ends its buyer gets an email. 0: no email.
     renewal_reminder_days: int = 3
+    # The nightly backup of the whole site (the "backup" service in
+    # docker-compose.yml, scripts/backup-service.sh): the time it runs, Guam
+    # time (None: no nightly backups), and for how many days each backup is
+    # kept. backup_dir is where the backups are; the stats page lists them
+    # and offers them for download (see web/backups.py).
+    backup_time: time | None = time(3, 0)
+    backup_keep_days: int = 14
+    backup_dir: Path = PROJECT_DIR / "backups" / "site"
 
     @property
     def sources_file(self) -> Path:
@@ -364,6 +372,19 @@ def _clock(value: str | None, default: time) -> time:
     return time(hour, minute)
 
 
+def _backup_time(value: str | None, default: time | None) -> time | None:
+    """BACKUP_TIME "03:00" or "3:00" (a 24-hour clock) -> a time of day;
+    None (no nightly backups) when it is empty; the default when it is
+    missing or not a time. scripts/backup-service.sh reads it the same way."""
+    if value is None:
+        return default
+    text = value.strip()
+    if not text:
+        return None
+    found = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", text)
+    return time(int(found[1]), int(found[2])) if found else default
+
+
 def _cents(value: str | None, default: int) -> int:
     """CLASSIFIED_PRICE and the other listing prices: as _price_cents, but
     the default (not 0) when the setting is missing, empty or not a price.
@@ -487,6 +508,11 @@ def load_settings() -> Settings:
         renewal_reminder_days=max(
             0, min(30, _int(env.get("RENEWAL_REMINDER_DAYS"), defaults.renewal_reminder_days))
         ),
+        backup_time=_backup_time(env.get("BACKUP_TIME"), defaults.backup_time),
+        backup_keep_days=max(
+            1, min(365, _int(env.get("BACKUP_KEEP_DAYS"), defaults.backup_keep_days))
+        ),
+        backup_dir=Path(env.get("BACKUP_DIR") or defaults.backup_dir),
     )
 
 

@@ -108,6 +108,31 @@ jobs:
         run: |
           docker compose exec -T worker guheadlines migrate
           docker compose exec -T worker guheadlines sources
+      - name: Back up, export and restore the whole site
+        run: |
+          # The backup service runs and waits for the night.
+          test "$(docker compose ps --format '{{.State}}' backup)" = running
+          ./scripts/site-backup.sh now
+          ./scripts/site-backup.sh list
+          name=$(ls backups/site | grep -E '^[0-9]{4}-' | tail -n 1)
+          test -n "$name"
+          grep -qx "result=ok" backups/site/status
+          # Only the website's user (and root) can open a backup: it holds .env.
+          test "$(stat -c '%u %a' "backups/site/$name")" = "10001 700"
+          sudo test -s "backups/site/$name/database.sql.gz"
+          sudo cmp .env "backups/site/$name/env"
+          ./scripts/site-backup.sh export "$name"
+          tar -tf "backups/site-backup-$name.tar" | grep -qx "site-backup-$name/database.sql.gz"
+          # Something newer than the backup, which the restore takes away.
+          docker compose exec -T db psql -U guheadlines -c "CREATE TABLE after_backup (x int)"
+          ./scripts/site-backup.sh restore "backups/site-backup-$name.tar" --yes
+          test -z "$(docker compose exec -T db psql -U guheadlines -tAc "SELECT to_regclass('after_backup')")"
+          for i in $(seq 1 60); do
+            if curl -fsSk https://localhost/healthz; then echo; exit 0; fi
+            sleep 2
+          done
+          docker compose ps
+          exit 1
       - name: Container logs
         if: always()
         run: docker compose logs --tail 80
