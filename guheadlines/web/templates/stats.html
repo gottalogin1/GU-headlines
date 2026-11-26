@@ -38,6 +38,10 @@
   <a href="#health">See Source health</a></p>
 {% endif %}
 
+{% if backup_status and backup_status.failed %}
+<p class="stats-alert"><span class="error">⚠ The last backup failed.</span> <a href="#backups">See Backups</a></p>
+{% endif %}
+
 <dl class="job-facts stats-totals">
   <div><dt>Page views</dt><dd>{{ "{:,}".format(views) }}</dd></div>
   <div><dt>Story clicks</dt><dd>{{ "{:,}".format(clicks) }}</dd></div>
@@ -204,4 +208,40 @@
 </div>
 {% endif %}
 <p class="muted section-note stats-keywords">Keyword alerts: {% if settings.alert_keywords and settings.discord_webhook_url %}a new story that mentions {{ settings.alert_keywords|join(", ") }} is posted in Discord.{% elif settings.alert_keywords %}off, because DISCORD_WEBHOOK_URL is empty.{% else %}off (ALERT_KEYWORDS is empty).{% endif %}</p>
+
+<h2 class="section-title" id="backups">Backups</h2>
+<p class="muted section-note">{% if settings.backup_time %}Every night at {{ backup_time_text }} (Guam time), the server backs up
+  the whole site: the database, the photos, your settings (.env), the config folder and the https certificates, and the
+  mailboxes when your own mail server is on. Each backup is kept for {{ settings.backup_keep_days }} days, in the
+  backups/site folder on the server.{% else %}Nightly backups are off (BACKUP_TIME is empty in .env). To back up by hand,
+  run <code>./scripts/site-backup.sh now</code> on the server.{% endif %}
+  A download is one .tar file with everything in it. It holds your passwords and your readers' email addresses, so keep
+  it private. To put a backup back, copy the file into the GU-headlines folder on the server and run
+  <code>./scripts/site-backup.sh restore</code> followed by the file's name.</p>
+{% if backup_status %}
+<p class="section-note">{% if backup_status.failed %}<span class="error">The last backup failed</span>
+  ({{ backup_status.time|fmt_datetime }}): {{ backup_status.message }}
+  {%- if backup_status.last_ok %} The last one that worked: {{ backup_status.last_ok|fmt_datetime }}.{% endif %}
+  {%- elif backup_status.last_ok %}Last backup: {{ backup_status.last_ok|fmt_datetime }}.{% endif %}
+  Space used by the backups: {{ backup_status.used|human_size }} ({{ backup_status.free|human_size }} free on the disk).</p>
+{% endif %}
+{% if backups %}
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Backup</th><th class="num">Size</th><th><span class="visually-hidden">Download</span></th></tr></thead>
+  <tbody>
+  {% for b in backups %}
+  <tr>
+    <td>{{ b.made|fmt_datetime }}<div class="muted small">{{ b.parts_text }}</div></td>
+    <td class="num">{{ b.size_text.replace(" ", "&nbsp;")|safe }}</td>
+    <td>{% if backup_problem %}<span class="muted">–</span>{% else %}<a href="/stats/backups/{{ b.file_name }}" download>Download</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if backup_problem %}<p class="muted section-note">{{ backup_problem }}</p>{% endif %}
+{% else %}
+<p class="muted section-note">No backups yet.{% if settings.backup_time %} The first one is made a few minutes after the site starts, then one every night.{% endif %}</p>
+{% endif %}
 {% endblock %}

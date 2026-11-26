@@ -38,9 +38,9 @@ that shows **0** new stories for days deserves a look; see
 docker compose ps
 ```
 
-All four (`db`, `web`, `worker`, `caddy`) should say **Up** (six, with
-`mailserver` and `webmail`, when [your own email server](email-server.md) is
-on). To see what the
+All five (`db`, `web`, `worker`, `caddy`, `backup`) should say **Up**
+(seven, with `mailserver` and `webmail`, when
+[your own email server](email-server.md) is on). To see what the
 news collector has been doing:
 
 ```sh
@@ -63,99 +63,155 @@ monitoring services can check:
 
 ## Backups
 
-Your collection lives in two places:
+**The whole site is backed up every night, by itself.** At 3:00 AM Guam time
+(`BACKUP_TIME` in `.env`), the `backup` part of the site saves:
 
-1. **The database:** every story, its headline, intro, topics and dates.
-   This is the important part.
-2. **The saved photos**, in Docker's `media` storage.
+- the database: every story, job, event, bid, listing, booking and
+  subscriber, and the visitor counts,
+- the saved photos,
+- your settings (`.env`), with your passwords and keys,
+- the `config` folder (news sites, topics, your sponsor picture),
+- Caddy's https certificates,
+- with [your own email server](email-server.md) on: the mailboxes, the mail
+  accounts and the DKIM key, and the webmail's settings and contacts.
 
-With [your own email server](email-server.md) on, the mailboxes are a third
-place. `backup.sh` saves them too (see below).
+Each backup is a folder in `backups/site`, named by its date and time, for
+example `backups/site/2026-11-26-0300`, and is kept for 14 days
+(`BACKUP_KEEP_DAYS`). A photo that is in the backups of several nights is
+stored only once, so 14 nights take much less space than 14 copies of the
+site. The site keeps working while it backs up. When the site starts for the
+first time (or after it was off for a day), the first backup comes a few
+minutes later.
 
-### Backing up the database
+There is nothing to set up. The settings are in `.env.example`, under
+"Backups".
 
-```sh
-./scripts/backup.sh
-```
+### Seeing the backups
 
-This saves a compressed copy to the `backups` folder, named with the date and
-time, for example `backups/guheadlines-20260927-0315.sql.gz`, and deletes
-backups older than 30 days. It's safe to run while the site is running.
+On the private stats page (`/stats`, see
+[Visitor stats](settings.md#visitor-stats)), the **Backups** section at the bottom lists
+them, with their size, the space all of them use, and the free space on the
+disk. It says so when the last backup failed. With
+[alerts in Discord](#alerts-in-discord) and
+[automatic updates](#automatic-updates) on, a failed backup (or no backup for
+more than a day) is posted in Discord too.
 
-With your own email server on, it also saves the mailboxes and the mail
-server's settings to `backups/mail-<date>.tar.gz`, at most once a day, and
-keeps the last 7 days. How to put one back:
-[email-server.md](email-server.md#looking-after-it).
-
-### Backing up automatically every night
-
-Linux and Mac have a built-in scheduler called **cron**. Open your schedule:
-
-```sh
-crontab -e
-```
-
-(If it asks which editor to use, pick `nano`.) Add this line at the bottom,
-changing `/home/you/GU-headlines` to your folder's real location (run `pwd`
-inside the folder to see it):
-
-```
-15 3 * * * cd /home/you/GU-headlines && ./scripts/backup.sh >> backups/backup.log 2>&1
-```
-
-Save and exit. It now runs every night at 3:15 AM (server time). The five
-fields at the start are *minute, hour, day of month, month, day of week*.
-`backups/backup.log` records each run, so you can check it works.
-
-To keep backups for a different number of days, put `KEEP_DAYS=90` before
-the command: `... && KEEP_DAYS=90 ./scripts/backup.sh >> ...`.
-
-**Keep a copy somewhere else.** A backup on the same computer won't help if
-its disk fails. Copy the `backups` folder to a USB drive, another computer or
-a cloud drive now and then.
-
-### Backing up the photos
-
-Photos can be downloaded again only while the news sites still have them, so
-back them up too. First find the storage's name:
+On the server:
 
 ```sh
-docker volume ls
+./scripts/site-backup.sh list
 ```
 
-Look for the one ending in `_media`, for example `gu-headlines_media`. Then
-(with your volume's name):
+### Backing up now
+
+Before a big change, back up by hand:
 
 ```sh
-docker run --rm -v gu-headlines_media:/media -v "$PWD/backups":/backup alpine \
-  tar czf /backup/photos-$(date +%Y%m%d).tgz -C /media .
+./scripts/site-backup.sh now
 ```
 
-This creates `backups/photos-YYYYMMDD.tgz`.
+It takes a few seconds to a few minutes and makes one more folder in
+`backups/site`.
 
-**Windows:** `backup.sh` needs a Linux-style shell. Run it from
-[WSL](https://learn.microsoft.com/windows/wsl/install) or Git Bash.
+### Keeping a copy somewhere else
 
-If it fails with errors like `$'\r': command not found`, your copy was
-downloaded before the project fixed its line endings. Fix it once, from the
-same WSL or Git Bash window, then run the backup again:
+The backups are on the server's own disk. A broken disk, or a server that the
+hosting company deletes, takes them with it. So now and then (once a month,
+say), download one to your own computer:
+
+- **In the browser:** open `/stats`, scroll to **Backups**, and press
+  **Download** next to a backup. You get one file, such as
+  `site-backup-2026-11-26-0300.tar`, with everything in it. This works only
+  over https (with `SITE_DOMAIN` set) and with a `STATS_PASSWORD` of at least
+  12 letters and digits, because a backup holds all your passwords. Each
+  download is posted in your Discord channel, so you would notice a download
+  that wasn't you.
+- **On the server:** this makes a fresh backup as one file in the `backups`
+  folder, and says how to copy it to your computer (it is deleted from the
+  server after 3 days):
+
+  ```sh
+  ./scripts/site-backup.sh export
+  ```
+
+  To send the newest backup straight to your own computer, without a copy on
+  the server, run this **on your computer** (with your user, server and
+  folder):
+
+  ```sh
+  ssh you@your-server 'cd GU-headlines && ./scripts/site-backup.sh export -' > site-backup.tar
+  ```
+
+Keep the file private: it holds your `.env` (every password and key) and your
+readers' email addresses. A `.tar` file opens in Windows (right-click,
+Extract All), on a Mac (double-click) and in 7-Zip, if you want to look
+inside. `database.sql.gz` in it is the database, and `README.txt` says what
+the rest is.
+
+### The quick database backup
+
+Before each [automatic update](#automatic-updates), the server also saves the
+database alone, as `backups/guheadlines-<date>-<time>.sql.gz`, kept for 7
+days. You can make one by hand with `./scripts/backup.sh`. It's a quick way
+back from an update that went wrong.
+
+**Windows:** the scripts need a Linux-style shell. Run them from
+[WSL](https://learn.microsoft.com/windows/wsl/install) or Git Bash. If one
+fails with errors like `$'\r': command not found`, your copy was downloaded
+before the project fixed its line endings. Fix it once, from the same WSL or
+Git Bash window:
 
 ```sh
-sed -i 's/\r$//' scripts/backup.sh .env
+sed -i 's/\r$//' scripts/*.sh .env
 ```
 
 ---
 
 ## Restoring from a backup
 
-Restoring **replaces** the current database with the backup.
+Restoring **replaces** what the site has now with the backup. Anything newer
+than the backup (stories found since, new listings, mail that came since) is
+lost, so pick the newest backup that is still good.
 
-1. Start only the database:
+**From a backup on the server** (a name from `./scripts/site-backup.sh list`):
 
-   ```sh
-   docker compose up -d db
-   ```
+```sh
+./scripts/site-backup.sh restore 2026-11-26-0300
+```
 
+**From a downloaded file:** copy it into the `GU-headlines` folder on the
+server (for example with `scp site-backup-2026-11-26-0300.tar
+you@your-server:GU-headlines/`), then:
+
+```sh
+./scripts/site-backup.sh restore site-backup-2026-11-26-0300.tar
+```
+
+It says what it will put back and asks you to type `yes`. Then it stops the
+site, puts the backup back, and starts the site again; the site is offline
+for a few minutes. If the database can't be put back (a damaged file), it
+stays as it was, and nothing else is changed.
+
+**Only some parts.** Name them after the backup:
+
+```sh
+./scripts/site-backup.sh restore 2026-11-26-0300 database
+./scripts/site-backup.sh restore 2026-11-26-0300 photos mail
+```
+
+The parts are `database`, `photos`, `settings` (your `.env`), `sponsor` (the
+sponsor picture), `mail` (mailboxes, accounts and the DKIM key), `webmail`
+and `certificates`.
+
+**Your settings (`.env`) are kept** unless you name `settings`. Then the
+backup's `.env` replaces yours, and yours is kept as
+`backups/env-before-restore-<date>`. On a new server without a `.env` yet,
+the settings always come from the backup.
+
+**An older quick database backup** (`backups/guheadlines-....sql.gz`, from
+before an update) goes back like this:
+
+1. Stop the website and the worker: `docker compose stop web worker`
 2. Load the backup (use your file's name):
 
    ```sh
@@ -163,18 +219,7 @@ Restoring **replaces** the current database with the backup.
    ```
 
    Many lines scroll past; that's normal.
-3. Start everything again:
-
-   ```sh
-   docker compose up -d
-   ```
-
-To restore photos (with your volume's name and file):
-
-```sh
-docker run --rm -v gu-headlines_media:/media -v "$PWD/backups":/backup alpine \
-  tar xzf /backup/photos-20260927.tgz -C /media
-```
+3. Start everything again: `docker compose up -d`
 
 ---
 
@@ -219,7 +264,7 @@ Keep the lines you want, delete the other lines and the three marker lines,
 save, then run `git stash drop`. Check the file with
 `docker compose exec worker guheadlines sources`.
 
-It's a good idea to take a backup before updating: `./scripts/backup.sh`.
+It's a good idea to take a backup before updating: `./scripts/site-backup.sh now`.
 
 ### Automatic updates
 
@@ -316,6 +361,8 @@ message as a notification. These alerts come:
 | 🚨 *site* is not answering, ✅ *site* is back | the server ([automatic updates](#automatic-updates)) | The site didn't answer for about 10 minutes, and when it answers again. |
 | ⚠️ news not checked for *N* hours, ✅ news checked again | the server | The worker hasn't checked the news for 3 hours. |
 | 🚀 updated, ⚠️ update failed, ⚠️ automatic update stopped | the server | After each [automatic update](#automatic-updates). |
+| ⚠️ the nightly backup failed, ⚠️ no backup for *N* hours, ✅ backups work again | the server | A [nightly backup](#backups) failed (once for each night), or none has worked for more than a day, and when one works again. |
+| 📦 a backup was downloaded | the website | Each time a backup is downloaded from the stats page. If it wasn't you, change `STATS_PASSWORD` and the other passwords and keys in `.env`. |
 | 🚨 *site* does not answer, ✅ *site* answers again | GitHub ([outside check](#watching-from-outside-the-server)) | The site didn't answer from outside for 3 minutes. |
 
 Each problem is posted once, not every hour. Nothing is posted while all is
@@ -467,6 +514,8 @@ Good to know:
 | news not checked for *N* hours | `docker compose logs --tail 50 worker` shows why; `docker compose restart worker` starts it again. |
 | Update failed | The site runs the version before. The reason is in `backups/.auto-update/failed-update.log`; pass it on to whoever made the change. |
 | Automatic update stopped | Read the message: usually a file changed on the server is in the way (see [Updating](#updating)). |
+| The nightly backup failed | The message says why. "Not enough disk space": see [Disk space](#disk-space). Otherwise `docker compose logs --tail 30 backup` shows more; try again with `./scripts/site-backup.sh now`. |
+| No backup for *N* hours | The backup part may have stopped: `docker compose ps backup`. Start it again with `docker compose up -d`. |
 | *site* does not answer (from GitHub), but the server posted nothing | The whole server may be down. Look at it in your server provider's control panel, and restart it there if needed. GU Headlines starts again by itself when the server starts. |
 
 ---
@@ -497,6 +546,14 @@ docker image prune
 (This never touches your stories or photos.) If disk space gets tight, lower
 `IMAGE_STORAGE_GB` in `.env`, or set `STORE_IMAGES=false` to save no photos
 at all; see [Changing settings](settings.md#photos).
+
+The [nightly backups](#backups) use space too: about one copy of the photos,
+plus the database (and the mailboxes) for each night kept.
+`./scripts/site-backup.sh list` shows how much. To use less, make
+`BACKUP_KEEP_DAYS` in `.env` smaller; the oldest backups go after the next
+backup. A backup is skipped (and the stats page says so) when it would leave
+less than 1 GB free, because the database stops working when the disk is
+full.
 
 ---
 
@@ -641,14 +698,17 @@ publishers' own pages.
 
 ## Moving to a new computer
 
-1. On the old computer: make a [database backup](#backing-up-the-database) and
-   a [photo backup](#backing-up-the-photos). Copy the `backups` folder, your
-   `.env` file, and the `config` folder if you changed it.
-2. On the new computer: follow [Getting started](getting-started.md) steps 3
-   and 4, then put your `.env` and `config` into the new `GU-headlines`
-   folder (instead of step 5), and the `backups` folder too.
-3. [Restore the database and photos](#restoring-from-a-backup), then run
-   `docker compose up -d --build`.
+1. On the old computer: stop the worker, so no news comes in after the
+   backup (`docker compose stop worker`), then make a backup as one file:
+   `./scripts/site-backup.sh export`. Copy that file to the new computer.
+2. On the new computer: install Docker and Git, and download the code
+   ([Getting started](getting-started.md) steps 1 to 3). Don't make a `.env`
+   file: it comes from the backup.
+3. Put the backup file in the new `GU-headlines` folder and run
+   `./scripts/site-backup.sh restore site-backup-....tar` (with your file's
+   name). It makes `.env` from the backup, puts back everything else, and
+   starts the site. The first start builds the program, which takes a few
+   minutes.
 4. Switch the old computer off (`docker compose down`), so both aren't
    collecting news at the same time. If you turned on
    [automatic updates](#automatic-updates) there, turn them off first:
