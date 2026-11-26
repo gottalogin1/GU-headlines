@@ -89,8 +89,13 @@ def settle(settings: Settings, listing_id: int, order_id: str, now: datetime | N
     if renewal.paid_at is not None:
         return "ok"  # the page was loaded again
     try:
-        capture = paypal.capture_order(settings, order_id)
+        capture = paypal.capture_order(
+            settings, order_id, custom_id=f"listing-{listing_id}-renewal"
+        )
     except paypal.PayPalError as exc:
+        if exc.issue == paypal.WRONG_ORDER:
+            log.error("PayPal payment not used for a renewal of listing %s: %s", listing_id, exc)
+            return "mismatch"
         log.warning("PayPal capture for a renewal of listing %s failed: %s", listing_id, exc)
         return "declined" if exc.issue == "INSTRUMENT_DECLINED" else "error"
     # PENDING: PayPal still checks the payment. The days are given at once,

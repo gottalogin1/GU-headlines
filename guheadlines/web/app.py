@@ -243,6 +243,32 @@ class RejectNulMiddleware:
         await self.app(scope, receive, send)
 
 
+# The largest request the site takes: the guide editor's form with two photos
+# (guides.MAX_FORM, about 16 MB), and room to spare. Caddy refuses larger ones
+# too (caddy/Caddyfile).
+MAX_REQUEST_BYTES = 20 * 1024 * 1024
+
+
+class LimitRequestSizeMiddleware:
+    """Answers 413 at once to a request that says it is larger than
+    MAX_REQUEST_BYTES, before any of it is read. (The forms also stop
+    reading at their own, smaller limits.)"""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            for name, value in scope["headers"]:
+                if name == b"content-length" and (
+                    not value.strip().isdigit() or int(value) > MAX_REQUEST_BYTES
+                ):
+                    answer = PlainTextResponse("Too large", status_code=413)
+                    await answer(scope, receive, send)
+                    return
+        await self.app(scope, receive, send)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -254,6 +280,7 @@ app = FastAPI(
     title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 )
 app.add_middleware(RejectNulMiddleware)
+app.add_middleware(LimitRequestSizeMiddleware)
 # Pages are mostly text and shrink to a fraction of their size; photos (and
 # backup downloads, which are mostly photos) are already compressed and left
 # alone.
@@ -1643,18 +1670,71 @@ def go(
 STATS_PERIODS = {1: "Today", 7: "7 days", 30: "30 days", 90: "90 days", 365: "1 year"}
 
 
-def _stats_password_ok(request: Request) -> bool:
-    """The browser's own login box (HTTP Basic): any user name, and the
-    password in STATS_PASSWORD."""
+class LoginLimit:
+    """Keeps anyone from guessing STATS_PASSWORD, the password of the private
+    pages: after `tries` wrong passwords from one IP address within `window`
+    seconds, that address is refused for `block` seconds, even with the right
+    password. Each web worker counts for itself. The addresses are kept in
+    memory only, and only for as long as they count."""
+
+    def __init__(self, tries: int = 10, window: float = 900, block: float = 3600) -> None:
+        self.tries, self.window, self.block = tries, window, block
+        self._lock = threading.Lock()
+        self._wrong: dict[str, deque[float]] = {}
+        self._blocked: dict[str, float] = {}  # address -> refused until (monotonic)
+
+    def _forget_old(self, now: float) -> None:
+        for address in [a for a, until in self._blocked.items() if until <= now]:
+            del self._blocked[address]
+        for address in list(self._wrong):
+            times = self._wrong[address]
+            while times and now - times[0] > self.window:
+                times.popleft()
+            if not times:
+                del self._wrong[address]
+
+    def blocked(self, address: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            until = self._blocked.get(address)
+            return until is not None and until > now
+
+    def wrong(self, address: str) -> bool:
+        """Count a wrong password. True when it is the one that blocks the address."""
+        now = time.monotonic()
+        with self._lock:
+            self._forget_old(now)
+            if len(self._wrong) >= 10_000 and address not in self._wrong:
+                # Very many addresses at once: forget the one that guessed
+                # least recently, so the memory used stays small.
+                oldest = min(self._wrong, key=lambda a: self._wrong[a][-1])
+                del self._wrong[oldest]
+            times = self._wrong.setdefault(address, deque())
+            times.append(now)
+            if len(times) < self.tries:
+                return False
+            del self._wrong[address]
+            self._blocked[address] = now + self.block
+            return True
+
+
+login_limit = LoginLimit()
+# When the last Discord alert about a blocked address went out (at most one
+# an hour, in each web worker).
+_blocked_alert = {"sent": float("-inf")}
+
+
+def _given_password(request: Request) -> str | None:
+    """The password typed into the browser's own login box (HTTP Basic: any
+    user name, and the password), or None when the browser sent none."""
     scheme, _, encoded = request.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "basic":
-        return False
+        return None
     try:
-        login = base64.b64decode(encoded, validate=True).decode("utf-8")
+        login = base64.b64decode(encoded.strip(), validate=True).decode("utf-8")
     except ValueError:  # not base64, or not UTF-8
-        return False
-    password = login.partition(":")[2]
-    return secrets.compare_digest(password.encode(), settings.stats_password.encode())
+        return ""
+    return login.partition(":")[2]
 
 
 def _password_prompt() -> PlainTextResponse:
@@ -1671,12 +1751,66 @@ def _password_prompt() -> PlainTextResponse:
     )
 
 
-@app.get("/stats", response_class=HTMLResponse)
-def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
+def _too_many_tries() -> PlainTextResponse:
+    minutes = round(login_limit.block / 60)
+    return PlainTextResponse(
+        f"Too many wrong passwords. Please try again in {minutes} minutes.",
+        status_code=429,
+        headers={
+            "Retry-After": str(int(login_limit.block)),
+            "Cache-Control": "no-store",
+            "X-Robots-Tag": "noindex",
+        },
+    )
+
+
+def _alert_blocked(address: str) -> None:
+    """Tell the owner (Discord) that an address was blocked for guessing."""
+    now = time.monotonic()
+    if not settings.discord_webhook_url or now - _blocked_alert["sent"] < 3600:
+        return
+    _blocked_alert["sent"] = now
+    minutes = round(login_limit.block / 60)
+    alert = alerts.Alert(
+        title=f"{settings.site_name}: wrong passwords on the private pages",
+        message=(
+            f"The address {address} typed a wrong password {login_limit.tries} times on the"
+            f" private pages (/stats, /admin), so it is blocked for {minutes} minutes. If it"
+            " was you, wait and try again. If not, someone is guessing: make sure"
+            " STATS_PASSWORD in .env is long and random (32 letters and digits, see"
+            " .env.example). More alerts like this one come at most once an hour."
+        ),
+        emoji="🔐",
+    )
+    threading.Thread(target=alerts.send, args=(settings, alert), daemon=True).start()
+
+
+def _owner_check(request: Request) -> Response | None:
+    """None for the owner of the site (the right STATS_PASSWORD); else the
+    answer to send: the browser's login box, or "too many wrong passwords"
+    for an address that keeps guessing (LoginLimit). Without STATS_PASSWORD
+    the private pages are not there at all (404)."""
     if not settings.stats_password:
         raise HTTPException(404)
-    if not _stats_password_ok(request):
+    address = request.client.host if request.client else ""
+    if login_limit.blocked(address):
+        return _too_many_tries()
+    password = _given_password(request)
+    if password is None:  # the first visit: the browser asks for the password
         return _password_prompt()
+    if secrets.compare_digest(password.encode(), settings.stats_password.encode()):
+        return None
+    if login_limit.wrong(address):
+        log.warning("private pages: %s blocked after too many wrong passwords", address)
+        _alert_blocked(address)
+        return _too_many_tries()
+    return _password_prompt()
+
+
+@app.get("/stats", response_class=HTMLResponse)
+def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
+    if (answer := _owner_check(request)) is not None:
+        return answer
     if days not in STATS_PERIODS:
         days = 7
     # This worker's newest counts. The other worker writes its own within 30 seconds.
@@ -1752,6 +1886,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         backups=backups.find(settings.backup_dir),
         backup_status=backups.read_status(settings.backup_dir),
         backup_problem=backups.download_problem(settings, request.url.scheme),
+        weak_password=len(settings.stats_password) < backups.MIN_PASSWORD,
         backup_time_text=backups.clock_text(settings.backup_time),
     )
     response.headers["Cache-Control"] = "private, no-store"
@@ -1762,10 +1897,8 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
 @app.get("/stats/backups/{file_name}")
 def backup_download(request: Request, file_name: str):
     """One nightly backup as a .tar file (STATS_PASSWORD, over https only)."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _password_prompt()
+    if (answer := _owner_check(request)) is not None:
+        return answer
     problem = backups.download_problem(settings, request.url.scheme)
     if problem:
         return PlainTextResponse(problem, status_code=403, headers={"Cache-Control": "no-store"})
@@ -2007,6 +2140,17 @@ signup_limit = SignupLimit()
 # characters that only odd quoted addresses use. The browser checks it too.
 _EMAIL = re.compile(r"[^\s@<>()\[\],;:\\\"]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 _MAX_SIGNUP_BODY = 4096
+
+
+async def _small_body(request: Request, limit: int = _MAX_SIGNUP_BODY) -> bytes | None:
+    """The body of a small form, read in pieces; None when it is larger than
+    `limit`, so that a huge request never fills the server's memory."""
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > limit:
+            return None
+    return body
 
 
 def _from_this_site(request: Request) -> bool:
@@ -2425,8 +2569,11 @@ def _settle(request: Request, listing, order_id: str) -> str:
     """Take the money of a PayPal order for the listing (see paypal.py), and
     send the listing to review. Returns a key of PAYMENT_RESULTS."""
     try:
-        capture = paypal.capture_order(settings, order_id)
+        capture = paypal.capture_order(settings, order_id, custom_id=f"listing-{listing.id}")
     except paypal.PayPalError as exc:
+        if exc.issue == paypal.WRONG_ORDER:
+            log.error("PayPal payment not used for listing %s: %s", listing.id, exc)
+            return "mismatch"
         log.warning("PayPal capture for listing %s failed: %s", listing.id, exc)
         return "declined" if exc.issue == "INSTRUMENT_DECLINED" else "error"
     if capture.status == "PENDING":
@@ -2530,10 +2677,8 @@ REVIEW_RESULTS = {
 def review_listings(request: Request, done: str = Query("", max_length=20)):
     """The owner's page for the paid listings: approve or reject the new
     ones, take down live ones."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _password_prompt()
+    if (answer := _owner_check(request)) is not None:
+        return answer
     with session_scope() as session:
         data = queries.listings_for_review(session, datetime.now(timezone.utc))
     response = render(
@@ -2592,13 +2737,13 @@ def _review(request: Request, listing_id: int, action: str, note: str) -> str:
 @app.post("/admin/listings/{listing_id}")
 async def review_listing(request: Request, listing_id: int):
     """A button of the review page: approve, reject, remove or check."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _password_prompt()
+    if (answer := _owner_check(request)) is not None:
+        return answer
     if not _from_this_site(request):
         return PlainTextResponse("Please use the buttons on the review page.", status_code=403)
-    body = (await request.body())[:_MAX_SIGNUP_BODY]
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
     form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
     action = (form.get("action") or [""])[0]
     note = (form.get("note") or [""])[0]
@@ -2726,15 +2871,6 @@ GUIDE_RESULTS = {
 }
 
 
-def _owner_only(request: Request) -> Response | None:
-    """None for the owner (STATS_PASSWORD); else the answer to send."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _password_prompt()
-    return None
-
-
 def _find_guide(guide_id: int) -> Guide:
     with session_scope() as session:
         guide = session.get(Guide, guide_id) if 1 <= guide_id < 2**31 else None
@@ -2746,7 +2882,7 @@ def _find_guide(guide_id: int) -> Guide:
 @app.get("/admin/guides", response_class=HTMLResponse)
 def admin_guides(request: Request, done: str = Query("", max_length=20)):
     """The owner's list of guides, drafts too, with their page views."""
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     today = datetime.now(GUAM_TZ).date()
     with session_scope() as session:
@@ -2817,14 +2953,14 @@ def _guide_form(
 
 @app.get("/admin/guides/new", response_class=HTMLResponse)
 def admin_guide_new(request: Request):
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     return _guide_form(request, None, {"position": "100", "status": guides.DRAFT}, {})
 
 
 @app.get("/admin/guides/{guide_id:int}", response_class=HTMLResponse)
 def admin_guide_edit(request: Request, guide_id: int, done: str = Query("", max_length=20)):
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     guide = _find_guide(guide_id)
     return _guide_form(request, guide, _guide_values(guide), {}, message=GUIDE_RESULTS.get(done))
@@ -2833,7 +2969,7 @@ def admin_guide_edit(request: Request, guide_id: int, done: str = Query("", max_
 @app.get("/admin/guides/{guide_id:int}/view", response_class=HTMLResponse)
 def admin_guide_view(request: Request, guide_id: int):
     """The guide as readers will see it, also while it is a draft."""
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     return _no_store(_guide_page(request, _find_guide(guide_id), preview=True))
 
@@ -2912,7 +3048,7 @@ async def _read_guide_form(request: Request) -> tuple[dict[str, str], dict[str, 
 @app.post("/admin/guides/new")
 @app.post("/admin/guides/{guide_id:int}")
 async def admin_guide_save(request: Request, guide_id: int | None = None):
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     if not _from_this_site(request):
         return PlainTextResponse("Please use the form on the guide's page.", status_code=403)
@@ -2934,11 +3070,14 @@ async def admin_guide_save(request: Request, guide_id: int | None = None):
 
 @app.post("/admin/guides/{guide_id:int}/delete")
 async def admin_guide_delete(request: Request, guide_id: int):
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     if not _from_this_site(request):
         return PlainTextResponse("Please use the button on the guide's page.", status_code=403)
-    form = parse_qs((await request.body())[:_MAX_SIGNUP_BODY].decode("utf-8", "replace"))
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
     if form.get("confirm") != ["yes"]:
         return RedirectResponse(
             f"/admin/guides/{guide_id}?done=confirm",
@@ -2968,11 +3107,14 @@ async def admin_guide_delete(request: Request, guide_id: int):
 @app.post("/admin/guides/starters")
 async def admin_guide_starters(request: Request):
     """Add the starter guides the owner ticked, as drafts."""
-    if (answer := _owner_only(request)) is not None:
+    if (answer := _owner_check(request)) is not None:
         return answer
     if not _from_this_site(request):
         return PlainTextResponse("Please use the button on the guides page.", status_code=403)
-    form = parse_qs((await request.body())[:_MAX_SIGNUP_BODY].decode("utf-8", "replace"))
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=100)
 
     def add() -> int:
         with session_scope() as session:
@@ -3392,8 +3534,11 @@ def ad_booking_paid(request: Request, code: str, token: str = Query("", max_leng
         if not ads.hold_again(session, booking):
             return _to_booking(code, "taken")
         try:
-            capture = paypal.capture_order(settings, token)
+            capture = paypal.capture_order(settings, token, custom_id=f"ad-booking-{booking.id}")
         except paypal.PayPalError as exc:
+            if exc.issue == paypal.WRONG_ORDER:
+                log.error("ad booking %d: %s", booking.id, exc)
+                return _to_booking(code, "stale")
             log.warning("ad booking %d: PayPal did not take the payment: %s", booking.id, exc)
             declined = exc.issue in ("INSTRUMENT_DECLINED", "ORDER_NOT_APPROVED")
             return _to_booking(code, "declined" if declined else "paypal")
@@ -3432,7 +3577,9 @@ async def ad_booking_again(request: Request, code: str):
     the usual way, and opens its page."""
     if not _from_this_site(request):
         return PlainTextResponse("Please use the form on the booking's page.", status_code=403)
-    body = (await request.body())[:_MAX_SIGNUP_BODY]
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
     picked_text = parse_qs(body.decode("utf-8", "replace"), max_num_fields=80).get("day", [])
     now = datetime.now(timezone.utc)
     offers = {offer.kind: offer for offer in advertising()}
@@ -3489,19 +3636,6 @@ def ad_booking_cancel(request: Request, code: str):
     return _to_booking(code, "cancelled")
 
 
-def _login_needed() -> PlainTextResponse:
-    """The browser's login box. The same realm as /stats, so one login opens both."""
-    return PlainTextResponse(
-        "This page needs a password.",
-        status_code=401,
-        headers={
-            "WWW-Authenticate": 'Basic realm="Visitor stats", charset="UTF-8"',
-            "Cache-Control": "no-store",
-            "X-Robots-Tag": "noindex",
-        },
-    )
-
-
 REVIEW_NOTES = {
     "approved": (True, "Approved. The ad shows in its weeks."),
     "rejected": (True, "Turned down. PayPal is giving the money back."),
@@ -3523,10 +3657,8 @@ def ad_review(
     booking: int = Query(0, ge=0, le=2**31),
 ):
     """The owner's list of booked ads, to approve or turn down (STATS_PASSWORD)."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _login_needed()
+    if (answer := _owner_check(request)) is not None:
+        return answer
     stats.counts.flush()
     now = datetime.now(timezone.utc)
     today = now.astimezone(GUAM_TZ).date()
@@ -3554,10 +3686,8 @@ def ad_review(
 @app.post("/advertise/review/{booking_id}")
 async def ad_review_decide(request: Request, booking_id: int):
     """Approve a paid booking, or turn it down (PayPal refunds it)."""
-    if not settings.stats_password:
-        raise HTTPException(404)
-    if not _stats_password_ok(request):
-        return _login_needed()
+    if (answer := _owner_check(request)) is not None:
+        return answer
     if not _from_this_site(request) or not 1 <= booking_id < 2**31:
         return PlainTextResponse("Please use the buttons on the review page.", status_code=403)
     body = b""

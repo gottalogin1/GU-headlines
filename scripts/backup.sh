@@ -12,6 +12,9 @@
 #   gunzip -c backups/guheadlines-YYYYmmdd-HHMM.sql.gz | docker compose exec -T db \
 #       psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 set -eu
+# The database copies hold the email addresses and private links of the
+# site's buyers: only the owner may read them.
+umask 077
 
 KEEP_DAYS="${KEEP_DAYS:-7}"
 DIR="${BACKUP_DIR:-./backups}"

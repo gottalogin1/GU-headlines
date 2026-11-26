@@ -22,6 +22,12 @@
 #   5. Once a week, on Sunday night (Guam time), it deletes what Docker
 #      leaves behind: old versions of the program and old build files. The
 #      stories, photos, mail and database are never touched.
+#   6. Private files: .env (every password of the site) and the backups
+#      folder (copies of the database) are made readable by their owner only,
+#      so no other user or program on the server can read them.
+#   7. Restart needed: when Linux has installed security updates that only
+#      work after a restart of the server (Ubuntu and Debian say so in
+#      /var/run/reboot-required), it posts once, and again after a week.
 # Each problem is posted once, and once more when it is fixed. Alerts go to
 # the Discord channel of DISCORD_WEBHOOK_URL in .env. What it does is written
 # to backups/auto-update.log (through auto-update.sh).
@@ -404,6 +410,44 @@ clean_docker() {
     return 0
 }
 
+# The permission bits of a file, such as 644; "" when they can't be read.
+mode_of() {
+    stat -c %a "$1" 2>/dev/null
+}
+
+# Does a mode such as 644 let other users (not the owner) read the file?
+others_can_read() {
+    [ -n "$1" ] && [ $((8#$1 & 8#077)) -ne 0 ]
+}
+
+check_private_files() {
+    local path mode
+    for path in .env backups; do
+        [ -e "$path" ] || continue
+        mode=$(mode_of "$path")
+        others_can_read "$mode" || continue
+        if [ -d "$path" ]; then chmod 700 "$path"; else chmod 600 "$path"; fi 2>/dev/null
+        # Some disks keep no permissions (such as a Windows folder in WSL):
+        # then there is nothing to do, and nothing to say.
+        others_can_read "$(mode_of "$path")" ||
+            say "made $path private: only its owner can read it now (it was $mode)"
+    done
+}
+
+check_reboot() {
+    local flag=${REBOOT_FLAG:-/var/run/reboot-required}
+    if [ ! -f "$flag" ]; then
+        rm -f "$STATE/reboot-alerted"
+        show "Restart needed: no"
+        return 0
+    fi
+    show "Restart needed: yes, to finish installing updates of Linux"
+    [ -n "$(find "$STATE/reboot-alerted" -mtime -7 2>/dev/null)" ] && return 0
+    send_alert "🔁" "$(site_label): the server needs a restart" \
+        "Linux has installed security updates that only work after the server restarts. When it suits you, run this on the server: \`sudo reboot\` The site is away for a minute or two, then starts again by itself." &&
+        touch "$STATE/reboot-alerted"
+}
+
 main() {
     case "${1:-}" in
         --round) ROUND=1 ;;
@@ -428,6 +472,8 @@ main() {
     check_certs
     check_block_lists
     clean_docker
+    check_private_files
+    check_reboot
     return 0
 }
 

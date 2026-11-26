@@ -28,6 +28,18 @@ os.environ["CONFIG_DIR"] = str(ROOT / "config")
 
 
 @pytest.fixture(autouse=True)
+def login_limit():
+    """Each test starts with no wrong passwords counted (web/app.py
+    LoginLimit), so tests that try wrong passwords never block later ones."""
+    import sys
+
+    web = sys.modules.get("guheadlines.web.app")
+    if web is not None:
+        web.login_limit = web.LoginLimit()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def visitor_counts(monkeypatch):
     """Each test counts visitors (web/stats.py) afresh, and what is not
     written by its end is dropped: else the counts' writer thread would

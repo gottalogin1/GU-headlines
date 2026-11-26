@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -981,6 +983,99 @@ def test_counts_are_written_when_the_website_stops(counting):
 
     with session_scope() as session:
         assert session.query(PageViews.views).filter(PageViews.path == "/").scalar() == 1
+
+
+def _basic(password: str) -> dict:
+    return {"authorization": "Basic " + base64.b64encode(f"me:{password}".encode()).decode()}
+
+
+def test_guessing_the_password_gets_an_address_blocked(counting, monkeypatch):
+    from guheadlines.web import app as web
+
+    sent = []
+    monkeypatch.setattr(web.alerts, "send", lambda settings, alert: sent.append(alert))
+    _set(
+        monkeypatch,
+        stats_password="a long stats password",
+        discord_webhook_url="https://discord.com/api/webhooks/1/x",
+    )
+    monkeypatch.setattr(web, "login_limit", web.LoginLimit(tries=3, window=900, block=3600))
+    monkeypatch.setitem(web._blocked_alert, "sent", float("-inf"))
+    # The browser's first visit, without a password, is not a wrong guess.
+    for _ in range(5):
+        assert counting.get("/stats").status_code == 401
+    assert counting.get("/stats", headers=_basic("wrong 1")).status_code == 401
+    assert counting.get("/admin/guides", headers=_basic("wrong 2")).status_code == 401
+    third = counting.get("/advertise/review", headers=_basic("wrong 3"))
+    assert third.status_code == 429
+    assert third.headers["retry-after"] == "3600"
+    assert "Too many wrong passwords" in third.text
+    # Blocked: even the right password is refused now, on every private page.
+    right = _basic("a long stats password")
+    for path in ("/stats", "/admin/guides", "/admin/listings", "/stats/backups/x.tar"):
+        assert counting.get(path, headers=right).status_code == 429, path
+    assert counting.post("/admin/guides/1/delete", headers=right).status_code == 429
+    # The owner hears about it in Discord, once.
+    for _ in range(100):
+        if sent:
+            break
+        time.sleep(0.01)
+    assert len(sent) == 1
+    assert "testclient" in sent[0].message and "STATS_PASSWORD" in sent[0].message
+    # Another address is not blocked.
+    other = TestClient(web.app, base_url="https://testserver", client=("203.0.113.9", 4000))
+    assert other.get("/stats", headers=right).status_code == 200
+
+
+def test_login_limit_forgets_old_guesses_and_ends_the_block(monkeypatch):
+    from guheadlines.web import app as web
+
+    now = [1000.0]
+    monkeypatch.setattr(web.time, "monotonic", lambda: now[0])
+    limit = web.LoginLimit(tries=3, window=900, block=3600)
+    assert not limit.wrong("a") and not limit.wrong("a")
+    now[0] += 901  # the first two are older than the window now
+    assert not limit.wrong("a") and not limit.wrong("a")
+    assert limit.wrong("a")  # the third within 15 minutes blocks
+    assert limit.blocked("a") and not limit.blocked("b")
+    now[0] += 3599
+    assert limit.blocked("a")
+    now[0] += 2
+    assert not limit.blocked("a")
+    limit.wrong("b")
+    assert "a" not in limit._blocked  # forgotten once its block ended
+
+
+def test_a_short_password_is_pointed_out_on_the_stats_page(counting, monkeypatch):
+    _set(monkeypatch, stats_password="short1")
+    page = counting.get("/stats", headers=_basic("short1"))
+    assert page.status_code == 200
+    assert "Your password (STATS_PASSWORD) is short." in page.text
+    _set(monkeypatch, stats_password="a long stats password")
+    page = counting.get("/stats", headers=_basic("a long stats password"))
+    assert "is short." not in page.text
+
+
+def test_huge_requests_are_refused_before_they_are_read():
+    from guheadlines import guides
+    from guheadlines.web import app as web
+
+    client = TestClient(web.app)
+    origin = {"origin": "http://testserver"}
+    # Says it is larger than any form: refused at once, whatever the page.
+    for path in ("/newsletter", "/admin/guides/new", "/advertise/booking/abc/again"):
+        big = client.post(
+            path, content=b"", headers={**origin, "content-length": str(web.MAX_REQUEST_BYTES + 1)}
+        )
+        assert big.status_code == 413, path
+    # Sent in pieces, without a size: the small forms stop reading at their limit.
+    pieces = (b"day=2026-12-07&" for _ in range(1000))
+    answer = client.post("/advertise/booking/abc/again", content=pieces, headers=origin)
+    assert answer.status_code == 413
+    # Caddy refuses them too, and the largest form still fits.
+    caddyfile = (Path(__file__).parent.parent / "caddy" / "Caddyfile").read_text()
+    assert "max_size 20MB" in caddyfile
+    assert web.MAX_REQUEST_BYTES == 20 * 1024 * 1024 > guides.MAX_FORM
 
 
 def test_stats_page_needs_the_password(counting):

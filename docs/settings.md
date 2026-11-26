@@ -468,6 +468,11 @@ Open the page only over https (with `SITE_DOMAIN` set, see
 [Web address and https](#web-address-and-https)). Over plain http the password
 travels without protection.
 
+After 10 wrong passwords within 15 minutes from one address, that address is
+blocked for an hour (even with the right password then), and Discord gets an
+alert. If that happens to you, wait an hour. See
+[Keeping the site safe](security.md).
+
 The same password opens the visitor guides editor, `/admin/guides` (see
 [Visitor guides](guides.md)), and the review pages of paid listings and booked
 ads.

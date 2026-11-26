@@ -23,6 +23,13 @@
 	# headers).
 	reverse_proxy web:8000
 
+	# The largest request the site takes is the guide editor's form with two
+	# photos, about 16 MB. Larger ones are refused here (413), so nobody can
+	# tie up the website by sending it a huge upload.
+	request_body {
+		max_size 20MB
+	}
+
 	# Do not tell visitors which web server software runs the site.
 	header {
 		-Server

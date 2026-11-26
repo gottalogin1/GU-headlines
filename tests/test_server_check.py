@@ -78,6 +78,7 @@ class Server:
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "FAKE": str(self.fake),
             "MEMINFO": str(self.fake / "meminfo"),
+            "REBOOT_FLAG": str(self.fake / "reboot-required"),
             "HOME": str(tmp),
         }
 
@@ -141,6 +142,7 @@ def test_by_hand_it_shows_the_readings_and_posts_nothing_when_all_is_well(server
     assert "Memory: 40% in use, 2457 MB free of 4096 MB (alert at 90%)" in result.stdout
     assert "Certificate of the site (guamheadlines.com): ends" in result.stdout
     assert "in 59 days" in result.stdout or "in 60 days" in result.stdout
+    assert "Restart needed: no" in result.stdout
     assert server.posted() == []
 
 
@@ -312,3 +314,46 @@ def test_env_example_has_the_server_check_settings():
         "WEEKLY_REPORT_DAY=monday",
     ):
         assert f"\n{line}\n" in text, line
+
+
+def test_private_files_are_made_readable_by_their_owner_only(server):
+    env_file = server.root / ".env"
+    env_file.chmod(0o644)
+    (server.root / "backups").mkdir(mode=0o755, exist_ok=True)
+    (server.root / "backups").chmod(0o755)
+    result = server.round(CERT_END=cert_end(60))
+    assert env_file.stat().st_mode & 0o777 == 0o600
+    assert (server.root / "backups").stat().st_mode & 0o777 == 0o700
+    assert "made .env private: only its owner can read it now (it was 644)" in result.stdout
+    assert "made backups private" in result.stdout
+    # Already private: nothing to do, nothing said.
+    assert "private" not in server.round(CERT_END=cert_end(60)).stdout
+    assert server.posted() == []
+
+
+def test_a_restart_for_linux_updates_is_posted_once(server):
+    (server.fake / "reboot-required").write_text("*** System restart required ***\n")
+    server.round(CERT_END=cert_end(60))
+    server.round(CERT_END=cert_end(60))
+    assert len(server.texts()) == 1
+    assert server.texts()[0].startswith("🔁 **guamheadlines.com: the server needs a restart**")
+    assert "`sudo reboot`" in server.texts()[0]
+    assert "Restart needed: yes" in server.run(CERT_END=cert_end(60)).stdout
+    # After the restart the flag is gone; a later one is posted again.
+    (server.fake / "reboot-required").unlink()
+    server.round(CERT_END=cert_end(60))
+    (server.fake / "reboot-required").write_text("")
+    server.round(CERT_END=cert_end(60))
+    assert len(server.texts()) == 2
+
+
+def test_auto_update_brings_security_updates_of_all_programs_weekly():
+    script = (ROOT / "scripts" / "auto-update.sh").read_text()
+    assert 'local services="db caddy backup"' in script
+    assert "docker compose build --pull --quiet" in script
+    assert "\n    update_images\n" in script
+    assert "update_mail" not in script
+
+
+def test_database_backups_are_private():
+    assert "\numask 077\n" in (ROOT / "scripts" / "backup.sh").read_text()
