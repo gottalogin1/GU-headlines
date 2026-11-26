@@ -7,6 +7,10 @@
 # Website: http://<server> (port 80). With SITE_DOMAIN set in .env and the
 # domain pointing at this server: https://<your domain>, with a free
 # certificate that Caddy gets and renews by itself.
+#
+# Your own mail server and webmail (the "mailserver" and "webmail" services
+# at the end) start only with COMPOSE_PROFILES=mail in .env. See
+# docs/email-server.md.
 
 services:
   db:
@@ -79,6 +83,11 @@ services:
       # Empty SITE_DOMAIN: plain http on port 80 for any address, such as the
       # server's IP address. A domain: https for that domain.
       SITE_ADDRESS: ${SITE_DOMAIN:-:80}
+      # The webmail's address, which also gets Caddy a certificate that the
+      # mail server uses. Without MAIL_HOSTNAME: a name that does not exist
+      # (".invalid" names never do), over plain http, so Caddy asks for no
+      # certificate.
+      WEBMAIL_ADDRESS: ${MAIL_HOSTNAME:-http://mail.invalid}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # The certificates. Keep this volume: without it Caddy asks for new
@@ -93,8 +102,116 @@ services:
     cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]
 
+  # ---------------------------------------------------------------------------
+  # Your own mail server (docker-mailserver) and webmail (Roundcube).
+  # Off until .env has COMPOSE_PROFILES=mail and MAIL_HOSTNAME. Step by step:
+  # docs/email-server.md. Mailboxes and DNS records: scripts/mail.sh.
+  # ---------------------------------------------------------------------------
+  mailserver:
+    # Receives mail for your addresses, sends mail (from the site and from
+    # you), keeps the mailboxes, signs outgoing mail (DKIM) and filters spam
+    # (Rspamd). The ":17" tag gets security fixes; scripts/auto-update.sh
+    # downloads them once a week.
+    image: mailserver/docker-mailserver:17
+    profiles: [mail]
+    restart: unless-stopped
+    # The mail server's own name, such as mail.guamheadlines.com. Your MX
+    # record and the server's reverse DNS point at it.
+    hostname: ${MAIL_HOSTNAME:-mail.localhost}
+    ports:
+      - "25:25" # mail from other mail servers to your addresses
+      - "465:465" # sending from mail apps (encrypted from the start)
+      - "587:587" # sending from mail apps and from the site (STARTTLS)
+      - "993:993" # reading mail in mail apps (IMAP, encrypted)
+    environment:
+      TZ: Pacific/Guam
+      # The certificate is the one Caddy gets for the webmail address (the
+      # same name), read from Caddy's storage. Only Let's Encrypt issues it
+      # (see caddy/Caddyfile), so the path stays the same. The mail server
+      # notices when Caddy renews it.
+      SSL_TYPE: manual
+      SSL_CERT_PATH: /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:-mail.localhost}/${MAIL_HOSTNAME:-mail.localhost}.crt
+      SSL_KEY_PATH: /caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/${MAIL_HOSTNAME:-mail.localhost}/${MAIL_HOSTNAME:-mail.localhost}.key
+      # Rspamd filters spam and signs mail with DKIM. The older programs
+      # that it replaces stay off. ClamAV (virus scanning) stays off: it
+      # needs about 1.5 GB of memory.
+      ENABLE_RSPAMD: 1
+      ENABLE_OPENDKIM: 0
+      ENABLE_OPENDMARC: 0
+      ENABLE_POLICYD_SPF: 0
+      ENABLE_AMAVIS: 0
+      ENABLE_SPAMASSASSIN: 0
+      ENABLE_CLAMAV: 0
+      # Spam goes to the Junk folder. Moving a message into or out of Junk
+      # teaches the filter.
+      MOVE_SPAM_TO_JUNK: 1
+      RSPAMD_LEARN: 1
+      # Fail2Ban blocks addresses that keep guessing passwords.
+      ENABLE_FAIL2BAN: 1
+      # A mailbox sends only as its own address (or its aliases).
+      SPOOF_PROTECTION: 1
+      ENABLE_POP3: 0
+      ENABLE_MANAGESIEVE: 0
+      # Docker's own network has IPv4 only. Some servers have IPv6 switched
+      # off completely, and then the mail programs would not start at all.
+      POSTFIX_INET_PROTOCOLS: ipv4
+      DOVECOT_INET_PROTOCOLS: ipv4
+      # New versions come through scripts/auto-update.sh, not by email.
+      ENABLE_UPDATE_CHECK: 0
+      # Largest email accepted: 35 MB, room for a 25 MB attachment.
+      POSTFIX_MESSAGE_SIZE_LIMIT: 36700160
+    volumes:
+      - mail_data:/var/mail # the mailboxes
+      - mail_state:/var/mail-state # spam filter data, mail waiting to go out
+      - mail_logs:/var/log/mail
+      - mail_config:/tmp/docker-mailserver # accounts, aliases, DKIM keys
+      - ./mail/fail2ban-jail.cf:/tmp/docker-mailserver/fail2ban-jail.cf:ro
+      # Caddy's certificates, read-only.
+      - caddy_data:/caddy-data:ro
+    networks:
+      default:
+        # Inside Docker, the mail server's name leads straight to this
+        # container. The site and the webmail connect to it by that name,
+        # and its certificate matches.
+        aliases:
+          - ${MAIL_HOSTNAME:-mail.localhost}
+    # Fail2Ban needs this permission to block addresses.
+    cap_add: [NET_ADMIN]
+    stop_grace_period: 1m
+    depends_on:
+      caddy:
+        condition: service_started
+
+  webmail:
+    # Roundcube: read and write your mail in the browser, at
+    # https://<MAIL_HOSTNAME>. Caddy passes the visits on; it has no port of
+    # its own.
+    image: roundcube/roundcubemail:1.7.x-apache
+    profiles: [mail]
+    restart: unless-stopped
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://${MAIL_HOSTNAME:-mail.localhost}
+      ROUNDCUBEMAIL_DEFAULT_PORT: 993
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://${MAIL_HOSTNAME:-mail.localhost}
+      ROUNDCUBEMAIL_SMTP_PORT: 587
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,markasjunk
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 18M
+    volumes:
+      - webmail_db:/var/roundcube/db # settings and contacts
+      - ./mail/roundcube.php:/var/roundcube/config/guheadlines.php:ro
+    depends_on:
+      mailserver:
+        condition: service_started
+    security_opt: ["no-new-privileges:true"]
+
 volumes:
   pgdata:
   media:
   caddy_data:
   caddy_config:
+  mail_data:
+  mail_state:
+  mail_logs:
+  mail_config:
+  webmail_db:

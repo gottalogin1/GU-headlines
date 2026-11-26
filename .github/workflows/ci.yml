@@ -38,6 +38,7 @@ jobs:
         run: |
           ruff check guheadlines tests
           ruff format --check guheadlines tests
+          shellcheck scripts/*.sh
       - name: Tests
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/guheadlines_test
@@ -94,6 +95,15 @@ jobs:
           done
           curl -fsSk -D - -o /dev/null https://localhost/ | grep -i '^strict-transport-security: max-age='
           test "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" http://localhost/jobs)" = "308 https://localhost/jobs"
+      - name: Mail server stays off unless asked for
+        run: |
+          # The mail server and webmail start only with COMPOSE_PROFILES=mail
+          # (docs/email-server.md). Check that they did not start, and that
+          # their settings are valid when they are on.
+          test -z "$(docker compose ps -aq mailserver webmail)"
+          COMPOSE_PROFILES=mail MAIL_HOSTNAME=mail.example.com docker compose config -q
+          COMPOSE_PROFILES=mail MAIL_HOSTNAME=mail.example.com docker compose config --services | grep -qx mailserver
+          COMPOSE_PROFILES=mail MAIL_HOSTNAME=mail.example.com docker compose config --services | grep -qx webmail
       - name: Worker commands
         run: |
           docker compose exec -T worker guheadlines migrate

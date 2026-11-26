@@ -1,0 +1,14 @@
+# Fail2Ban settings for the mail server (docker-compose.yml mounts this file
+# into it). Fail2Ban blocks an address after 6 wrong passwords within a week,
+# for a week.
+#
+# The webmail and the site sign in to the mail server from inside Docker.
+# They are never blocked: otherwise a few mistyped passwords on the webmail
+# page would block the webmail for everyone, and a wrong SMTP_PASSWORD in
+# .env would block the site's emails for a week, even after you fix it. The
+# webmail has its own limit instead: 3 tries a minute for each visitor.
+#
+# To unblock an address:   ./scripts/mail.sh unban 203.0.113.5
+# Do not change this file on the server: scripts/auto-update.sh updates it.
+[DEFAULT]
+ignoreip = 127.0.0.1/8 webmail web worker
