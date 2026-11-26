@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% from "_listing.html" import business %}
+{# The business directory (listings.py): free entries, and upgraded ones with
+   a photo, a link and a place at the top. #}
+{% block main %}
+<header class="page-head">
+  <h1>Business directory</h1>
+  <p class="muted">Guam businesses by category and village.</p>
+  {% if offers.business %}
+  <p class="post-offer"><a class="btn" href="/post/business">Add your business</a> <span class="muted small">Free. Featured at the top, with a photo and a link to your website: {{ offers.business.price }} for {{ offers.business.days }} days.</span></p>
+  {% endif %}
+</header>
+
+<form class="search-form" action="/directory" method="get">
+  <div class="field">
+    <label for="dq">Words</label>
+    <input id="dq" type="search" name="q" value="{{ q }}" placeholder="e.g. pizza, Tamuning, plumber" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="dcat">Category</label>
+    <select id="dcat" name="category">
+      <option value="">All categories</option>
+      {% for name in choices %}<option {% if category == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if q or category %}<a class="reset" href="/directory">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(result.total) }} {{ "business" if result.total == 1 else "businesses" }}{% if category %} in {{ category }}{% endif %}{% if q %} matching “{{ q }}”{% endif %}</h2>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No businesses here yet</h2>
+  <p>{% if offers.business %}<a href="/post/business">Add your business</a>: a basic entry is free.{% else %}Check back soon.{% endif %}</p>
+</div>
+{% endif %}
+
+{% for l in result.items %}{{ business(l, now) }}{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>About the directory</h2>
+  <p class="small">Businesses add themselves, and each entry is checked before it shows. Entries marked <strong>Featured</strong> are paid upgrades. {{ settings.site_name }} does not vouch for the businesses listed.</p>
+</section>
+{% include "_sidebar.html" %}
+{% endblock %}

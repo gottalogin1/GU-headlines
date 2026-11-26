@@ -4,7 +4,8 @@ A grid of weeks (Sunday first) for one month, with each day's main events.
 Which events are main events is set per calendar in config/events.yaml
 (`main_events`); when a visitor narrows the page to one calendar or searches
 for a word, every matching event is shown. A day shows at most MAX_PER_DAY
-events (all-day ones first) and how many more there are. An event that lasts
+events (paid featured events first, then all-day ones) and how many more
+there are. An event that lasts
 longer than LONG_EVENT_DAYS is shown on its first day only, so a semester or
 an exhibition doesn't fill every square. Past days are left empty, and this
 month starts with this week: the page is about what's coming up.
@@ -17,9 +18,12 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 from ..config import CalendarConfig
+from ..models import FEATURED_CALENDAR
 from ..scraper.text import GUAM_TZ
 
 MAX_PER_DAY = 3
+# The colour of paid featured events (listings.py) on the calendar.
+FEATURED_COLOR = "gold"
 LONG_EVENT_DAYS = 7
 _WEEKS = calendar.Calendar(firstweekday=calendar.SUNDAY)
 
@@ -88,7 +92,8 @@ def event_days(event, first: date, last: date) -> list[date]:
 
 def _order(entry: dict) -> tuple:
     event = entry["event"]
-    return (not event.all_day, event.starts_at, event.title.lower(), event.id or 0)
+    featured = entry["calendar_slug"] == FEATURED_CALENDAR
+    return (not featured, not event.all_day, event.starts_at, event.title.lower(), event.id or 0)
 
 
 def build_month(
@@ -113,7 +118,11 @@ def build_month(
         settings = config.get(item["calendar_slug"])
         if not everything and settings is not None and not settings.is_main(item["event"].title):
             continue
-        entry = {**item, "color": settings.color if settings else None}
+        if settings:
+            color = settings.color
+        else:
+            color = FEATURED_COLOR if item["calendar_slug"] == FEATURED_CALENDAR else None
+        entry = {**item, "color": color}
         for day in event_days(item["event"], start, end):
             by_day.setdefault(day, []).append(entry)
     rows = []

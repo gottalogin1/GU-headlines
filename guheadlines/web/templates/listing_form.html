@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{# The form for a new paid listing (listings.py). After it, the poster's own
+   page shows the listing and the PayPal link. Problems come back beside the
+   fields (errors); the values typed so far are kept (values). #}
+
+{% macro field(name, label, required=false, maxlength=100, type="text", hint="", placeholder="", attrs="") %}
+<div class="field{% if errors.get(name) %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}{% if not required %} <span class="optional">(optional)</span>{% endif %}</label>
+  <input id="f-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ values.get(name, '') }}"{% if required %} required{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if hint or errors.get(name) %} aria-describedby="{% if hint %}h-{{ name }}{% endif %}{% if errors.get(name) %} e-{{ name }}{% endif %}"{% endif %}{% if errors.get(name) %} aria-invalid="true"{% endif %} {{ attrs|safe }}>
+  {% if hint %}<p class="hint" id="h-{{ name }}">{{ hint }}</p>{% endif %}
+  {% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro textarea(name, label, required=true, maxlength=1500, hint="", rows=6) %}
+<div class="field wide{% if errors.get(name) %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}{% if not required %} <span class="optional">(optional)</span>{% endif %}</label>
+  <textarea id="f-{{ name }}" name="{{ name }}" rows="{{ rows }}" maxlength="{{ maxlength }}"{% if required %} required{% endif %}{% if hint or errors.get(name) %} aria-describedby="{% if hint %}h-{{ name }}{% endif %}{% if errors.get(name) %} e-{{ name }}{% endif %}"{% endif %}{% if errors.get(name) %} aria-invalid="true"{% endif %}>{{ values.get(name, '') }}</textarea>
+  {% if hint %}<p class="hint" id="h-{{ name }}">{{ hint }}</p>{% endif %}
+  {% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro choose(name, label, options) %}
+<div class="field{% if errors.get(name) %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}</label>
+  <select id="f-{{ name }}" name="{{ name }}" required{% if errors.get(name) %} aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+    <option value="">Pick one</option>
+    {% for option in options %}<option {% if values.get(name) == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+  </select>
+  {% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro photo_field(hint) %}
+<div class="field wide{% if errors.get('photo') %} has-error{% endif %}">
+  <label for="f-photo">Photo <span class="optional">(optional)</span></label>
+  <input id="f-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" aria-describedby="h-photo{% if errors.get('photo') %} e-photo{% endif %}">
+  <p class="hint" id="h-photo">{{ hint }}{% if errors %} If you chose a photo before, please choose it again.{% endif %}</p>
+  {% if errors.get('photo') %}<p class="field-error" id="e-photo">{{ errors.photo }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% block main %}
+{% set offer = offers[kind.slug] %}
+<header class="page-head">
+  <p class="crumbs"><a href="{{ kind.page }}">{{ {"classified": "Classifieds", "job": "Jobs", "event": "Events", "business": "Business directory"}[kind.slug] }}</a></p>
+  <h1>{{ {"classified": "Post a classified ad", "job": "Post a featured job", "event": "Feature your event", "business": "Add your business"}[kind.slug] }}</h1>
+  <p class="muted">
+  {% if kind.slug == "classified" %}Your ad shows on the Classifieds page for {{ offer.days }} days. It costs {{ offer.price }}.
+  {% elif kind.slug == "job" %}Your job shows at the top of the Jobs page, marked Featured, for {{ offer.days }} days. It costs {{ offer.price }}.
+  {% elif kind.slug == "event" %}Your event shows at the top of the Events page and on the home page, marked Featured, and on the event calendar, until it is over. It costs {{ offer.price }}.
+  {% else %}A basic entry is free. The featured upgrade adds your photo and a link to your website, and puts you at the top of the directory, for {{ offer.days }} days.{% endif %}
+  </p>
+</header>
+
+{% if errors.form %}<p class="signup-result error" role="alert">{{ errors.form }}</p>
+{% elif errors %}<p class="signup-result error" role="alert">Please check the fields marked below.</p>{% endif %}
+
+<form class="listing-form panel" action="/post/{{ kind.slug }}" method="post" enctype="multipart/form-data">
+  {% if kind.slug == "classified" %}
+    {{ field("title", "What are you selling or looking for?", required=true, maxlength=100, placeholder="e.g. 2015 Toyota Corolla, 80,000 miles") }}
+    {{ choose("category", "Section", sections) }}
+    {{ field("price", "Price", maxlength=40, placeholder="e.g. $4,500 or best offer") }}
+    {{ field("location", "Village", maxlength=80, placeholder="e.g. Dededo") }}
+    {{ textarea("description", "Description", maxlength=1500, hint="What it is, its condition, and anything a buyer should know.") }}
+    {{ field("contact", "Phone or email for buyers", required=true, maxlength=120, hint="Shown with your ad, so buyers can reach you.") }}
+    {{ photo_field("A JPG, PNG or WebP photo, at most 6 MB.") }}
+  {% elif kind.slug == "job" %}
+    {{ field("title", "Job title", required=true, maxlength=100, placeholder="e.g. Line cook") }}
+    {{ field("name", "Employer", required=true, maxlength=100) }}
+    {{ field("location", "Location", maxlength=80, placeholder="e.g. Tumon") }}
+    {{ field("price", "Pay", maxlength=60, placeholder="e.g. $15 an hour") }}
+    {{ textarea("description", "About the job", maxlength=3000, rows=8, hint="The work, the hours, and what you need from applicants.") }}
+    {{ field("link", "Page to apply on", maxlength=300, type="url", placeholder="https://") }}
+    {{ field("contact", "How to apply", maxlength=200, hint="For example an email address or a phone number. Give this, the page to apply on, or both.") }}
+  {% elif kind.slug == "event" %}
+    {{ field("title", "Event name", required=true, maxlength=100) }}
+    {{ field("name", "Organizer", required=true, maxlength=100) }}
+    {{ field("date", "Date", required=true, maxlength=0, type="date", attrs='min="' ~ today.isoformat() ~ '" max="' ~ last_day.isoformat() ~ '"') }}
+    {{ field("start_time", "Starts at", maxlength=0, type="time", hint="Leave it empty for an all-day event.") }}
+    {{ field("end_date", "Last day", maxlength=0, type="date", hint="Only for an event of more than one day.", attrs='min="' ~ today.isoformat() ~ '"') }}
+    {{ field("end_time", "Ends at", maxlength=0, type="time") }}
+    {{ field("location", "Place", required=true, maxlength=120, placeholder="e.g. Chamorro Village, Hagåtña") }}
+    {{ textarea("description", "About the event", required=false, maxlength=1500) }}
+    {{ field("link", "Event page", maxlength=300, type="url", placeholder="https://", hint="Tickets, or more details.") }}
+  {% else %}
+    {{ field("title", "Business name", required=true, maxlength=100) }}
+    {{ choose("category", "Category", business_categories) }}
+    {{ field("location", "Village or address", required=true, maxlength=120) }}
+    {{ field("contact", "Phone", maxlength=60) }}
+    {{ textarea("description", "What you do", maxlength=600, rows=4, hint="A few lines: what you sell or do, and your hours.") }}
+    {{ field("link", "Website", maxlength=300, type="url", placeholder="https://", hint="Linked from featured entries.") }}
+    {{ photo_field("Shown on featured entries: your shop, your work or your logo. A JPG, PNG or WebP photo, at most 6 MB.") }}
+    <fieldset class="field wide plan">
+      <legend>Your entry</legend>
+      <label class="plan-choice"><input type="radio" name="plan" value="featured" {% if values.get("plan", "featured") == "featured" %}checked{% endif %}> <span><strong>Featured, {{ offer.price }} for {{ offer.days }} days.</strong> At the top of the directory, with your photo and a link to your website. Then a basic entry, free.</span></label>
+      <label class="plan-choice"><input type="radio" name="plan" value="basic" {% if values.get("plan") == "basic" %}checked{% endif %}> <span><strong>Basic, free.</strong> Your name, category, village, phone and description.</span></label>
+    </fieldset>
+  {% endif %}
+
+  <div class="signup-trap" aria-hidden="true">
+    <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+  </div>
+  <div class="field wide form-end">
+    <button class="btn" type="submit">Continue</button>
+    <p class="hint">{% if kind.slug == "business" %}On the next page you see your entry. For the featured entry, you then pay with PayPal (with a PayPal account or a card).{% else %}On the next page you see your listing, and pay {{ offer.price }} with PayPal (with a PayPal account or a card).{% endif %}
+      Each listing is checked before it shows. If it is not accepted, the payment is given back.</p>
+  </div>
+</form>
+{% endblock %}

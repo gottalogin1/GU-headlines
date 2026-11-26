@@ -29,13 +29,13 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
-from sqlalchemy import select
+from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import ads, alerts, gas, health, mail, paypal, sendfox
+from .. import ads, alerts, gas, health, listings, mail, paypal, sendfox
 from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
@@ -49,10 +49,10 @@ from ..config import (
 from ..db import session_scope
 from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
-from ..models import CATCH_UP_NOTE, AdBooking, Article, Source
+from ..models import CATCH_UP_NOTE, FEATURED_CALENDAR, AdBooking, Article, Listing, Source
 from ..newsletter import schedule_text
 from ..outages import EPA_URL, GPA_TROUBLE_PHONE, GPA_URL, GWA_DISPATCH_PHONE, GWA_URL, outages_page
-from ..scraper.images import SMALL_WIDTH, small_image_path
+from ..scraper.images import SMALL_WIDTH, ImageRejected, small_image_path
 from ..scraper.text import GUAM_TZ, truncate
 from ..settings import DAY_NAMES, get_settings
 from ..settings import _web_address as web_address
@@ -360,6 +360,26 @@ def weather_reports() -> dict[str, tuple]:
     return weather_cache.get("weather", load)
 
 
+# Paid featured events (listings.py), shown on the home page and the Events page.
+featured_cache = _TTLCache(ttl=60)
+FEATURED_SHOWN = 4
+
+
+def featured_events() -> list[dict]:
+    """The next featured events, soonest first."""
+
+    def load():
+        today = datetime.now(GUAM_TZ).date()
+        since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
+        with session_scope() as session:
+            found = queries.list_events(
+                session, EventFilters(calendar=FEATURED_CALENDAR), 1, FEATURED_SHOWN, since
+            )
+        return found.items
+
+    return featured_cache.get("featured", load)
+
+
 # --------------------------------------------------------- template helpers
 
 
@@ -577,6 +597,7 @@ templates.env.filters.update(
     safe_url=safe_url,
 )
 templates.env.tests.update(note=is_note)
+templates.env.filters.update(money=listings.money)
 templates.env.globals.update(
     settings=settings,
     event_time=event_time,
@@ -593,6 +614,9 @@ templates.env.globals.update(
     guam_radar_url=GUAM_RADAR_URL,
     surf_page_url=SURF_PAGE,
     marine_page_url=MARINE_PAGE,
+    upgraded=listings.upgraded,
+    listing_kinds=listings.KINDS,
+    featured_calendar=FEATURED_CALENDAR,
 )
 
 
@@ -740,6 +764,19 @@ def signup_info() -> dict | None:
     return {"pitch": pitch + "."}
 
 
+def paid_listings() -> dict[str, dict]:
+    """The kinds of paid listings that people can post now (listings.py),
+    with their price and days, for the links that offer them."""
+    return {
+        kind: {
+            "price": listings.money(listings.price_cents(settings, kind, featured=True)),
+            "days": listings.days(settings, kind),
+        }
+        for kind in listings.KINDS
+        if listings.is_on(settings, kind)
+    }
+
+
 def render(request: Request, template: str, status_code: int = 200, **context) -> HTMLResponse:
     """Render a page with what every page needs: the sections, the sidebar and
     the pagination helper."""
@@ -800,6 +837,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "signup": signup_info(),
             "show_signup": show_signup,
             "bid_alerts": bid_alerts_info(),
+            "offers": paid_listings(),
             "travel": travel_links() if show_travel else None,
             "weather": (
                 for_page(
@@ -876,6 +914,7 @@ def home(request: Request, page: int = Query(1, ge=1, le=10000)):
         active_nav="latest",
         show_ad=True,
         show_weather=page == 1,
+        featured=featured_events() if page == 1 else [],
     )
 
 
@@ -1166,6 +1205,14 @@ def jobs(
     with session_scope() as session:
         result = queries.list_jobs(session, job_filters, page, settings.page_size, today)
         boards = queries.job_boards(session, today)
+        # Paid job posts (listings.py), pinned above the boards' postings.
+        featured = (
+            queries.listings(
+                session, "job", datetime.now(timezone.utc), q=job_filters.q, per_page=20
+            ).items
+            if page == 1 and not job_filters.source
+            else []
+        )
     if page > 1 and not result.items:
         raise HTTPException(404)
     # Boards that can't be collected are listed apart, with the reason.
@@ -1175,6 +1222,7 @@ def jobs(
         request,
         "jobs.html",
         result=result,
+        featured=featured,
         job_filters=job_filters,
         boards=boards,
         uncollectable=[b for b in boards_config if b.enabled and b.cannot_scrape],
@@ -1228,6 +1276,7 @@ def events(
     collected = {c.slug for c in calendars_config if c.collected}
     calendars = [c for c in calendars if c["calendar"].slug in collected]
     colors = {c.slug: c.color for c in calendars_config if c.color}
+    colors[FEATURED_CALENDAR] = event_calendar.FEATURED_COLOR
     # The calendar feed to offer: the calendar the page is narrowed to, or all.
     feed_calendar = next(
         (c for c in calendars_config if c.collected and c.slug == event_filters.calendar), None
@@ -1246,12 +1295,16 @@ def events(
         request,
         "events.html",
         result=result,
+        featured=(
+            featured_events() if page == 1 and not (picked or event_filters.calendar) else []
+        ),
         groups=group_events(result.items, picked or today),
         event_filters=event_filters,
         calendars=calendars,
         month_view=month_view,
         colors=colors,
         legend=[c for c in calendars if c["calendar"].slug in colors],
+        featured_legend=bool(featured_events()),
         feed=_feed_links(request, feed_calendar.slug if feed_calendar else None),
         feed_calendar=feed_calendar,
         title="Events on Guam",
@@ -1320,6 +1373,7 @@ def event_page(request: Request, event_id: int):
     item = _upcoming_event(event_id)
     event = item["event"]
     colors = {c.slug: c.color for c in events_config_cache.get() if c.color}
+    colors[FEATURED_CALENDAR] = event_calendar.FEATURED_COLOR
     when = event_when(event)
     summary = f"{when}, {event.location}" if event.location else when
     if event.description:
@@ -1576,20 +1630,26 @@ def _stats_password_ok(request: Request) -> bool:
     return secrets.compare_digest(password.encode(), settings.stats_password.encode())
 
 
+def _password_prompt() -> PlainTextResponse:
+    """The answer that makes the browser ask for STATS_PASSWORD. Every private
+    page uses the same realm, so one login opens them all."""
+    return PlainTextResponse(
+        "This page needs a password.",
+        status_code=401,
+        headers={
+            "WWW-Authenticate": 'Basic realm="Visitor stats", charset="UTF-8"',
+            "Cache-Control": "no-store",
+            "X-Robots-Tag": "noindex",
+        },
+    )
+
+
 @app.get("/stats", response_class=HTMLResponse)
 def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
     if not settings.stats_password:
         raise HTTPException(404)
     if not _stats_password_ok(request):
-        return PlainTextResponse(
-            "This page needs a password.",
-            status_code=401,
-            headers={
-                "WWW-Authenticate": 'Basic realm="Visitor stats", charset="UTF-8"',
-                "Cache-Control": "no-store",
-                "X-Robots-Tag": "noindex",
-            },
-        )
+        return _password_prompt()
     if days not in STATS_PERIODS:
         days = 7
     # This worker's newest counts. The other worker writes its own within 30 seconds.
@@ -1598,6 +1658,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
     since = datetime.now(GUAM_TZ).date() - timedelta(days=days - 1)
     with session_scope() as session:
         data = queries.visitor_stats(session, since)
+        to_review = session.scalar(select(func.count()).where(Listing.status == listings.REVIEW))
         news_health = health.news_health(
             session, [s.slug for s in config.sources if s.collected], datetime.now(timezone.utc)
         )
@@ -1633,6 +1694,8 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/advertise": "Advertise",
         "/status": "Sources",
         "/search": "Search",
+        "/classifieds": "Classifieds",
+        "/directory": "Business directory",
         **{f"/category/{c.slug}": c.name for c in config.categories},
         **{f"/source/{s.slug}": s.name for s in config.sources},
     }
@@ -1658,6 +1721,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         news_health=news_health,
         feed_health=feed_health,
         problems=[h for h in [*news_health, *feed_health] if h.status in ("failing", "quiet")],
+        to_review=to_review,
     )
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
@@ -1690,6 +1754,9 @@ def robots(request: Request):
         "Disallow: /healthz\n"
         # The counting stop in front of each story link (/go/<id>).
         "Disallow: /go/\n"
+        # Each poster's own page of a paid listing, and the review page.
+        "Disallow: /listing/\n"
+        "Disallow: /admin/\n"
         # A booking's own page and the owner's review page (the Advertise page
         # itself, /advertise, is for everyone).
         "Disallow: /advertise/\n"
@@ -1739,6 +1806,11 @@ def sitemap(request: Request):
         outages=bool(settings.outages_interval_minutes),
         events=found["events"],
         bid_alerts=bid_alerts.is_on(settings),
+        listings=[
+            listings.KINDS[kind].page
+            for kind in ("classified", "business")
+            if listings.is_on(settings, kind)
+        ],
         advertise=bool(advertising()),
     )
     return Response(
@@ -1954,6 +2026,440 @@ async def newsletter_signup(request: Request):
         return result("error")
     log.info("newsletter sign-up added to SendFox")
     return result("ok")
+
+
+# ------------------------------------------------------------ paid listings
+
+
+listing_limit = SignupLimit(per_address=10, total=60)
+
+
+def _no_store(response: Response) -> Response:
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+def _alert_review(request: Request, listing) -> None:
+    """Tell the owner of the site (Discord) that a listing waits for review."""
+    if settings.discord_webhook_url:
+        kind = listings.KINDS[listing.kind].name
+        alerts.send(
+            settings,
+            alerts.Alert(
+                title=f"{kind} to review",
+                message=f"{listing.title}\n{seo.absolute_url(request, '/admin/listings')}",
+                emoji="🧾",
+            ),
+        )
+
+
+def _listing_page(
+    request: Request,
+    kind: str,
+    template: str,
+    title: str,
+    description: str,
+    q: str,
+    category: str,
+    categories: tuple[str, ...],
+    page: int,
+):
+    """The Classifieds or the Directory page."""
+    if category and category not in categories:
+        category = ""
+    with session_scope() as session:
+        result = queries.listings(
+            session,
+            kind,
+            datetime.now(timezone.utc),
+            q=q.strip(),
+            category=category or None,
+            page=page,
+            per_page=settings.page_size,
+        )
+    # Listings that were paid for stay on the site until they end, also when
+    # posting is off.
+    if not listings.is_on(settings, kind) and not result.total and not (q or category):
+        raise HTTPException(404)
+    if page > 1 and not result.items:
+        raise HTTPException(404)
+    return render(
+        request,
+        template,
+        result=result,
+        q=q.strip(),
+        category=category,
+        choices=categories,
+        now=datetime.now(timezone.utc),
+        title=title,
+        description=description,
+        active_nav="listings",  # not a topic slug: "business" is one
+        canonical={"category": category or None, "page": page},
+        robots="noindex, follow" if q else None,
+        breadcrumbs=[(title, None)],
+        show_ad=True,
+    )
+
+
+@app.get("/classifieds", response_class=HTMLResponse)
+def classifieds(
+    request: Request,
+    q: str = Query("", max_length=200),
+    category: str = Query("", max_length=60),
+    page: int = Query(1, ge=1, le=1000),
+):
+    return _listing_page(
+        request,
+        "classified",
+        "classifieds.html",
+        "Classifieds",
+        "Guam classified ads: things for sale, cars and trucks, housing, services and wanted"
+        f" ads from people on the island, on {settings.site_name}.",
+        q,
+        category,
+        listings.CLASSIFIED_SECTIONS,
+        page,
+    )
+
+
+@app.get("/directory", response_class=HTMLResponse)
+def directory(
+    request: Request,
+    q: str = Query("", max_length=200),
+    category: str = Query("", max_length=60),
+    page: int = Query(1, ge=1, le=1000),
+):
+    return _listing_page(
+        request,
+        "business",
+        "directory.html",
+        "Business directory",
+        "Guam businesses by category and village: restaurants, shops, services and more,"
+        f" with their phone numbers and websites, on {settings.site_name}.",
+        q,
+        category,
+        listings.BUSINESS_CATEGORIES,
+        page,
+    )
+
+
+def _post_form(request: Request, kind: str, values: dict, errors: dict, status_code: int = 200):
+    info = listings.KINDS[kind]
+    return render(
+        request,
+        "listing_form.html",
+        status_code=status_code,
+        kind=info,
+        values=values,
+        errors=errors,
+        today=datetime.now(GUAM_TZ).date(),
+        last_day=datetime.now(GUAM_TZ).date() + timedelta(days=listings.EVENT_DAYS_AHEAD),
+        sections=listings.CLASSIFIED_SECTIONS,
+        business_categories=listings.BUSINESS_CATEGORIES,
+        title=f"Post a {info.name.lower()}",
+        robots="noindex, follow",
+        canonical={},
+        breadcrumbs=[(f"Post a {info.name.lower()}", None)],
+        show_signup=False,
+    )
+
+
+@app.get("/post/{kind}", response_class=HTMLResponse)
+def post_form(request: Request, kind: str):
+    """The form for a new listing of this kind."""
+    if not listings.is_on(settings, kind):
+        raise HTTPException(404)
+    return _post_form(request, kind, {"plan": "featured"}, {})
+
+
+@app.post("/post/{kind}")
+async def post_listing(request: Request, kind: str):
+    """Save a new listing from its form, then open the poster's own page for
+    it, which has the PayPal link."""
+    if not listings.is_on(settings, kind):
+        raise HTTPException(404)
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the site.", status_code=403)
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > listings.MAX_BODY:
+            return PlainTextResponse("Too large: the photo can be at most 6 MB.", status_code=413)
+    try:
+        fields, photo = listings.parse_form(body, request.headers.get("content-type", ""))
+    except listings.FormError:
+        return PlainTextResponse("Please use the form on the site.", status_code=400)
+    if fields.get("website"):
+        # The field that people don't see: a robot filled it in.
+        return RedirectResponse(f"/post/{kind}", status_code=303)
+    values, errors = listings.check(
+        kind, fields, datetime.now(GUAM_TZ).date(), config_cache.get().muted
+    )
+    if errors:
+        return _post_form(request, kind, fields, errors, status_code=400)
+    if not listing_limit.allow(request.client.host if request.client else ""):
+        log.warning("listing refused: too many new listings in the last hour")
+        errors = {"form": "Too many listings in a short time. Please try again in an hour."}
+        return _post_form(request, kind, fields, errors, status_code=429)
+
+    def save():
+        stored = None
+        if photo and listings.KINDS[kind].photo:
+            stored = listings.save_photo(settings.media_dir, photo, settings.image_max_width)
+        with session_scope() as session:
+            listings.delete_stale(session, datetime.now(timezone.utc), settings.media_dir)
+            listing = listings.create(session, settings, kind, values, stored)
+        if listing.status == listings.REVIEW:  # free: nothing to pay
+            _alert_review(request, listing)
+        return listing
+
+    try:
+        listing = await run_in_threadpool(save)
+    except ImageRejected as exc:
+        log.info("listing photo refused: %s", exc)
+        errors = {
+            "photo": "The photo could not be used. Please choose a JPG, PNG or WebP photo of at"
+            " least 200 by 120 pixels, and at most 6 MB."
+        }
+        return _post_form(request, kind, fields, errors, status_code=400)
+    return RedirectResponse(
+        f"/listing/{listing.id}/{listing.key}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _own_listing(listing_id: int, key: str):
+    with session_scope() as session:
+        listing = listings.find(session, listing_id, key)
+    if listing is None:
+        raise HTTPException(404)
+    return listing
+
+
+PAYMENT_RESULTS = {
+    "ok": (
+        True,
+        "Thank you, your payment went through. Your listing now waits for a quick"
+        " review, and then shows on the site.",
+    ),
+    "pending": (
+        True,
+        "PayPal is still checking your payment. Your listing goes to review as soon"
+        " as PayPal is done; this page shows it then.",
+    ),
+    "unfinished": (False, "The payment was not finished. Nothing was charged. You can pay below."),
+    "declined": (
+        False,
+        "PayPal could not take the payment. Please try again, with another card or account.",
+    ),
+    "error": (
+        False,
+        "PayPal did not answer this time. Nothing was charged. Please try again in a few minutes.",
+    ),
+    "mismatch": (
+        False,
+        "Something did not match in this payment, so it was not used. Please try"
+        " again; if you were charged, the payment will be given back.",
+    ),
+}
+
+
+@app.get("/listing/{listing_id}/{key}", response_class=HTMLResponse)
+def listing_page(
+    request: Request,
+    listing_id: int,
+    key: str,
+    paid: str = Query("", max_length=12),
+):
+    """The poster's own page for a listing: how it looks, what it costs, the
+    PayPal link, and where it is (waiting for review, live, ...)."""
+    listing = _own_listing(listing_id, key)
+    found = PAYMENT_RESULTS.get(paid)
+    response = render(
+        request,
+        "listing.html",
+        listing=listing,
+        kind=listings.KINDS[listing.kind],
+        result={"ok": found[0], "text": found[1]} if found else None,
+        address=seo.absolute_url(request, f"/listing/{listing.id}/{listing.key}"),
+        now=datetime.now(timezone.utc),
+        title=f"Your {listings.KINDS[listing.kind].name.lower()}",
+        robots="noindex, nofollow",
+        count_view=False,
+        show_signup=False,
+    )
+    return _no_store(response)
+
+
+@app.get("/listing/{listing_id}/{key}/pay")
+def listing_pay(request: Request, listing_id: int, key: str):
+    """Make a PayPal order for the listing, and send the poster to PayPal to
+    pay it. (A link, not a form: see paypal.py.)"""
+    listing = _own_listing(listing_id, key)
+    page = f"/listing/{listing.id}/{listing.key}"
+    if listing.status != listings.UNPAID or not paypal.enabled(settings):
+        return RedirectResponse(page, status_code=303, headers={"Cache-Control": "no-store"})
+    try:
+        order = paypal.create_order(
+            settings,
+            amount_cents=listing.amount_cents,
+            description=f"{listings.KINDS[listing.kind].name}: {listing.title}",
+            custom_id=f"listing-{listing.id}",
+            return_url=seo.absolute_url(request, f"{page}/paid"),
+            cancel_url=seo.absolute_url(request, page),
+        )
+    except paypal.PayPalError as exc:
+        log.warning("PayPal order for listing %s failed: %s", listing.id, exc)
+        return RedirectResponse(f"{page}?paid=error", status_code=303)
+    with session_scope() as session:
+        listings.set_order(session, listing.id, order.id)
+    return RedirectResponse(
+        order.approve_url, status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+def _settle(request: Request, listing, order_id: str) -> str:
+    """Take the money of a PayPal order for the listing (see paypal.py), and
+    send the listing to review. Returns a key of PAYMENT_RESULTS."""
+    try:
+        capture = paypal.capture_order(settings, order_id)
+    except paypal.PayPalError as exc:
+        log.warning("PayPal capture for listing %s failed: %s", listing.id, exc)
+        return "declined" if exc.issue == "INSTRUMENT_DECLINED" else "error"
+    if capture.status == "PENDING":
+        with session_scope() as session:
+            listings.set_order(session, listing.id, order_id)
+        return "pending"
+    if not capture.paid:
+        return "unfinished"
+    try:
+        with session_scope() as session:
+            recorded = listings.mark_paid(
+                session, listing.id, order_id, capture, datetime.now(timezone.utc)
+            )
+    except listings.PaymentMismatch as exc:
+        log.error(
+            "PayPal payment %s not used for listing %s: %s", capture.capture_id, listing.id, exc
+        )
+        return "mismatch"
+    if recorded:
+        log.info("listing %s paid (PayPal capture %s)", listing.id, capture.capture_id)
+        _alert_review(request, listing)
+    return "ok"
+
+
+@app.get("/listing/{listing_id}/{key}/paid")
+def listing_paid(
+    request: Request, listing_id: int, key: str, token: str = Query("", max_length=64)
+):
+    """Where PayPal sends the poster back after approving the payment, with
+    ?token=<the order's ID>."""
+    listing = _own_listing(listing_id, key)
+    page = f"/listing/{listing.id}/{listing.key}"
+    if listing.status != listings.UNPAID:
+        return RedirectResponse(page, status_code=303, headers={"Cache-Control": "no-store"})
+    if not re.fullmatch(r"[A-Za-z0-9-]{5,64}", token):
+        return RedirectResponse(f"{page}?paid=unfinished", status_code=303)
+    result = _settle(request, listing, token)
+    return RedirectResponse(
+        f"{page}?paid={result}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+REVIEW_RESULTS = {
+    "approved": "Approved: the listing is on the site.",
+    "rejected": "Rejected. Its payment, if any, was given back.",
+    "removed": "Taken down: the listing is off the site. No money was given back.",
+    "paid": "PayPal says it is paid: the listing now waits for review below.",
+    "unpaid": "PayPal says it is not paid (yet).",
+    "refund-failed": "PayPal could not give the money back, so the listing was not rejected."
+    " See the web log for PayPal's reason, or refund it on paypal.com.",
+    "gone": "That listing was not in that state any more. Nothing changed.",
+}
+
+
+@app.get("/admin/listings", response_class=HTMLResponse)
+def review_listings(request: Request, done: str = Query("", max_length=20)):
+    """The owner's page for the paid listings: approve or reject the new
+    ones, take down live ones."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _password_prompt()
+    with session_scope() as session:
+        data = queries.listings_for_review(session, datetime.now(timezone.utc))
+    response = render(
+        request,
+        "admin_listings.html",
+        title="Paid listings",
+        robots="noindex, nofollow",
+        count_view=False,
+        show_signup=False,
+        message=REVIEW_RESULTS.get(done),
+        now=datetime.now(timezone.utc),
+        **data,
+    )
+    return _no_store(response)
+
+
+def _review(request: Request, listing_id: int, action: str, note: str) -> str:
+    """Do one action of the review page. Returns a key of REVIEW_RESULTS."""
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        listing = session.get(Listing, listing_id) if 1 <= listing_id < 2**63 else None
+    if listing is None:
+        return "gone"
+    if action == "approve":
+        with session_scope() as session:
+            done = listings.approve(session, settings, listing_id, now)
+        featured_cache._data.clear()
+        return "approved" if done else "gone"
+    if action == "reject":
+        if listing.status != listings.REVIEW:
+            return "gone"
+        refund = bool(listing.capture_id and not listing.refunded_at)
+        if refund:
+            try:
+                paypal.refund_capture(settings, listing.capture_id)
+            except paypal.PayPalError as exc:
+                log.warning("refund of listing %s failed: %s", listing_id, exc)
+                return "refund-failed"
+        with session_scope() as session:
+            done = listings.reject(session, listing_id, now, note, refunded=refund)
+        if done:
+            listings.delete_photo(settings.media_dir, listing.photo)
+        return "rejected" if done else "gone"
+    if action == "remove":
+        with session_scope() as session:
+            done = listings.take_down(session, listing_id, now)
+        if done:
+            listings.delete_photo(settings.media_dir, listing.photo)
+            featured_cache._data.clear()
+        return "removed" if done else "gone"
+    if action == "check" and listing.status == listings.UNPAID and listing.order_id:
+        return "paid" if _settle(request, listing, listing.order_id) == "ok" else "unpaid"
+    return "gone"
+
+
+@app.post("/admin/listings/{listing_id}")
+async def review_listing(request: Request, listing_id: int):
+    """A button of the review page: approve, reject, remove or check."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _password_prompt()
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the buttons on the review page.", status_code=403)
+    body = (await request.body())[:_MAX_SIGNUP_BODY]
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
+    action = (form.get("action") or [""])[0]
+    note = (form.get("note") or [""])[0]
+    result = await run_in_threadpool(_review, request, listing_id, action, note)
+    return RedirectResponse(
+        f"/admin/listings?done={result}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
 
 
 # ------------------------------------------------------------ advertising
@@ -2506,7 +3012,7 @@ def bid_alerts_info() -> dict | None:
 bid_alert_limit = SignupLimit()
 
 
-async def _post_form(request: Request) -> dict[str, list[str]] | Response:
+async def _bid_alert_form(request: Request) -> dict[str, list[str]] | Response:
     """The fields of a form sent from a page of this site, or the answer to
     give when it was not (another site's form) or is too large."""
     if not bid_alerts.is_on(settings):
@@ -2584,7 +3090,7 @@ def bid_alerts_page(request: Request, result: str = Query("", max_length=10)):
 @app.post("/bids/alerts")
 async def bid_alerts_signup(request: Request):
     """The sign-up form: keep a pending subscriber, then show the review page."""
-    form = await _post_form(request)
+    form = await _bid_alert_form(request)
     if isinstance(form, Response):
         return form
     if _field(form, "website"):
@@ -2599,7 +3105,7 @@ async def bid_alerts_signup(request: Request):
     return _see_other(f"/bids/alerts/review?t={token}")
 
 
-def _review(request: Request, sub, result: dict | None = None) -> HTMLResponse:
+def _bid_alert_review(request: Request, sub, result: dict | None = None) -> HTMLResponse:
     return _private(
         render(
             request,
@@ -2638,7 +3144,7 @@ def bid_alerts_review(
             "ok": False,
             "text": "You left PayPal before the end, so nothing was paid. You can try again.",
         }
-    return _review(request, sub, result)
+    return _bid_alert_review(request, sub, result)
 
 
 @app.get("/bids/alerts/pay")
@@ -2655,7 +3161,7 @@ def bid_alerts_pay(request: Request, t: str = Query("", max_length=64)):
         approve = bid_alerts.start_payment(settings, t)
     except (paypal.PayPalError, bid_alerts.AlertsError) as exc:
         log.warning("bid alerts: could not start the PayPal payment: %s", exc)
-        return _review(
+        return _bid_alert_review(
             request,
             sub,
             {"ok": False, "text": "PayPal could not be reached just now. Please try again soon."},
@@ -2756,7 +3262,7 @@ def bid_alerts_manage(
 @app.post("/bids/alerts/manage")
 async def bid_alerts_save(request: Request):
     """The form on a subscriber's own page: new address, trades and words."""
-    form = await _post_form(request)
+    form = await _bid_alert_form(request)
     if isinstance(form, Response):
         return form
     token = _field(form, "t")
@@ -2773,7 +3279,7 @@ async def bid_alerts_save(request: Request):
 @app.post("/bids/alerts/cancel")
 async def bid_alerts_cancel(request: Request):
     """Cancel a subscription: PayPal stops the payments."""
-    form = await _post_form(request)
+    form = await _bid_alert_form(request)
     if isinstance(form, Response):
         return form
     token = _field(form, "t")
@@ -2793,7 +3299,7 @@ async def bid_alerts_link(request: Request):
     """Email the links of an address's bid alerts again. The answer is the
     same whether or not the address has any, so the form tells no one who
     subscribes."""
-    form = await _post_form(request)
+    form = await _bid_alert_form(request)
     if isinstance(form, Response):
         return form
     if _field(form, "website"):
