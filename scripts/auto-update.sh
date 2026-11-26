@@ -23,6 +23,9 @@
 #   3. Watch. If the site does not answer in two rounds in a row (about 10
 #      minutes), it sends an alert, and another when the site answers again.
 #      The same when the news has not been checked for 3 hours.
+#   4. Server checks (scripts/server-check.sh): disk space, memory, the https
+#      certificates and, with your own mail server on, the spam block lists;
+#      and once a week it deletes Docker's leftovers.
 #
 # Alerts are posted to a Discord channel through DISCORD_WEBHOOK_URL in .env
 # (see .env.example). Without it, the script still updates and watches, and
@@ -354,6 +357,8 @@ main() {
     update
     update_mail
     watch
+    # Its own file, so it can also be run by hand. "bash": see install_cron.
+    bash scripts/server-check.sh --round
     if [ -t 1 ]; then # run by hand: say where things stand
         echo "On commit $(git log -1 --format='%h: %s')."
         if healthz >/dev/null 2>&1; then echo "The site answers."; else echo "The site does not answer."; fi
