@@ -367,6 +367,9 @@ SPONSOR_CLICKS = "sponsor-click"
 # Clicks on the stories in the newsletter emails (links that end in
 # ?from=newsletter), kept in page_views under this name.
 NEWSLETTER_CLICKS = "newsletter-click"
+# Sign-ups in the site's newsletter box (sendfox.py), kept in page_views
+# under this name, for the weekly report (reports.py).
+NEWSLETTER_SIGNUPS = "newsletter-signup"
 
 
 class PageViews(Base):

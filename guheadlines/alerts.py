@@ -117,7 +117,8 @@ def send(settings: Settings, alert: Alert, transport: httpx.BaseTransport | None
 # ------------------------------------------------------------ failing sources
 
 # AlertState keys: "<prefix>:<slug>" for a failing source (the prefix says
-# which kind), "quiet:<slug>" for a news site that went quiet.
+# which kind), "quiet:<slug>" for a news site that went quiet. reports.py
+# keeps its own rows ("report:...") in the same table.
 KINDS = {"news": "news site", "jobs": "job board", "events": "event calendar"}
 QUIET_KEY = "quiet:"
 
@@ -318,7 +319,9 @@ def check_sources(
         names, failures = _collected(session, news_slugs, board_slugs, calendar_slugs)
         states = {state.key: state for state in session.scalars(select(AlertState))}
         quiet_states = {k: s for k, s in states.items() if k.startswith(QUIET_KEY)}
-        states = {k: s for k, s in states.items() if k not in quiet_states}
+        # Only the rows of failing sources. The table also keeps other notes,
+        # such as when each report was sent (reports.py).
+        states = {k: s for k, s in states.items() if k.partition(":")[0] in KINDS}
 
         newly: list[tuple[AlertState, Failure]] = []
         for key, failure in failures.items():
@@ -488,6 +491,10 @@ def send_test_alert(settings: Settings, transport: httpx.BaseTransport | None = 
         message += f"\n\nKeyword alerts are on for: {', '.join(words)}."
     else:
         message += "\n\nKeyword alerts are off (ALERT_KEYWORDS is empty)."
+    from . import reports  # reports.py uses this module
+
+    if reports.is_on(settings):
+        message += f"\n\nReports: {reports.describe(settings)}."
     return send(
         settings,
         Alert(title=f"{settings.site_name}: test alert", message=message, emoji="✅"),

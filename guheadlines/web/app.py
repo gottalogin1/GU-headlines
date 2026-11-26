@@ -2025,6 +2025,7 @@ async def newsletter_signup(request: Request):
         log.warning("newsletter sign-up failed: %s", exc)
         return result("error")
     log.info("newsletter sign-up added to SendFox")
+    stats.counts.signup()
     return result("ok")
 
 

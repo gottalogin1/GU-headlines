@@ -26,7 +26,9 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -344,3 +346,123 @@ def refund_capture(
             return "COMPLETED"  # given back already
         raise
     return str(data.get("status") or "UNKNOWN")
+
+
+# ------------------------------------------------- what came in (reports.py)
+
+
+@dataclass(frozen=True)
+class Payment:
+    """One payment in or out of the PayPal account, as PayPal's records list it."""
+
+    id: str
+    # True when the money moved: not pending, refused or taken back.
+    done: bool
+    # Less than 0: money that went out, such as a refund.
+    amount_cents: int
+    currency: str
+    # PayPal's kind of payment (Transaction Search only), such as T0006 (a
+    # payment through the site, Orders v2), T0002 (a subscription payment),
+    # T0000 or T0013 (money sent with a PayPal.Me or donate link), T1107 (a
+    # refund). "" from a subscription's own list.
+    event_code: str = ""
+    # Our own name of the thing paid for (create_order's custom_id), when
+    # PayPal shows it.
+    custom_id: str = ""
+
+
+def _when(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# The most pages of 500 payments read for one report.
+MAX_PAGES = 20
+
+
+def transactions(
+    settings: Settings,
+    start: datetime,
+    end: datetime,
+    transport: httpx.BaseTransport | None = None,
+) -> list[Payment]:
+    """Every payment in and out of the PayPal account from `start` to `end`
+    (at most 31 days), from PayPal's Transaction Search. It needs "Transaction
+    search" turned on for the app in the PayPal developer dashboard; without
+    it, PayPal answers 403 and this raises PayPalError with status 403.
+    PayPal lists a payment up to 3 hours after it was made."""
+    found: list[Payment] = []
+    for page in range(1, MAX_PAGES + 1):
+        query = urlencode(
+            {
+                "start_date": _when(start),
+                "end_date": _when(end),
+                "fields": "transaction_info",
+                "page_size": 500,
+                "page": page,
+            }
+        )
+        data = call(settings, "GET", f"/v1/reporting/transactions?{query}", transport=transport)
+        details = data.get("transaction_details")
+        for item in details if isinstance(details, list) else []:
+            info = item.get("transaction_info") if isinstance(item, dict) else None
+            if not isinstance(info, dict) or not isinstance(info.get("transaction_id"), str):
+                continue
+            amount = info.get("transaction_amount")
+            amount = amount if isinstance(amount, dict) else {}
+            cents = _cents(amount.get("value"))
+            if cents is None:
+                continue
+            found.append(
+                Payment(
+                    id=info["transaction_id"],
+                    # S: done. P: pending, V: taken back, D: refused.
+                    done=info.get("transaction_status") == "S",
+                    amount_cents=cents,
+                    currency=str(amount.get("currency_code") or ""),
+                    event_code=str(info.get("transaction_event_code") or ""),
+                    custom_id=str(info.get("custom_field") or ""),
+                )
+            )
+        pages = data.get("total_pages")
+        if not isinstance(pages, int) or page >= pages:
+            break
+    return found
+
+
+def subscription_payments(
+    settings: Settings,
+    subscription_id: str,
+    start: datetime,
+    end: datetime,
+    transport: httpx.BaseTransport | None = None,
+) -> list[Payment]:
+    """The payments of one subscription (such as a bid alert subscription)
+    from `start` to `end`. Unlike transactions(), this needs nothing turned on."""
+    query = urlencode({"start_time": _when(start), "end_time": _when(end)})
+    data = call(
+        settings,
+        "GET",
+        f"/v1/billing/subscriptions/{quote(subscription_id, safe='')}/transactions?{query}",
+        transport=transport,
+    )
+    found: list[Payment] = []
+    items = data.get("transactions")
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            continue
+        breakdown = item.get("amount_with_breakdown")
+        gross = breakdown.get("gross_amount") if isinstance(breakdown, dict) else None
+        gross = gross if isinstance(gross, dict) else {}
+        cents = _cents(gross.get("value"))
+        if cents is None:
+            continue
+        found.append(
+            Payment(
+                id=item["id"],
+                # A payment later given back in part still came in.
+                done=item.get("status") in ("COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED"),
+                amount_cents=cents,
+                currency=str(gross.get("currency_code") or ""),
+            )
+        )
+    return found

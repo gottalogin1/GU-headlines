@@ -26,6 +26,7 @@ from ..db import session_scope
 from ..models import (
     AD_CLICKS,
     NEWSLETTER_CLICKS,
+    NEWSLETTER_SIGNUPS,
     SPONSOR_CLICKS,
     Article,
     PageViews,
@@ -122,6 +123,11 @@ class Counts:
     def newsletter_click(self) -> None:
         """A click on a story in a newsletter email."""
         self._add(self._views, NEWSLETTER_CLICKS)
+
+    def signup(self) -> None:
+        """A new address in the newsletter sign-up box. Counted also while the
+        visitor stats are off: it is only a number, for the weekly report."""
+        self._add(self._views, NEWSLETTER_SIGNUPS)
 
     def referrer(self, site: str) -> None:
         self._add(self._referrers, site)

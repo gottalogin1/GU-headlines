@@ -110,6 +110,13 @@ class Settings:
     # them is posted in Discord (see alerts.check_keywords). Empty: no
     # keyword alerts.
     alert_keywords: tuple[str, ...] = ()
+    # The reports in Discord (see reports.py), at report_time, Guam time: a
+    # money summary every morning (daily_report), and a report of the week
+    # (readers, sign-ups and money) on weekly_report_day (0 is Monday;
+    # None: no weekly report).
+    report_time: time = time(8, 0)
+    daily_report: bool = True
+    weekly_report_day: int | None = 0
     # How often the worker reads the weather (NWS alerts, forecast and airport
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
@@ -325,6 +332,18 @@ def _days(value: str | None, default: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted(days)) or default
 
 
+def _day(value: str | None, default: int | None) -> int | None:
+    """WEEKLY_REPORT_DAY "monday" or "Mon" -> 0 (0 is Monday); "off" -> None
+    (no weekly report). The default when the setting is missing, empty or
+    not a day."""
+    text = (value or "").strip().lower()
+    if text in ("off", "no", "none", "false"):
+        return None
+    if text[:3] in [name[:3] for name in DAY_NAMES]:
+        return [name[:3] for name in DAY_NAMES].index(text[:3])
+    return default
+
+
 def _clock(value: str | None, default: time) -> time:
     """NEWSLETTER_TIME "10:00", "14:30", "9" or "2:30 pm" -> a time of day;
     the default when the setting is missing or not a time."""
@@ -414,6 +433,9 @@ def load_settings() -> Settings:
         discord_webhook_url=env.get("DISCORD_WEBHOOK_URL", "").strip(),
         alert_after_hours=max(1, _int(env.get("ALERT_AFTER_HOURS"), defaults.alert_after_hours)),
         alert_keywords=_words(env.get("ALERT_KEYWORDS")),
+        report_time=_clock(env.get("REPORT_TIME"), defaults.report_time),
+        daily_report=_bool(env.get("DAILY_REPORT"), defaults.daily_report),
+        weekly_report_day=_day(env.get("WEEKLY_REPORT_DAY"), defaults.weekly_report_day),
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         outages_interval_minutes=max(5, outage_minutes) if outage_minutes > 0 else 0,
         gas_price_days=max(0, min(365, _int(env.get("GAS_PRICE_DAYS"), defaults.gas_price_days))),

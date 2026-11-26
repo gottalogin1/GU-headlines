@@ -390,6 +390,13 @@ def cmd_worker(args, settings: Settings) -> None:
         threading.Thread(
             target=_newsletter_loop, args=(settings, stop), name="newsletter", daemon=True
         ).start()
+    from . import reports
+
+    if reports.is_on(settings):
+        log.info("reports on: %s", reports.describe(settings))
+        threading.Thread(
+            target=_reports_loop, args=(settings, stop), name="reports", daemon=True
+        ).start()
     if settings.scrape_on_start:
         run_once()
         check_keywords()
@@ -472,6 +479,50 @@ def _newsletter_loop(settings: Settings, stop: threading.Event) -> None:
             wait = (due - datetime.now(timezone.utc)).total_seconds() + 1
         if stop.wait(max(wait, 1)):
             return
+
+
+def _reports_loop(settings: Settings, stop: threading.Event) -> None:
+    """Posts the money summary and the weekly report in Discord on time (see
+    reports.py), also while a news check is running. A report that could not
+    be posted is tried again 10 minutes later."""
+    from .reports import next_report_time, send_due
+
+    while True:
+        try:
+            for key in send_due(settings):
+                log.info("%s posted in Discord", key)
+        except Exception:
+            log.exception("report failed; trying again in 10 minutes")
+        now = datetime.now(timezone.utc)
+        due = next_report_time(settings, now)
+        wait = (due - now).total_seconds() + 1 if due else 600.0
+        if stop.wait(min(max(wait, 1.0), 600.0)):
+            return
+
+
+def cmd_report(args, settings: Settings) -> None:
+    """Post the money summary of yesterday, or the report of the last week,
+    in Discord now (or only show it with --show)."""
+    from . import reports
+    from .alerts import discord_text, send
+
+    wait_for_db()
+    migrate()
+    now = datetime.now(timezone.utc)
+    if args.which == "daily":
+        alert = reports.daily_alert(settings, now)
+    else:
+        day = settings.weekly_report_day if settings.weekly_report_day is not None else 0
+        due = reports.edition_time(now, (day,), settings.report_time) or now
+        alert = reports.weekly_alert(settings, due)
+    if args.show or not settings.discord_webhook_url:
+        print(discord_text(alert))
+        if not settings.discord_webhook_url:
+            print("\n(DISCORD_WEBHOOK_URL is empty, so it was only shown here.)")
+        return
+    if not send(settings, alert):
+        raise SystemExit("the report could not be posted; see the message above")
+    print("Posted in your Discord channel. It shows within a few seconds.")
 
 
 def cmd_weather(args, settings: Settings) -> None:
@@ -1126,6 +1177,13 @@ def main(argv: list[str] | None = None) -> None:
     bids.add_argument("--limit", type=int, default=8, help="with --check: bids to show")
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
+    report = sub.add_parser("report", help="post a report in your Discord channel now")
+    report.add_argument(
+        "which", choices=["daily", "weekly"], help="daily: yesterday's money; weekly: last week"
+    )
+    report.add_argument(
+        "--show", action="store_true", help="only show it here; post nothing in Discord"
+    )
     sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
     sub.add_parser("paypal-check", help="check that PayPal accepts the PayPal settings")
     mail_test = sub.add_parser("mail-test", help="send a test email through the SMTP settings")
@@ -1164,6 +1222,7 @@ def main(argv: list[str] | None = None) -> None:
         "events": cmd_events,
         "bids": cmd_bids,
         "alert-test": cmd_alert_test,
+        "report": cmd_report,
         "sendfox-check": cmd_sendfox_check,
         "paypal-check": cmd_paypal_check,
         "mail-test": cmd_mail_test,
