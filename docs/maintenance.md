@@ -274,7 +274,8 @@ on GitHub has new commits (for example after a pull request is merged). If
 it has, the server does the steps above by itself: it downloads the new
 version, makes a database backup, and rebuilds and restarts the site. If the
 new version doesn't answer within 5 minutes, the server goes back to the
-version before. It also checks every 5 minutes that the site answers. With
+version before. It also checks every 5 minutes that the site answers, and
+that the server has disk space and memory left ([server checks](#server-checks)). With
 [your own email server](email-server.md) on, it downloads new versions of the
 mail server and the webmail once a week too (they bring security fixes).
 
@@ -364,9 +365,83 @@ message as a notification. These alerts come:
 | ⚠️ the nightly backup failed, ⚠️ no backup for *N* hours, ✅ backups work again | the server | A [nightly backup](#backups) failed (once for each night), or none has worked for more than a day, and when one works again. |
 | 📦 a backup was downloaded | the website | Each time a backup is downloaded from the stats page. If it wasn't you, change `STATS_PASSWORD` and the other passwords and keys in `.env`. |
 | 🚨 *site* does not answer, ✅ *site* answers again | GitHub ([outside check](#watching-from-outside-the-server)) | The site didn't answer from outside for 3 minutes. |
+| 💾 disk 91% full, 🧠 memory 95% in use, 🔒 certificate ends | the server ([server checks](#server-checks)) | The server runs low on disk space or memory, or an https certificate ends within 14 days. |
+| 🚫 the mail server is on a spam block list | the server | Your own mail server's IP address is on a block list ([server checks](#server-checks)). |
+| 💰 Money for *day*, 📊 Weekly report | the worker ([reports](#reports)) | Every morning, and every Monday. |
 
 Each problem is posted once, not every hour. Nothing is posted while all is
-well.
+well, except the reports.
+
+### Reports
+
+The worker posts two reports in the same Discord channel, at 8:00 AM Guam time
+(`REPORT_TIME`):
+
+- **💰 Money for *yesterday*,** every morning, while PayPal is set up: what
+  people paid yesterday, one line for each kind (classified ads, featured
+  jobs and events, business upgrades, the sponsor spot, newsletter sponsor
+  lines, bid alerts, and donations and other payments), money given back, and
+  **Waiting for you**: the listings and ads to approve, with the links. It
+  comes without a phone notification, unless something waits for you.
+- **📊 Weekly report,** every Monday (`WEEKLY_REPORT_DAY`), for the week from
+  Monday to Sunday, compared with the week before: page views and story
+  clicks, the busiest day, the most clicked story and the websites readers
+  came from (these need the [visitor stats](settings.md#visitor-stats)),
+  clicks on the sponsor spot and the ads, newsletter sign-ups, new bid alert
+  subscribers, and the money of the week.
+
+AdSense and affiliate earnings aren't in the reports; they are only on
+AdSense's and each partner's own site.
+
+**Donations and refunds** come from PayPal's own list of your account's
+payments, which the site may read only after you turn on **Transaction
+search** for your app: on [developer.paypal.com](https://developer.paypal.com),
+open **Apps & Credentials** (on the **Live** side for real payments), click
+your app, tick **Transaction search** under **Features**, and click **Save
+Changes**. Then run `docker compose restart worker`. PayPal can take a few
+hours to switch it on. Until then, the money summary shows everything else,
+and says that donations are missing. It only lets the site read payments; it
+can't send money.
+
+To see a report now:
+
+```sh
+docker compose exec worker guheadlines report daily          # posts it in Discord
+docker compose exec worker guheadlines report weekly --show  # shows it here only
+```
+
+A report that can't be posted (Discord down) is tried again every 10 minutes.
+If the worker was off at 8:00, it posts the report when it starts, until 8:00
+in the evening.
+
+### Server checks
+
+With [automatic updates](#automatic-updates) on, the server also checks itself
+every 5 minutes (`scripts/server-check.sh`), and posts in Discord when:
+
+| Check | When it posts | Setting |
+|---|---|---|
+| Disk space | A disk is 90% full, and again when it is back at 87% or less. | `DISK_ALERT_PERCENT` |
+| Memory | 90% of the memory has been in use for about 15 minutes. | `MEMORY_ALERT_PERCENT` |
+| https certificates | The site's certificate, or the mail server's, ends within 14 days. Caddy renews them about 30 days before the end, so this means renewing has failed. Checked every 6 hours. | `CERT_ALERT_DAYS` |
+| Spam block lists | Once a day, with your own mail server on: the server's IP address is on Spamhaus, Barracuda, SpamCop, PSBL or Mailspike. | (none) |
+
+A setting of `0` turns that check off. Once a week, on Sunday night (Guam
+time), it also deletes Docker's leftovers: old versions of the program
+(images without a name) and build files older than a week. Stories, photos,
+mail and the database are never touched. Discord gets a quiet note with the
+space it freed.
+
+To see the readings now, or to clean up now, run in the `GU-headlines` folder
+on the server:
+
+```sh
+./scripts/server-check.sh
+./scripts/server-check.sh --clean
+```
+
+The memory reading is the server's own memory, as Linux counts it
+(*MemAvailable*: memory that programs can still get).
 
 ### Source health
 
@@ -516,6 +591,10 @@ Good to know:
 | Automatic update stopped | Read the message: usually a file changed on the server is in the way (see [Updating](#updating)). |
 | The nightly backup failed | The message says why. "Not enough disk space": see [Disk space](#disk-space). Otherwise `docker compose logs --tail 30 backup` shows more; try again with `./scripts/site-backup.sh now`. |
 | No backup for *N* hours | The backup part may have stopped: `docker compose ps backup`. Start it again with `docker compose up -d`. |
+| disk *N*% full | See [Disk space](#disk-space). `./scripts/server-check.sh --clean` deletes Docker's leftovers. |
+| memory *N*% in use | `docker stats --no-stream` shows which part uses the most. `docker compose restart` frees memory for a while. If it keeps coming, the server needs more memory. |
+| certificate ends | `docker compose logs --tail 50 caddy` shows why Caddy can't renew it. Most often the domain no longer points at the server, or port 80 is closed. |
+| the mail server is on a spam block list | Ask for removal on each list's page (the alert has the links); see [Block lists](email-server.md#block-lists). |
 | *site* does not answer (from GitHub), but the server posted nothing | The whole server may be down. Look at it in your server provider's control panel, and restart it there if needed. GU Headlines starts again by itself when the server starts. |
 
 ---
@@ -537,10 +616,13 @@ To see how much Docker uses in all:
 docker system df
 ```
 
-Old versions of the program pile up after updates. Remove unused ones with:
+Old versions of the program pile up after updates. With
+[automatic updates](#automatic-updates) on, they are deleted after each update
+and once a week (see [Server checks](#server-checks)); Discord tells you when
+the disk is 90% full. To remove them now:
 
 ```sh
-docker image prune
+./scripts/server-check.sh --clean
 ```
 
 (This never touches your stories or photos.) If disk space gets tight, lower

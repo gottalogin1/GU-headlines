@@ -27,6 +27,20 @@ os.environ.setdefault("MEDIA_DIR", tempfile.mkdtemp(prefix="guheadlines-media-")
 os.environ["CONFIG_DIR"] = str(ROOT / "config")
 
 
+@pytest.fixture(autouse=True)
+def visitor_counts(monkeypatch):
+    """Each test counts visitors (web/stats.py) afresh, and what is not
+    written by its end is dropped: else the counts' writer thread would
+    write it into a later test's database, up to 30 seconds later."""
+    from guheadlines.web import stats
+
+    monkeypatch.setattr(stats, "counts", stats.Counts())
+    yield
+    with stats.counts._lock:
+        for counter in (stats.counts._views, stats.counts._clicks, stats.counts._referrers):
+            counter.clear()
+
+
 def fixture_bytes(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
 

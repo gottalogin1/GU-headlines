@@ -25,6 +25,9 @@
 #      The same when the news has not been checked for 3 hours, and when the
 #      nightly backup (docs/maintenance.md#backups) failed or has not run
 #      for more than a day.
+#   4. Server checks (scripts/server-check.sh): disk space, memory, the https
+#      certificates and, with your own mail server on, the spam block lists;
+#      and once a week it deletes Docker's leftovers.
 #
 # Alerts are posted to a Discord channel through DISCORD_WEBHOOK_URL in .env
 # (see .env.example). Without it, the script still updates and watches, and
@@ -408,6 +411,8 @@ main() {
     update_mail
     watch
     check_backup
+    # Its own file, so it can also be run by hand. "bash": see install_cron.
+    bash scripts/server-check.sh --round
     if [ -t 1 ]; then # run by hand: say where things stand
         echo "On commit $(git log -1 --format='%h: %s')."
         if healthz >/dev/null 2>&1; then echo "The site answers."; else echo "The site does not answer."; fi
