@@ -220,6 +220,10 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **Sources page: how this site compares with search engines.** "Why this
+  site exists" now adds that search engines such as Google read the full
+  text of every article they index, while this site keeps only the
+  headline, a short excerpt and the photo. Nothing to do when you update.
 - **No Chamber of Commerce events, and no calendars that can't be
   collected.** The Events page no longer lists the Chamber of Commerce, the
   Guam Visitors Bureau or the Guampedia fiesta calendar, and events that
