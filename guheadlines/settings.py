@@ -139,6 +139,16 @@ class Settings:
     paypal_client_id: str = ""
     paypal_client_secret: str = ""
     paypal_mode: str = "sandbox"
+    # Sending email (see mail.py): an SMTP server, such as Resend's, and the
+    # sender address. No server or no sender: no email is sent.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    mail_from: str = ""
+    # Bid alerts (see bids/alerts.py): the monthly price, in US cents, of an
+    # email alert for new bids. 0: no bid alerts.
+    bid_alerts_price_cents: int = 0
 
     @property
     def sources_file(self) -> Path:
@@ -217,6 +227,15 @@ def _file_name(value: str | None) -> str:
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]{0,99}\.(jpe?g|png|webp|gif)", name, re.I):
         return name
     return ""
+
+
+def _price_cents(value: str | None) -> int:
+    """BID_ALERTS_PRICE "15", "15.00" or "$9.50" -> 1500, 1500 or 950 (US
+    cents). 0 when it is empty or not a price."""
+    found = re.fullmatch(r"\$?\s*(\d{1,5})(?:\.(\d{1,2}))?", (value or "").strip())
+    if not found:
+        return 0
+    return int(found[1]) * 100 + int((found[2] or "0").ljust(2, "0"))
 
 
 def _tide_station(value: str | None, default: str) -> str:
@@ -345,6 +364,12 @@ def load_settings() -> Settings:
         paypal_client_id=env.get("PAYPAL_CLIENT_ID", "").strip(),
         paypal_client_secret=env.get("PAYPAL_CLIENT_SECRET", "").strip(),
         paypal_mode=_paypal_mode(env.get("PAYPAL_MODE")),
+        smtp_host=env.get("SMTP_HOST", "").strip(),
+        smtp_port=_int(env.get("SMTP_PORT"), defaults.smtp_port),
+        smtp_user=env.get("SMTP_USER", "").strip(),
+        smtp_password=env.get("SMTP_PASSWORD", "").strip(),
+        mail_from=" ".join(env.get("MAIL_FROM", "").split()),
+        bid_alerts_price_cents=_price_cents(env.get("BID_ALERTS_PRICE")),
     )
 
 

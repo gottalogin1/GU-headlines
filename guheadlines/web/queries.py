@@ -623,7 +623,7 @@ class BidFilters:
 @dataclass
 class BidListing:
     # {"bid", "source_slug", "source_name", "source_homepage", "document_url",
-    #  "also": [{"name", "url"}]}, soonest due first, those without a due date last.
+    #  "also": [{"name", "url"}], "ids"}, soonest due first, those without a due date last.
     items: list[dict]
     # (agency, open bids) of the bids matching the words and source, most first.
     agencies: list[tuple[str, int]]
@@ -695,6 +695,9 @@ def list_bids(session: Session, f: BidFilters, now: datetime) -> BidListing:
             for o in others
             if o["source_slug"] != shown["source_slug"]
         ]
+        # Every listing of the bid, so bid alerts (bids/alerts.py) can tell a
+        # bid that is new from one that a second source now lists too.
+        shown["ids"] = [i["bid"].id for i in group]
         items.append(shown)
     agencies = Counter(i["bid"].agency for i in items if i["bid"].agency)
     if f.agency:
