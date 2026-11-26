@@ -36,7 +36,7 @@ from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import ads, alerts, gas, health, listings, mail, paypal, renewals, sendfox
+from .. import ads, alerts, gas, guides, health, listings, mail, paypal, renewals, sendfox
 from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
@@ -50,7 +50,15 @@ from ..config import (
 from ..db import session_scope
 from ..events import ical
 from ..events.pipeline import DAYS_AHEAD as EVENT_DAYS_AHEAD
-from ..models import CATCH_UP_NOTE, FEATURED_CALENDAR, AdBooking, Article, Listing, Source
+from ..models import (
+    CATCH_UP_NOTE,
+    FEATURED_CALENDAR,
+    AdBooking,
+    Article,
+    Guide,
+    Listing,
+    Source,
+)
 from ..newsletter import schedule_text
 from ..outages import EPA_URL, GPA_TROUBLE_PHONE, GPA_URL, GWA_DISPATCH_PHONE, GWA_URL, outages_page
 from ..scraper.images import SMALL_WIDTH, ImageRejected, small_image_path
@@ -624,6 +632,10 @@ templates.env.globals.update(
     upgraded=listings.upgraded,
     listing_kinds=listings.KINDS,
     featured_calendar=FEATURED_CALENDAR,
+    guide_minutes=lambda guide: guides.reading_minutes(guide.body),
+    guide_srcset=guides.photo_srcset,
+    guide_photo_size=guides.photo_size,
+    guide_photo_sizes=guides.PHOTO_SIZES,
 )
 
 
@@ -846,6 +858,8 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "bid_alerts": bid_alerts_info(),
             "offers": paid_listings(),
             "travel": travel_links() if show_travel else None,
+            # The Guides link in the menu, once a guide is published.
+            "guides_menu": bool(published_guides()),
             "weather": (
                 for_page(
                     weather_reports(),
@@ -1864,6 +1878,7 @@ def sitemap(request: Request):
             if listings.is_on(settings, kind)
         ],
         advertise=bool(advertising()),
+        guides=[(g.slug, g.updated_at) for g in published_guides()],
     )
     return Response(
         seo.sitemap_xml(entries),
@@ -2584,6 +2599,379 @@ async def review_listing(request: Request, listing_id: int):
     result = await run_in_threadpool(_review, request, listing_id, action, note)
     return RedirectResponse(
         f"/admin/listings?done={result}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+# ------------------------------------------------------------ visitor guides
+# Guides about visiting Guam that the owner writes on /admin/guides, behind
+# STATS_PASSWORD (guides.py). Published guides are on /guides.
+
+# The published guides are looked for on every page (the Guides link in the
+# menu), so they are kept for a minute. Saving a guide empties this worker's
+# copy; the other worker's copy is at most a minute old.
+guide_cache = _TTLCache(ttl=60)
+
+
+def published_guides() -> list[Guide]:
+    def find() -> list[Guide]:
+        with session_scope() as session:
+            return guides.published(session)
+
+    return guide_cache.get("published", find)
+
+
+@app.get("/guides", response_class=HTMLResponse)
+def guides_index(request: Request):
+    found = published_guides()
+    if not found:
+        raise HTTPException(404)
+    # Under their section's heading, the sections in the order of their first guide.
+    sections: dict[str, list[Guide]] = {}
+    for guide in found:
+        sections.setdefault(guide.section, []).append(guide)
+    return render(
+        request,
+        "guides.html",
+        sections=list(sections.items()),
+        title="Visitor guides",
+        description=(
+            f"Guides for visiting Guam from {settings.site_name}: getting around, the weather,"
+            " beaches, food and what to see, kept up to date."
+        ),
+        active_nav="guides",
+        canonical={},
+        breadcrumbs=[("Visitor guides", None)],
+        show_ad=True,
+        show_travel=True,
+    )
+
+
+def _guide_page(request: Request, guide: Guide, preview: bool = False) -> HTMLResponse:
+    """A guide's page; `preview` is the owner's look at it from the editor,
+    also before it is published: not counted, no ads, not for search engines."""
+    sponsor_box = None
+    if guides.sponsor_showing(guide, datetime.now(GUAM_TZ).date()):
+        link = safe_url(guide.sponsor_link)
+        counted = bool(link and settings.stats_password and not preview)
+        sponsor_box = {
+            "name": guide.sponsor_name,
+            "text": guide.sponsor_text,
+            # While the visitor stats are on, /go/guide-sponsor/<id> counts the click.
+            "href": f"/go/guide-sponsor/{guide.id}" if counted else link,
+            "rel": "nofollow sponsored noopener" if counted else "sponsored noopener",
+        }
+    others = [g for g in published_guides() if g.id != guide.id]
+    others.sort(key=lambda g: g.section != guide.section)  # the same section first
+    return render(
+        request,
+        "guide.html",
+        guide=guide,
+        text=guides.render(guide.body),
+        others=others[:6],
+        guide_sponsor=sponsor_box,
+        preview=preview,
+        title=guide.title,
+        description=truncate(guide.summary, 160),
+        active_nav="guides",
+        canonical=None if preview else {},
+        robots="noindex, nofollow" if preview else None,
+        breadcrumbs=[("Visitor guides", "/guides"), (guide.title, None)],
+        structured=None if preview else [seo.guide_data(request, guide)],
+        show_ad=not preview,
+        show_travel=True,
+        show_signup=not preview,
+        count_view=not preview,
+    )
+
+
+@app.get("/guides/{slug}", response_class=HTMLResponse)
+def guide_page(request: Request, slug: str):
+    guide = next((g for g in published_guides() if g.slug == slug), None)
+    if guide is None:
+        raise HTTPException(404)
+    return _guide_page(request, guide)
+
+
+@app.get("/go/guide-sponsor/{guide_id}")
+def go_guide_sponsor(request: Request, guide_id: int):
+    """Count a click on a guide's sponsor, then send the reader on to the
+    sponsor's website."""
+    guide = next((g for g in published_guides() if g.id == guide_id), None)
+    today = datetime.now(GUAM_TZ).date()
+    link = safe_url(guide.sponsor_link) if guide and guides.sponsor_showing(guide, today) else ""
+    if not link:
+        raise HTTPException(404)
+    if settings.stats_password and stats.is_reader(request):
+        stats.counts.guide_sponsor_click(guide_id)
+    return RedirectResponse(
+        link, status_code=302, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
+    )
+
+
+GUIDE_RESULTS = {
+    "saved": "Saved.",
+    "deleted": "The guide and its photos are deleted.",
+    "starters": "The starter guides are added as drafts. Read each one, change what you like,"
+    " and publish it.",
+    "confirm": "To delete the guide, tick the box beside the Delete button first.",
+    "gone": "That guide is not there any more.",
+}
+
+
+def _owner_only(request: Request) -> Response | None:
+    """None for the owner (STATS_PASSWORD); else the answer to send."""
+    if not settings.stats_password:
+        raise HTTPException(404)
+    if not _stats_password_ok(request):
+        return _password_prompt()
+    return None
+
+
+def _find_guide(guide_id: int) -> Guide:
+    with session_scope() as session:
+        guide = session.get(Guide, guide_id) if 1 <= guide_id < 2**31 else None
+    if guide is None:
+        raise HTTPException(404)
+    return guide
+
+
+@app.get("/admin/guides", response_class=HTMLResponse)
+def admin_guides(request: Request, done: str = Query("", max_length=20)):
+    """The owner's list of guides, drafts too, with their page views."""
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        found = guides.everything(session)
+        counts = guides.numbers(session, found, today - timedelta(days=29))
+        starters = guides.missing_starters(session)
+    response = render(
+        request,
+        "admin_guides.html",
+        title="Visitor guides",
+        robots="noindex, nofollow",
+        count_view=False,
+        show_signup=False,
+        all_guides=found,
+        counts=counts,
+        starters=starters,
+        today=today,
+        message=GUIDE_RESULTS.get(done),
+    )
+    return _no_store(response)
+
+
+def _guide_values(guide: Guide) -> dict:
+    """A guide's fields as the editor's form shows them."""
+    return {
+        "title": guide.title,
+        "slug": guide.slug,
+        "section": guide.section,
+        "summary": guide.summary,
+        "body": guide.body,
+        "position": str(guide.position),
+        "status": guide.status,
+        "photo_alt": guide.photo_alt,
+        "sponsor_name": guide.sponsor_name,
+        "sponsor_link": guide.sponsor_link,
+        "sponsor_text": guide.sponsor_text,
+        "sponsor_until": guide.sponsor_until.isoformat() if guide.sponsor_until else "",
+    }
+
+
+def _guide_form(
+    request: Request,
+    guide: Guide | None,
+    values: dict,
+    errors: dict,
+    status_code: int = 200,
+    message: str | None = None,
+) -> HTMLResponse:
+    with session_scope() as session:
+        sections = sorted({g.section for g in guides.everything(session) if g.section})
+    response = render(
+        request,
+        "guide_form.html",
+        status_code=status_code,
+        title=f"Edit: {guide.title}" if guide else "New guide",
+        robots="noindex, nofollow",
+        count_view=False,
+        show_signup=False,
+        guide=guide,
+        values=values,
+        errors=errors,
+        message=message,
+        sections=sections,
+        limits=guides,
+    )
+    return _no_store(response)
+
+
+@app.get("/admin/guides/new", response_class=HTMLResponse)
+def admin_guide_new(request: Request):
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    return _guide_form(request, None, {"position": "100", "status": guides.DRAFT}, {})
+
+
+@app.get("/admin/guides/{guide_id:int}", response_class=HTMLResponse)
+def admin_guide_edit(request: Request, guide_id: int, done: str = Query("", max_length=20)):
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    guide = _find_guide(guide_id)
+    return _guide_form(request, guide, _guide_values(guide), {}, message=GUIDE_RESULTS.get(done))
+
+
+@app.get("/admin/guides/{guide_id:int}/view", response_class=HTMLResponse)
+def admin_guide_view(request: Request, guide_id: int):
+    """The guide as readers will see it, also while it is a draft."""
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    return _no_store(_guide_page(request, _find_guide(guide_id), preview=True))
+
+
+class _PhotoRefused(Exception):
+    pass
+
+
+def _save_guide(
+    guide_id: int | None, fields: dict[str, str], files: dict[str, bytes]
+) -> tuple[Guide | None, dict[str, str]]:
+    """Save the editor's form. Returns the guide and the problems found
+    (nothing is saved when there are any)."""
+    media = settings.media_dir
+    stored: list[str] = []  # photos saved by this form, deleted again if it fails
+    old_cover = None
+    try:
+        with session_scope() as session:
+            guide = session.get(Guide, guide_id) if guide_id is not None else None
+            if guide_id is not None and guide is None:
+                return None, {"form": GUIDE_RESULTS["gone"]}
+            remove = fields.get("remove_photo") == "yes"
+            has_photo = "cover" in files or bool(guide and guide.photo and not remove)
+            values, errors = guides.check(fields, has_photo)
+            if "slug" not in errors and guides.slug_taken(session, values["slug"], guide_id):
+                errors["slug"] = "Another guide has this address. Please choose another."
+            if errors:
+                return guide, errors
+            now = datetime.now(timezone.utc)
+            if guide is None:
+                guide = Guide(created_at=now, access=guides.FREE)
+                session.add(guide)
+            guides.apply(guide, values, now)
+            session.flush()  # a new guide's number, for its photos' names
+            try:
+                if "cover" in files:
+                    stored.append(guides.save_photo(media, guide.id, files["cover"]))
+                    old_cover, guide.photo = guide.photo, stored[-1]
+                elif remove:
+                    old_cover, guide.photo = guide.photo, None
+                if "picture" in files:
+                    stored.append(guides.save_photo(media, guide.id, files["picture"]))
+                    alt = values["picture_alt"].replace("[", "(").replace("]", ")") or "Photo"
+                    guide.body = f"{guide.body}\n\n![{alt}]({stored[-1]})"
+            except ImageRejected as exc:
+                log.info("guide photo refused: %s", exc)
+                field = "cover" if not stored and "cover" in files else "picture"
+                raise _PhotoRefused(field) from exc
+    except _PhotoRefused as exc:
+        for path in stored:
+            guides.delete_photo(media, path)
+        message = (
+            "The photo could not be used. Please choose a JPG, PNG or WebP photo of at least"
+            " 200 by 120 pixels, and at most 8 MB."
+        )
+        return guide, {str(exc): message}
+    if old_cover and old_cover not in guide.body:
+        guides.delete_photo(media, old_cover)
+    guide_cache._data.clear()
+    sitemap_cache._data.clear()
+    return guide, {}
+
+
+async def _read_guide_form(request: Request) -> tuple[dict[str, str], dict[str, bytes]] | Response:
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > guides.MAX_FORM:
+            return PlainTextResponse("Too large: each photo can be at most 8 MB.", status_code=413)
+    try:
+        return guides.read_form(body, request.headers.get("content-type", ""))
+    except guides.FormError:
+        return PlainTextResponse("Please use the form on the guide's page.", status_code=400)
+
+
+@app.post("/admin/guides/new")
+@app.post("/admin/guides/{guide_id:int}")
+async def admin_guide_save(request: Request, guide_id: int | None = None):
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the guide's page.", status_code=403)
+    form = await _read_guide_form(request)
+    if isinstance(form, Response):
+        return form
+    fields, files = form
+    guide, errors = await run_in_threadpool(_save_guide, guide_id, fields, files)
+    if errors:
+        if guide is None and guide_id is not None:
+            raise HTTPException(404)
+        return _guide_form(request, guide if guide_id else None, fields, errors, status_code=400)
+    return RedirectResponse(
+        f"/admin/guides/{guide.id}?done=saved",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/admin/guides/{guide_id:int}/delete")
+async def admin_guide_delete(request: Request, guide_id: int):
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the button on the guide's page.", status_code=403)
+    form = parse_qs((await request.body())[:_MAX_SIGNUP_BODY].decode("utf-8", "replace"))
+    if form.get("confirm") != ["yes"]:
+        return RedirectResponse(
+            f"/admin/guides/{guide_id}?done=confirm",
+            status_code=303,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    def delete() -> bool:
+        with session_scope() as session:
+            guide = session.get(Guide, guide_id) if 1 <= guide_id < 2**31 else None
+            if guide is None:
+                return False
+            session.delete(guide)
+        guides.delete_photos(settings.media_dir, guide_id)
+        guide_cache._data.clear()
+        sitemap_cache._data.clear()
+        return True
+
+    done = await run_in_threadpool(delete)
+    return RedirectResponse(
+        f"/admin/guides?done={'deleted' if done else 'gone'}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/admin/guides/starters")
+async def admin_guide_starters(request: Request):
+    """Add the starter guides that come with the site, as drafts."""
+    if (answer := _owner_only(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the button on the guides page.", status_code=403)
+
+    def add() -> int:
+        with session_scope() as session:
+            return guides.add_starters(session, datetime.now(timezone.utc))
+
+    await run_in_threadpool(add)
+    return RedirectResponse(
+        "/admin/guides?done=starters", status_code=303, headers={"Cache-Control": "no-store"}
     )
 
 

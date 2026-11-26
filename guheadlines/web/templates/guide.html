@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{# One visitor guide (/guides/<slug>, guides.py). Its text is cut before each
+   main heading (text.parts); the ad unit goes after the first main part.
+   `preview`: the owner's look from the editor (/admin/guides/<id>/view). #}
+
+{% block main %}
+{% if preview %}
+<p class="signup-result" role="status">
+  {% if guide.status == "published" %}Preview: this guide is on the site at <a href="/guides/{{ guide.slug }}">/guides/{{ guide.slug }}</a>.
+  {% else %}Preview of a draft: readers can't see this guide until you publish it.{% endif %}
+  <a href="/admin/guides/{{ guide.id }}">Back to editing</a>
+</p>
+{% endif %}
+<article class="guide">
+  <header class="page-head guide-head">
+    <p class="crumbs"><a href="/guides">Visitor guides</a>{% if guide.section %} · {{ guide.section }}{% endif %}</p>
+    <h1>{{ guide.title }}</h1>
+    <p class="guide-summary">{{ guide.summary }}</p>
+    <p class="muted small">Updated {{ guide.updated_at|fmt_day }} · {{ guide_minutes(guide) }} min read</p>
+  </header>
+
+  {% if guide_sponsor %}
+  {# The guide's own sponsor (guides.py), sold directly by the site's owner. #}
+  <aside class="guide-sponsor" aria-label="Sponsor">
+    <span class="guide-sponsor-label">Sponsored by</span>
+    {% if guide_sponsor.href %}<a href="{{ guide_sponsor.href }}" target="_blank" rel="{{ guide_sponsor.rel }}">{{ guide_sponsor.name }} ↗</a>
+    {% else %}<strong>{{ guide_sponsor.name }}</strong>{% endif %}
+    {% if guide_sponsor.text %}<span class="guide-sponsor-text">{{ guide_sponsor.text }}</span>{% endif %}
+  </aside>
+  {% endif %}
+
+  {% if guide.photo %}
+  {% set size = guide_photo_size(guide.photo) %}
+  {% set srcset = guide_srcset(guide.photo) %}
+  <img class="guide-cover" src="{{ guide.photo }}"{% if srcset %} srcset="{{ srcset }}" sizes="{{ guide_photo_sizes }}"{% endif %}
+       {% if size %}width="{{ size[0] }}" height="{{ size[1] }}"{% endif %} alt="{{ guide.photo_alt }}" fetchpriority="high" decoding="async">
+  {% endif %}
+
+  {% if text.contents|length >= 3 %}
+  <nav class="guide-contents" aria-labelledby="contents-title">
+    <h2 id="contents-title">On this page</h2>
+    <ol>
+      {% for anchor, heading in text.contents %}<li><a href="#{{ anchor }}">{{ heading }}</a></li>{% endfor %}
+    </ol>
+  </nav>
+  {% endif %}
+
+  <div class="prose">
+    {% for part in text.parts %}
+    {{ part }}
+    {% if loop.index == 2 and not loop.last and show_ad and settings.adsense_stories_slot %}{% include "_ad_guide.html" %}{% endif %}
+    {% endfor %}
+  </div>
+</article>
+
+{% if others %}
+<nav class="guide-more" aria-labelledby="more-title">
+  <h2 class="section-title" id="more-title">More visitor guides</h2>
+  <ul class="facets">
+    {% for g in others %}
+    <li><span class="facet-name"><a href="/guides/{{ g.slug }}">{{ g.title }}</a><span class="site-link">{{ g.summary|truncate(110) }}</span></span></li>
+    {% endfor %}
+  </ul>
+  <p class="small"><a href="/guides">All visitor guides →</a></p>
+</nav>
+{% endif %}
+{% endblock %}

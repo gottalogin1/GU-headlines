@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import insert
 from ..db import session_scope
 from ..models import (
     AD_CLICKS,
+    GUIDE_SPONSOR_CLICKS,
     NEWSLETTER_CLICKS,
     NEWSLETTER_SIGNUPS,
     SPONSOR_CLICKS,
@@ -119,6 +120,10 @@ class Counts:
     def ad_click(self, booking_id: int) -> None:
         """A click on an ad booked on the Advertise page (ads.py)."""
         self._add(self._views, f"{AD_CLICKS}{booking_id}")
+
+    def guide_sponsor_click(self, guide_id: int) -> None:
+        """A click on the sponsor of a visitor guide (guides.py)."""
+        self._add(self._views, f"{GUIDE_SPONSOR_CLICKS}{guide_id}")
 
     def newsletter_click(self) -> None:
         """A click on a story in a newsletter email."""

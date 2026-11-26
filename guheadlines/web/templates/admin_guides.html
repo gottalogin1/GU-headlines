@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{# The owner's list of visitor guides (/admin/guides, behind STATS_PASSWORD;
+   guides.py): drafts and published guides, with their page views and the
+   clicks on their sponsors in the last 30 days. #}
+
+{% block main %}
+<header class="page-head">
+  <p class="crumbs">Your pages</p>
+  <h1>Visitor guides</h1>
+  <p class="muted">Write and change the guides readers see on
+    {% if all_guides|selectattr("status", "equalto", "published")|list %}<a href="/guides">/guides</a>{% else %}/guides (it shows once a guide is published){% endif %}.
+    A draft is yours alone until you publish it.</p>
+  <p class="post-offer"><a class="btn" href="/admin/guides/new">New guide</a></p>
+</header>
+
+{% if message %}<p class="signup-result" role="status">{{ message }}</p>{% endif %}
+
+{% if starters %}
+<section class="panel listing-status">
+  <h2>Starter guides</h2>
+  <p>The site comes with {{ starters|length }} starter {{ "guide" if starters|length == 1 else "guides" }} you don't have yet:
+    {% for s in starters %}{{ s.title }}{{ ", " if not loop.last else "." }}{% endfor %}
+    They are added as drafts: read each one, change what you like, and publish it.</p>
+  <form action="/admin/guides/starters" method="post">
+    <button class="btn btn-quiet" type="submit">Add the starter {{ "guide" if starters|length == 1 else "guides" }} as drafts</button>
+  </form>
+</section>
+{% endif %}
+
+<h2 class="section-title">Your guides ({{ all_guides|length }})</h2>
+{% if not all_guides %}<p class="muted section-note">No guides yet. Start a new one, or add the starter guides.</p>
+{% else %}
+<div class="table-wrap">
+<table class="status-table guide-table">
+  <thead>
+    <tr><th scope="col">Guide</th><th scope="col" class="num">Order</th><th scope="col" class="num">Views, 30 days</th><th scope="col">Sponsor</th></tr>
+  </thead>
+  <tbody>
+  {% for g in all_guides %}
+  {% set n = counts[g.id] %}
+  <tr>
+    <td><a href="/admin/guides/{{ g.id }}"><strong>{{ g.title }}</strong></a><br>
+      <span class="muted small">{{ "Published" if g.status == "published" else "Draft" }}{% if g.section %} · {{ g.section }}{% endif %}
+        · <a href="{{ '/guides/' ~ g.slug if g.status == 'published' else '/admin/guides/' ~ g.id ~ '/view' }}">{{ "view" if g.status == "published" else "preview" }}</a></span></td>
+    <td class="num">{{ g.position }}</td>
+    <td class="num">{{ n.views }}</td>
+    <td>{% if g.sponsor_name %}{{ g.sponsor_name }}<br><span class="muted small">
+      {%- if g.sponsor_until and g.sponsor_until < today %}ended {{ g.sponsor_until|fmt_day }}{% elif g.sponsor_until %}until {{ g.sponsor_until|fmt_day }}{% else %}no end date{% endif %}
+      {%- if g.sponsor_link %} · {{ n.clicks }} {{ "click" if n.clicks == 1 else "clicks" }}{% endif %}</span>
+      {%- else %}<span class="muted">None</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small section-note">Views and clicks are counted while the visitor stats are on, as on /stats. Sponsor clicks are what you can show a sponsor.</p>
+{% endif %}
+{% endblock %}

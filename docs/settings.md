@@ -157,8 +157,9 @@ then run `docker compose up -d --build`.
 
 ## Advertising
 
-The home page, the Jobs page, the Sources page and the Obituaries page can show
-one Google AdSense ad at the top of the right-hand column. To show it on
+The home page, the Jobs page, the Sources page, the Obituaries page and the
+[visitor guides](guides.md#ads-in-the-guides) can show one Google AdSense ad at
+the top of the right-hand column. To show it on
 another topic's page too, add `show_ad: true` to that topic in
 `config/categories.yaml` ([Topics](topics.md#separate-topics-obituaries)).
 All these pages use the same ad unit. On a phone, the column moves below the
@@ -169,7 +170,7 @@ and no ad code.
 |---|---|---|
 | `ADSENSE_CLIENT` | *(empty)* | Your AdSense publisher ID, such as `ca-pub-1234567890123456` (`pub-1234567890123456` also works). You can also paste the ads.txt line or the verification code from AdSense: the site takes the ID out of it. With only this setting, the site can be verified, but it shows no ad. |
 | `ADSENSE_SLOT` | *(empty)* | The ad unit's number, such as `9876543210`. With `ADSENSE_CLIENT`, the ad block is shown. |
-| `ADSENSE_STORIES_SLOT` | *(empty)* | The number of a second ad unit, such as `1122334455`, shown between the stories (see [The ad between the stories](#the-ad-between-the-stories)). It needs `ADSENSE_CLIENT` and `ADSENSE_SLOT` too. |
+| `ADSENSE_STORIES_SLOT` | *(empty)* | The number of a second ad unit, such as `1122334455`, shown between the stories (see [The ad between the stories](#the-ad-between-the-stories)), and inside each visitor guide with three or more parts, after its first part. It needs `ADSENSE_CLIENT` and `ADSENSE_SLOT` too. |
 
 **How to set it up**
 
@@ -466,6 +467,10 @@ Until you set a password, nothing is counted.
 Open the page only over https (with `SITE_DOMAIN` set, see
 [Web address and https](#web-address-and-https)). Over plain http the password
 travels without protection.
+
+The same password opens the visitor guides editor, `/admin/guides` (see
+[Visitor guides](guides.md)), and the review pages of paid listings and booked
+ads.
 
 **What is counted**
 

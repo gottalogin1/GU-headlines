@@ -247,6 +247,15 @@ price again through PayPal for as many days more (see
 an ad on the Advertise page gets the same kind of email, and its booking's
 page has a **Run this ad again** form.
 
+## Visitor guides
+
+The **Guides** link in the top bar (shown once a guide is published) opens
+`/guides`: practical guides for visiting Guam, written by the site's owner and
+listed by section. Each guide has an "On this page" list of its parts, and
+links to the other guides at the end. A guide may name a local business that
+sponsors it ("Sponsored by"). How the owner writes the guides:
+[guides.md](guides.md).
+
 ## The Sources page
 
 The **Sources** link at the bottom of every page opens a page that starts with **Why this site

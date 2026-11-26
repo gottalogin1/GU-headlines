@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{# The owner's editor for one visitor guide (/admin/guides/new and
+   /admin/guides/<id>, behind STATS_PASSWORD; guides.py). Problems come back
+   beside the fields (errors), with the text typed so far (values). #}
+
+{% macro describe(name, hint) -%}
+{%- if hint or errors.get(name) %} aria-describedby="{% if hint %}h-{{ name }}{% endif %}{% if errors.get(name) %} e-{{ name }}{% endif %}"{% endif %}
+{%- if errors.get(name) %} aria-invalid="true"{% endif %}
+{%- endmacro %}
+
+{% macro notes(name, hint) %}
+{% if hint %}<p class="hint" id="h-{{ name }}">{{ hint }}</p>{% endif %}
+{% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+{% endmacro %}
+
+{% macro field(name, label, required=false, maxlength=100, type="text", hint="", placeholder="", wide=false, attrs="") %}
+<div class="field{% if wide %} wide{% endif %}{% if errors.get(name) %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}{% if not required %} <span class="optional">(optional)</span>{% endif %}</label>
+  <input id="f-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ values.get(name, '') }}"{% if required %} required{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{{ describe(name, hint) }} {{ attrs|safe }}>
+  {{ notes(name, hint) }}
+</div>
+{% endmacro %}
+
+{% block main %}
+<header class="page-head">
+  <p class="crumbs"><a href="/admin/guides">Visitor guides</a></p>
+  <h1>{{ "Edit guide" if guide else "New guide" }}</h1>
+  {% if guide %}
+  <p class="muted">{{ "Published" if guide.status == "published" else "Draft" }} · last saved {{ guide.updated_at|fmt_datetime }} ·
+    <a href="/admin/guides/{{ guide.id }}/view">Preview</a>{% if guide.status == "published" %} · <a href="/guides/{{ guide.slug }}">On the site</a>{% endif %}</p>
+  {% endif %}
+</header>
+
+{% if message %}<p class="signup-result" role="status">{{ message }}{% if guide and message == "Saved." %} <a href="/admin/guides/{{ guide.id }}/view">See how it looks</a>{% endif %}</p>{% endif %}
+{% if errors.form %}<p class="signup-result error" role="alert">{{ errors.form }}</p>
+{% elif errors %}<p class="signup-result error" role="alert">Nothing was saved yet. Please check the fields marked below.</p>{% endif %}
+
+<form class="listing-form guide-form panel" action="/admin/guides/{{ guide.id if guide else 'new' }}" method="post" enctype="multipart/form-data">
+  {{ field("title", "Title", required=true, maxlength=limits.MAX_TITLE, wide=true, placeholder="Getting around Guam") }}
+  {{ field("slug", "Address", maxlength=limits.MAX_SLUG, placeholder="getting-around",
+           hint="The end of the guide's address: /guides/getting-around. Empty: made from the title. Once a guide is published, keep its address, or links people saved stop working.") }}
+  {{ field("section", "Section", maxlength=limits.MAX_SECTION, placeholder="Start here",
+           hint="The heading it is listed under on /guides. Guides with the same section are listed together.", attrs='list="sections"') }}
+  <datalist id="sections">{% for s in sections %}<option value="{{ s }}">{% endfor %}</datalist>
+  {{ field("position", "Order", required=true, maxlength=0, type="number", hint="Lower numbers are listed first, such as 10, 20, 30. Leave gaps to fit new guides in between.", attrs='min="0" max="9999" inputmode="numeric"') }}
+  <fieldset class="field plan{% if errors.get('status') %} has-error{% endif %}">
+    <legend>Who can see it</legend>
+    <label class="plan-choice"><input type="radio" name="status" value="draft" {% if values.get('status') != 'published' %}checked{% endif %}>
+      <span><strong>Draft</strong><br><span class="muted small">Only you, with Preview.</span></span></label>
+    <label class="plan-choice"><input type="radio" name="status" value="published" {% if values.get('status') == 'published' %}checked{% endif %}>
+      <span><strong>Published</strong><br><span class="muted small">Everyone, on /guides.</span></span></label>
+  </fieldset>
+
+  <div class="field wide{% if errors.get('summary') %} has-error{% endif %}">
+    <label for="f-summary">Summary</label>
+    <textarea id="f-summary" name="summary" rows="2" maxlength="{{ limits.MAX_SUMMARY }}" required{{ describe('summary', 'x') }}>{{ values.get('summary', '') }}</textarea>
+    {{ notes("summary", "One or two sentences: shown on the guide's card on /guides, under its title, and in search results.") }}
+  </div>
+
+  <div class="field wide{% if errors.get('body') %} has-error{% endif %}">
+    <label for="f-body">Text</label>
+    <textarea id="f-body" class="guide-text" name="body" rows="26" maxlength="{{ limits.MAX_BODY_TEXT }}" required spellcheck="true"{{ describe('body', 'x') }}>{{ values.get('body', '') }}</textarea>
+    {{ notes("body", "Written in Markdown: see How to format the text, below. Each ## heading starts a new part of the guide, and the guide lists the headings at the top.") }}
+    <details class="guide-help">
+      <summary>How to format the text</summary>
+      <div class="table-wrap">
+      <table class="status-table">
+        <thead><tr><th scope="col">Type this</th><th scope="col">To get</th></tr></thead>
+        <tbody>
+          <tr><td><code>## Getting there</code></td><td>A main heading (a new part of the guide)</td></tr>
+          <tr><td><code>### By bus</code></td><td>A smaller heading</td></tr>
+          <tr><td>An empty line between paragraphs</td><td>A new paragraph</td></tr>
+          <tr><td><code>**strong**</code> and <code>*slanted*</code></td><td><strong>strong</strong> and <em>slanted</em> words</td></tr>
+          <tr><td><code>- Sunscreen</code> (one a line)</td><td>A list with dots</td></tr>
+          <tr><td><code>1. Book a car</code> (one a line)</td><td>A numbered list</td></tr>
+          <tr><td><code>[the weather page](/weather)</code></td><td>A link to a page of this site</td></tr>
+          <tr><td><code>[Guam's parks](https://example.com)</code></td><td>A link to another site (opens in a new tab)</td></tr>
+          <tr><td><code>[Call us](tel:+16715550123)</code></td><td>A phone number people can tap</td></tr>
+          <tr><td><code>&gt; Bring cash for the fruit stands.</code></td><td>A "good to know" box</td></tr>
+          <tr><td><code>| Month | Rain |</code><br><code>|---|---|</code><br><code>| June | Some |</code></td><td>A table</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="hint">Photos: choose one under "Add a photo to the text" and save. It is put at the end of the text as a line like <code>![What it shows](/media/guides/…webp)</code>: move that line to where the photo belongs. Text after the address in quotes, <code>(/media/… "Like this")</code>, shows under the photo. Only photos added here can be shown.</p>
+    </details>
+  </div>
+
+  <h2 class="guide-form-title wide">Photos</h2>
+  {% if guide and guide.photo %}
+  <div class="field wide guide-current-photo">
+    <span class="hint">The cover photo now:</span>
+    <img src="{{ guide.photo }}" alt="" width="240" height="{{ (240 * guide_photo_size(guide.photo)[1] / guide_photo_size(guide.photo)[0])|round|int }}" loading="lazy">
+    <label class="plan-choice"><input type="checkbox" name="remove_photo" value="yes"> <span>Take the cover photo off</span></label>
+  </div>
+  {% endif %}
+  <div class="field{% if errors.get('cover') %} has-error{% endif %}">
+    <label for="f-cover">{{ "New cover photo" if guide and guide.photo else "Cover photo" }} <span class="optional">(optional)</span></label>
+    <input id="f-cover" type="file" name="cover" accept="image/jpeg,image/png,image/webp"{{ describe('cover', 'x') }}>
+    {{ notes("cover", "The large photo at the top of the guide and on its card. A wide photo works best. JPG, PNG or WebP, at most 8 MB." ~ (" If you chose one before, please choose it again." if errors else "")) }}
+  </div>
+  {{ field("photo_alt", "What the cover photo shows", maxlength=limits.MAX_ALT, placeholder="Tumon Bay at sunset, seen from the cliffs",
+           hint="For readers who can't see the photo, and for search engines. Needed with a cover photo.") }}
+  <div class="field{% if errors.get('picture') %} has-error{% endif %}">
+    <label for="f-picture">Add a photo to the text <span class="optional">(optional)</span></label>
+    <input id="f-picture" type="file" name="picture" accept="image/jpeg,image/png,image/webp"{{ describe('picture', 'x') }}>
+    {{ notes("picture", "Saved at the end of the text: move its line to where it belongs." ~ (" If you chose one before, please choose it again." if errors else "")) }}
+  </div>
+  {{ field("picture_alt", "What that photo shows", maxlength=limits.MAX_ALT, placeholder="Red rice, chicken kelaguen and a lemon wedge") }}
+
+  <h2 class="guide-form-title wide">Sponsor of this guide</h2>
+  <p class="hint wide">A business that pays you to be named at the top of this guide: you agree on the price with them, and they pay you through PayPal. Leave the name empty for no sponsor.</p>
+  {{ field("sponsor_name", "Sponsor's name", maxlength=limits.MAX_SPONSOR_NAME, placeholder="Island Car Rentals") }}
+  {{ field("sponsor_link", "Sponsor's website", maxlength=500, placeholder="islandcarrentals.com", hint="Clicks on it are counted on the guides list.") }}
+  {{ field("sponsor_text", "A short line about them", maxlength=limits.MAX_SPONSOR_TEXT, placeholder="Cars at the airport, open every day") }}
+  {{ field("sponsor_until", "Last day it shows", type="date", maxlength=0, hint="Guam time. Empty: until you take it off.") }}
+
+  <div class="form-end wide">
+    <button class="btn" type="submit">Save</button>
+    <p class="hint">Saving a published guide changes it on the site within a minute.</p>
+  </div>
+</form>
+
+{% if guide %}
+<form class="panel listing-status guide-delete" action="/admin/guides/{{ guide.id }}/delete" method="post">
+  <h2>Delete this guide</h2>
+  <p>The guide and its photos are deleted for good. To only hide it, make it a draft instead.</p>
+  <label class="plan-choice"><input type="checkbox" name="confirm" value="yes" required> <span>Yes, delete "{{ guide.title }}"</span></label>
+  <p><button class="btn btn-quiet" type="submit">Delete</button></p>
+</form>
+{% endif %}
+{% endblock %}

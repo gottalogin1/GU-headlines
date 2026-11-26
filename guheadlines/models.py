@@ -630,3 +630,51 @@ class BidAlertSubscriber(Base):
     # When PayPal was last asked about the subscription.
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# Clicks on the sponsor of a visitor guide (guides.py) are kept in page_views,
+# under this name and the guide's number, such as "guide-sponsor:3".
+GUIDE_SPONSOR_CLICKS = "guide-sponsor:"
+
+
+class Guide(Base):
+    """A visitor guide that the site's owner writes on /admin/guides (see
+    guides.py), shown on /guides once it is published."""
+
+    __tablename__ = "guides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The guide's address: /guides/<slug>.
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    # The heading it is listed under on /guides, such as "Start here".
+    section: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # One or two sentences: the guide's card on /guides, and search results.
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # The text, in Markdown.
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Lower numbers are listed first.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    # "draft" (only the owner sees it) or "published".
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="draft")
+    # "free", or "paid" for a guide that only paying readers may read in full
+    # (not built yet; see docs/guides.md#selling-guides).
+    access: Mapped[str] = mapped_column(Text, nullable=False, default="free")
+    # The cover photo's address (/media/guides/...), and what it shows.
+    photo: Mapped[str | None] = mapped_column(Text)
+    photo_alt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # A business that sponsors this guide, sold directly by the owner: its
+    # name, website and a short line, shown until sponsor_until (Guam time;
+    # empty: no end).
+    sponsor_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sponsor_link: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sponsor_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sponsor_until: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # The first time it was published.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

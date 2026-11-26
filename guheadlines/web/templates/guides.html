@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{# The visitor guides (/guides): every published guide, under its section's
+   heading, in the owner's order (guides.py). #}
+
+{% block main %}
+<header class="page-head">
+  <h1>Visitor guides</h1>
+  <p class="muted">Short, practical guides for visiting Guam: getting around, the weather,
+    beaches, food and what to see. Written and kept up to date by {{ settings.site_name }}.</p>
+</header>
+
+{% for section, items in sections %}
+{% if section or sections|length > 1 %}<h2 class="section-title">{{ section or "More guides" }}</h2>{% endif %}
+<ul class="guide-grid">
+  {% for g in items %}
+  <li class="guide-card{% if not g.photo %} no-photo{% endif %}">
+    {% if g.photo %}
+    {% set size = guide_photo_size(g.photo) %}
+    {% set srcset = guide_srcset(g.photo) %}
+    <img src="{{ g.photo }}"{% if srcset %} srcset="{{ srcset }}" sizes="(max-width: 640px) calc(100vw - 32px), 340px"{% endif %}
+         width="{{ size[0] }}" height="{{ size[1] }}" alt="" {% if loop.first and loop.index0 == 0 and section == sections[0][0] %}fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">
+    {% endif %}
+    <div class="guide-card-body">
+      <h3 class="headline"><a href="/guides/{{ g.slug }}">{{ g.title }}</a></h3>
+      <p class="guide-card-summary">{{ g.summary }}</p>
+      <p class="muted small">{{ guide_minutes(g) }} min read</p>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endfor %}
+{% endblock %}
