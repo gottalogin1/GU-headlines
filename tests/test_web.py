@@ -690,6 +690,9 @@ def test_sources_page_says_why_the_site_exists_and_disclaims(client):
     page = client.get("/status").text
     about = page.split('id="about"', 1)[1].split("</section>", 1)[0]
     assert "Why this site exists" in about
+    about = " ".join(about.split())  # the template wraps its lines
+    assert "Search engines such as Google collect and use more than that." in about
+    assert "never stores the rest of the story" in about
     disclaimer = page.split('id="disclaimer"', 1)[1].split("</section>", 1)[0]
     disclaimer = " ".join(disclaimer.split())  # the template wraps its lines
     assert "does not write, edit or publish any of the articles" in disclaimer
