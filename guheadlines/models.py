@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     Text,
     func,
 )
@@ -363,6 +364,9 @@ class WeatherReport(Base):
 # Clicks on the sponsor spot (web/sponsor.py) are kept in page_views, under
 # this name. Page addresses start with "/", so it is never a page.
 SPONSOR_CLICKS = "sponsor-click"
+# Clicks on the stories in the newsletter emails (links that end in
+# ?from=newsletter), kept in page_views under this name.
+NEWSLETTER_CLICKS = "newsletter-click"
 
 
 class PageViews(Base):
@@ -411,6 +415,69 @@ class NewsletterEdition(Base):
     # The scheduled time of the edition (NEWSLETTER_DAYS at NEWSLETTER_TIME).
     formed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     article_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), nullable=False)
+
+
+# Clicks on a booked ad (ads.py) are kept in page_views too, under this name
+# and the booking's number, such as "ad-click:12".
+AD_CLICKS = "ad-click:"
+
+
+class AdBooking(Base):
+    """An ad that a business booked on the Advertise page (see ads.py): the
+    sponsor spot for some weeks, or a sponsor line in some newsletter
+    editions. It shows only once it is paid through PayPal and the site's
+    owner has approved it."""
+
+    __tablename__ = "ad_bookings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The secret part of the booking's own page (/advertise/booking/<code>),
+    # which only the business that booked it is given.
+    code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    # "site" (the sponsor spot) or "newsletter" (a line in the newsletter).
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    # new (not paid yet), paid (waiting for the owner), approved, rejected
+    # (and refunded) or cancelled (not paid in time, or cancelled by the business).
+    status: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    business: Mapped[str] = mapped_column(Text, nullable=False)
+    # So the site's owner can reach the business about its ad. Shown only on
+    # the owner's review page.
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    link: Mapped[str] = mapped_column(Text, nullable=False)
+    # The words of the picture (for people who cannot see it), or the
+    # sponsor line in the newsletter.
+    words: Mapped[str] = mapped_column(Text, nullable=False)
+    # The sponsor spot's picture: a WebP copy at most 600 pixels wide.
+    picture: Mapped[bytes | None] = mapped_column(LargeBinary)
+    picture_width: Mapped[int | None] = mapped_column(Integer)
+    picture_height: Mapped[int | None] = mapped_column(Integer)
+    # The Monday of each week (the sponsor spot), or the day of each edition
+    # (the newsletter), in Guam time.
+    days: Mapped[list[date]] = mapped_column(ARRAY(Date), nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    paypal_order_id: Mapped[str | None] = mapped_column(Text)
+    paypal_capture_id: Mapped[str | None] = mapped_column(Text)
+    # Why the owner turned the ad down, shown to the business.
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AdSlot(Base):
+    """A week of the sponsor spot, or a newsletter edition, that a booking
+    holds. One booking per slot: a slot that is taken cannot be booked again,
+    even by two businesses at the same moment."""
+
+    __tablename__ = "ad_slots"
+
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("ad_bookings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
 
 class BidAlertPlan(Base):

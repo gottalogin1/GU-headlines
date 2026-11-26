@@ -391,7 +391,7 @@ def test_sign_up_pay_and_start(web, fake_paypal, outbox):
     assert sub.keywords == ["Generator"] and sub.email == "buyer@example.com"
 
     review = web.get(f"/bids/alerts/review?t={token}")
-    assert review.status_code == 200 and review.headers["cache-control"] == "no-store"
+    assert review.status_code == 200 and "no-store" in review.headers["cache-control"]
     assert "noindex" in review.text and "buyer@example.com" in review.text
     assert "Construction and repairs; the words “Generator”" in review.text
     assert f'href="/bids/alerts/pay?t={token}"' in review.text
@@ -420,7 +420,8 @@ def test_sign_up_pay_and_start(web, fake_paypal, outbox):
     renews = NOW + timedelta(days=30)
     fake_paypal.approve("I-1", renews)
     page = web.get(f"/bids/alerts/manage?t={token}")
-    assert page.status_code == 200 and page.headers["cache-control"] == "no-store"
+    assert page.status_code == 200 and "no-store" in page.headers["cache-control"]
+    assert page.headers["referrer-policy"] == "no-referrer"
     assert "the payment is done" in page.text and "Cancel my subscription" in page.text
     sub = _subscriber(token)
     assert sub.status == "active" and abs(sub.paid_until - renews) < timedelta(seconds=1)

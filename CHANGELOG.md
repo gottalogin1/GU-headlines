@@ -6,6 +6,36 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **An Advertise page, where businesses book and pay for ads themselves.** A
+  new page (`/advertise`, linked at the bottom of every page) shows your real
+  numbers from the visitor stats (page views in the last 30 days, with a
+  chart, and the clicks on the sponsor spot and on the newsletter's stories),
+  and a booking form for each thing that has a price: the sponsor spot by the
+  week (`SPONSOR_WEEK_PRICE`) and a sponsor line at the top of a newsletter
+  edition (`NEWSLETTER_SPONSOR_PRICE`). A business picks its weeks or
+  editions, gives its picture or words, and pays through PayPal. You get a
+  Discord alert, and the ad shows only after you approve it on the new
+  `/advertise/review` page (the stats password opens it); turning it down
+  refunds it through PayPal. Each booking has its own page with a secret
+  address, where the business sees where it stands and, later, its ad's page
+  views and clicks. No logins, and no PayPal script on the site, so the
+  PageSpeed scores stay the same. It needs PayPal (`PAYPAL_CLIENT_ID` and
+  `PAYPAL_CLIENT_SECRET`), `STATS_PASSWORD` and a price; without them the site
+  is as before. When you update, the database gets two new tables, by itself.
+  See [Advertise page](docs/settings.md#advertise-page).
+- **A "Buy me a coffee" box, a "Plan a trip" box and a second ad.** With
+  `PAYPAL_DONATE_LINK` set (a PayPal.Me or PayPal Donate button link), every
+  page shows a **Support this site** box with a **Buy me a coffee** button
+  that opens your PayPal page. With one or more `AFFILIATE_*_LINK` settings
+  (hotels, flights, tours and car rentals), the Weather page and the Events
+  pages show a **Plan a trip** box of affiliate links, with a note that tells
+  readers the site can earn a commission. With `ADSENSE_STORIES_SLOT` set,
+  the home page and the Obituaries page show a second AdSense ad after the
+  fifth story. All three are off until you set them, load no outside script,
+  and add a paragraph to the disclaimer on the Sources page where needed. See
+  [Coffee donations](docs/settings.md#coffee-donations),
+  [Affiliate links](docs/settings.md#affiliate-links) and
+  [The ad between the stories](docs/settings.md#advertising).
 - **Paid bid alerts.** Businesses can pay a monthly price through PayPal to
   get an email when a new bid on the Bids page matches their trades (such as
   construction, IT or medical) or their own words. The new page

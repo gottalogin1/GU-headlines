@@ -40,8 +40,16 @@ Each story in the feed has:
 - the news site's name,
 - the first lines of the intro (at most 280 characters, never the full story),
 - a link to the story. While the visitor stats are on, the link passes
-  through `/go/<number>` on your site, so the clicks in the emails count on
-  the stats page like other story clicks.
+  through `/go/<number>?from=newsletter` on your site, so the clicks in the
+  emails count on the stats page like other story clicks, and the
+  [Advertise page](settings.md#advertise-page) can show how many story clicks
+  the newsletter brought in the last 30 days.
+
+When a business has booked the edition's sponsor line on the
+[Advertise page](settings.md#advertise-page) (`NEWSLETTER_SPONSOR_PRICE`) and
+you approved it, the edition starts with one more item: "Sponsor:" and the
+business's name, its sponsor line, and a link to its website through
+`/go/ad/<number>`, which counts the clicks for the business.
 
 No page of the site links to the feed. The feed tells search engines not to
 list it (the `X-Robots-Tag: noindex` header), and it is not in the sitemap.

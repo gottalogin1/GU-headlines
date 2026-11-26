@@ -16,6 +16,21 @@
 <lastBuildDate>{{ formed }}</lastBuildDate>
 {%- endif %}
 <ttl>30</ttl>
+{%- if sponsor %}
+{#- The sponsor line a business booked for this edition (ads.py), first in
+    the email and marked "Sponsor". #}
+<item>
+<title>Sponsor: {{ sponsor.business }}</title>
+<link>{{ sponsor.link }}</link>
+<guid isPermaLink="false">{{ sponsor.guid }}</guid>
+<pubDate>{{ formed }}</pubDate>
+<description>{{ sponsor.words }}</description>
+<content:encoded>{% filter forceescape %}
+<p>{{ sponsor.words }}</p>
+<p><strong>Sponsor</strong> · <a href="{{ sponsor.link }}">Visit {{ sponsor.domain }}</a></p>
+{%- endfilter %}</content:encoded>
+</item>
+{%- endif %}
 {%- for item in items %}
 <item>
 <title>{{ item.title }}</title>

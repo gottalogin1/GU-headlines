@@ -1,7 +1,7 @@
 """Paid email alerts for new bids: bid_alert_plans and bid_alert_subscribers.
 
-Revision ID: 0012_bid_alerts
-Revises: 0011_bids
+Revision ID: 0013_bid_alerts
+Revises: 0012_ad_bookings
 Create Date: 2026-11-26
 """
 
@@ -11,8 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0012_bid_alerts"
-down_revision = "0011_bids"
+revision = "0013_bid_alerts"
+down_revision = "0012_ad_bookings"
 branch_labels = None
 depends_on = None
 

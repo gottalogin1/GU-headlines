@@ -751,8 +751,14 @@ def test_ad_block_on_the_home_sources_jobs_events_bids_and_obituaries_pages(clie
             'script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'
             '?client=ca-pub-1234567890123456";'
         ) in sidebar
-        # An ad blocker stops the code: the empty block is then taken away.
-        assert "script.onerror = function () { slot.hidden = true; };" in sidebar
+        # An ad blocker stops the code: the empty blocks are then taken away.
+        hide = (
+            'document.querySelectorAll(".ad-slot")'
+            ".forEach(function (slot) { slot.hidden = true; });"
+        )
+        assert hide in sidebar
+        # Without ADSENSE_STORIES_SLOT: no ad between the stories.
+        assert "ad-between" not in page.text
     assert len(nonces) == 7  # a new nonce for every page
 
     # Other pages keep the strict policy and show no ad.
@@ -774,6 +780,49 @@ def test_ad_block_on_the_home_sources_jobs_events_bids_and_obituaries_pages(clie
     page = client.get("/")
     assert "adsbygoogle" not in page.text and "google-adsense-account" in page.text
     assert "'nonce-" not in page.headers["content-security-policy"]
+
+
+def test_second_ad_between_the_stories(client, monkeypatch):
+    _set(
+        monkeypatch,
+        adsense_client="ca-pub-1234567890123456",
+        adsense_slot="9876543210",
+        adsense_stories_slot="1122334455",
+    )
+    # Two stories: the ad goes after the fifth story, so not yet.
+    assert "ad-between" not in client.get("/").text
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        kuam = session.query(Source).filter_by(slug="kuam").one()
+        session.add_all(
+            Article(
+                source_id=kuam.id,
+                url=f"https://www.kuam.com/story/{n}/news",
+                title=f"Story number {n}",
+                published_at=now - timedelta(minutes=n),
+            )
+            for n in range(10, 16)
+        )
+    page = client.get("/")
+    main = page.text.split('<main id="main">', 1)[1].split("</main>", 1)[0]
+    assert main.count('<div class="panel ad-slot ad-between">') == 1
+    before, after = main.split("ad-between", 1)
+    assert before.count('<article class="story') == 5 and after.count('<article class="story') == 3
+    unit = after.split("</div>", 1)[0]
+    assert 'data-ad-client="ca-pub-1234567890123456" data-ad-slot="1122334455"' in unit
+    # Its script only puts the unit in the queue, with the page's nonce. The
+    # block in the right-hand column loads the AdSense code for both units.
+    nonce = page.headers["content-security-policy"].split("'nonce-", 1)[1].split("'", 1)[0]
+    assert f'<script nonce="{nonce}">(adsbygoogle = window.adsbygoogle || []).push({{}});' in unit
+    assert "adsbygoogle.js" not in main
+    sidebar = page.text.split('<aside class="sidebar">', 1)[1]
+    assert 'data-ad-slot="9876543210"' in sidebar and "adsbygoogle.js" in sidebar
+
+    # Pages without the ad block have no ad between the stories either.
+    assert "adsbygoogle" not in client.get("/source/kuam").text
+    # It needs the first ad unit too.
+    _set(monkeypatch, adsense_slot="")
+    assert "adsbygoogle" not in client.get("/").text
 
 
 def test_adsense_settings_must_be_ids():

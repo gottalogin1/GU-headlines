@@ -55,6 +55,19 @@ class Settings:
     # shown beside the stories on the home, Sources and Jobs pages.
     adsense_client: str = ""
     adsense_slot: str = ""
+    # A second ad unit, shown between the stories of the pages with the ad
+    # block. It needs adsense_client and adsense_slot too.
+    adsense_stories_slot: str = ""
+    # The "Buy me a coffee" box: a PayPal.Me or PayPal donate link. Empty:
+    # no box.
+    paypal_donate_link: str = ""
+    # Affiliate links (a booking site's links with your partner ID in them)
+    # for the "Plan a trip" box on the Weather and Events pages. Empty: that
+    # line is left out; all empty: no box.
+    affiliate_hotels_link: str = ""
+    affiliate_flights_link: str = ""
+    affiliate_tours_link: str = ""
+    affiliate_cars_link: str = ""
     user_agent: str = "Mozilla/5.0 (compatible; GUHeadlinesBot/1.0)"
     scrape_interval_minutes: int = 60
     # When a run leaves pages behind (site rate-limited us, or the per-run cap
@@ -139,7 +152,12 @@ class Settings:
     paypal_client_id: str = ""
     paypal_client_secret: str = ""
     paypal_mode: str = "sandbox"
-    # Sending email (see mail.py): an SMTP server, such as Resend's, and the
+    # The Advertise page (/advertise, see ads.py): businesses book and pay for
+    # the sponsor spot by the week, and for a sponsor line in the newsletter
+    # by the edition, through PayPal. Prices in US cents; 0: not for sale.
+    sponsor_week_price_cents: int = 0
+    newsletter_sponsor_price_cents: int = 0
+    # Sending email (see mail.py): an SMTP server (a mail server) and the
     # sender address. No server or no sender: no email is sent.
     smtp_host: str = ""
     smtp_port: int = 587
@@ -219,6 +237,22 @@ def _web_address(value: str | None) -> str:
     return value
 
 
+def _paypal_link(value: str | None) -> str:
+    """PAYPAL_DONATE_LINK: a https address on paypal.com or paypal.me ("https://"
+    is added when it is missing), or "" if it is not one. A link with an email
+    address in it (a donate link with business=you@example.com) is refused
+    too: the site never shows an email address."""
+    value = (value or "").strip()
+    if value.lower().startswith(("paypal.", "www.paypal.")):
+        value = "https://" + value
+    address = _web_address(value)
+    host = (urlsplit(address).hostname or "") if address else ""
+    paypal = any(host == name or host.endswith("." + name) for name in ("paypal.com", "paypal.me"))
+    if not paypal or not address.startswith("https://") or re.search("@|%40", address, re.I):
+        return ""
+    return address
+
+
 def _file_name(value: str | None) -> str:
     """SPONSOR_IMAGE "ad.jpg" -> "ad.jpg": only the name of the file, without
     a folder in front of it ("config/sponsor/ad.jpg" also gives "ad.jpg").
@@ -229,13 +263,19 @@ def _file_name(value: str | None) -> str:
     return ""
 
 
+MAX_PRICE_CENTS = 1_000_000  # $10,000
+
+
 def _price_cents(value: str | None) -> int:
-    """BID_ALERTS_PRICE "15", "15.00" or "$9.50" -> 1500, 1500 or 950 (US
-    cents). 0 when it is empty or not a price."""
-    found = re.fullmatch(r"\$?\s*(\d{1,5})(?:\.(\d{1,2}))?", (value or "").strip())
+    """SPONSOR_WEEK_PRICE "25", "25.50", "$25" or "1,200" -> 2500, 2550,
+    2500, 120000 (US cents). 0 (not for sale) when empty, not a price, or
+    over $10,000."""
+    text = (value or "").strip().removeprefix("$").replace(",", "").strip()
+    found = re.fullmatch(r"(\d{1,7})(?:\.(\d{1,2}))?", text)
     if not found:
         return 0
-    return int(found[1]) * 100 + int((found[2] or "0").ljust(2, "0"))
+    cents = int(found[1]) * 100 + int((found[2] or "0").ljust(2, "0"))
+    return cents if cents <= MAX_PRICE_CENTS else 0
 
 
 def _tide_station(value: str | None, default: str) -> str:
@@ -323,6 +363,12 @@ def load_settings() -> Settings:
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
         adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),
         adsense_slot=_adsense_slot(env.get("ADSENSE_SLOT")),
+        adsense_stories_slot=_adsense_slot(env.get("ADSENSE_STORIES_SLOT")),
+        paypal_donate_link=_paypal_link(env.get("PAYPAL_DONATE_LINK")),
+        affiliate_hotels_link=_web_address(env.get("AFFILIATE_HOTELS_LINK")),
+        affiliate_flights_link=_web_address(env.get("AFFILIATE_FLIGHTS_LINK")),
+        affiliate_tours_link=_web_address(env.get("AFFILIATE_TOURS_LINK")),
+        affiliate_cars_link=_web_address(env.get("AFFILIATE_CARS_LINK")),
         user_agent=env.get("SCRAPER_USER_AGENT", defaults.user_agent),
         scrape_interval_minutes=max(5, _int(env.get("SCRAPE_INTERVAL_MINUTES"), 60)),
         catch_up_seconds=max(30, _int(env.get("CATCH_UP_SECONDS"), 60)),
@@ -364,6 +410,8 @@ def load_settings() -> Settings:
         paypal_client_id=env.get("PAYPAL_CLIENT_ID", "").strip(),
         paypal_client_secret=env.get("PAYPAL_CLIENT_SECRET", "").strip(),
         paypal_mode=_paypal_mode(env.get("PAYPAL_MODE")),
+        sponsor_week_price_cents=_price_cents(env.get("SPONSOR_WEEK_PRICE")),
+        newsletter_sponsor_price_cents=_price_cents(env.get("NEWSLETTER_SPONSOR_PRICE")),
         smtp_host=env.get("SMTP_HOST", "").strip(),
         smtp_port=_int(env.get("SMTP_PORT"), defaults.smtp_port),
         smtp_user=env.get("SMTP_USER", "").strip(),

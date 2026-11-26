@@ -1,0 +1,12 @@
+{# The second ad unit, between the stories (ADSENSE_STORIES_SLOT,
+   docs/settings.md#advertising). Its script only puts the unit in the queue.
+   The AdSense code that fills it is loaded by the block in the right-hand
+   column (_ad.html), on the visitor's first scroll, tap, key press or mouse
+   move. A div, not a section: a second "Advertisement" area in the page's
+   list of areas only gets in the way of screen readers. #}
+<div class="panel ad-slot ad-between">
+  <p class="ad-label">Advertisement</p>
+  <ins class="adsbygoogle" data-ad-client="{{ settings.adsense_client }}" data-ad-slot="{{ settings.adsense_stories_slot }}"
+       data-ad-format="auto" data-full-width-responsive="false"></ins>
+  <script nonce="{{ csp_nonce }}">(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>
