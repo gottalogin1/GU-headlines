@@ -2666,13 +2666,14 @@ def _guide_page(request: Request, guide: Guide, preview: bool = False) -> HTMLRe
             "href": f"/go/guide-sponsor/{guide.id}" if counted else link,
             "rel": "nofollow sponsored noopener" if counted else "sponsored noopener",
         }
-    others = [g for g in published_guides() if g.id != guide.id]
+    listed = published_guides()
+    others = [g for g in listed if g.id != guide.id]
     others.sort(key=lambda g: g.section != guide.section)  # the same section first
     return render(
         request,
         "guide.html",
         guide=guide,
-        text=guides.render(guide.body),
+        text=guides.unlink_unpublished(guides.render(guide.body), {g.slug for g in listed}),
         others=others[:6],
         guide_sponsor=sponsor_box,
         preview=preview,
@@ -2717,8 +2718,9 @@ def go_guide_sponsor(request: Request, guide_id: int):
 GUIDE_RESULTS = {
     "saved": "Saved.",
     "deleted": "The guide and its photos are deleted.",
-    "starters": "The starter guides are added as drafts. Read each one, change what you like,"
-    " and publish it.",
+    "starters": "The starter guides you ticked are added as drafts. Read each one, change"
+    " what you like, and publish it.",
+    "none": "Tick the starter guides you want first.",
     "confirm": "To delete the guide, tick the box beside the Delete button first.",
     "gone": "That guide is not there any more.",
 }
@@ -2965,19 +2967,22 @@ async def admin_guide_delete(request: Request, guide_id: int):
 
 @app.post("/admin/guides/starters")
 async def admin_guide_starters(request: Request):
-    """Add the starter guides that come with the site, as drafts."""
+    """Add the starter guides the owner ticked, as drafts."""
     if (answer := _owner_only(request)) is not None:
         return answer
     if not _from_this_site(request):
         return PlainTextResponse("Please use the button on the guides page.", status_code=403)
+    form = parse_qs((await request.body())[:_MAX_SIGNUP_BODY].decode("utf-8", "replace"))
 
     def add() -> int:
         with session_scope() as session:
-            return guides.add_starters(session, datetime.now(timezone.utc))
+            return guides.add_starters(session, datetime.now(timezone.utc), form.get("slug", []))
 
-    await run_in_threadpool(add)
+    added = await run_in_threadpool(add)
     return RedirectResponse(
-        "/admin/guides?done=starters", status_code=303, headers={"Cache-Control": "no-store"}
+        f"/admin/guides?done={'starters' if added else 'none'}",
+        status_code=303,
+        headers={"Cache-Control": "no-store"},
     )
 
 

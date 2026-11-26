@@ -36,23 +36,44 @@ protected on its way.
 
 ## Your first guides: the starter guides
 
-The site comes with eight starter guides, written for this site:
+The site comes with twenty starter guides, written for this site:
 
 | Guide | Section |
 |---|---|
 | Your first day on Guam | Start here |
 | Getting around Guam | Start here |
 | Weather and the best time to visit | Plan your trip |
+| Guam with kids | Plan your trip |
+| What to do on a rainy day | Plan your trip |
+| Things to do on Guam (a list that links to all the others) | Things to do |
 | Beaches and staying safe in the water | Things to do |
+| Tumon and Two Lovers Point | Things to do |
+| Snorkeling and diving | Things to do |
+| Hiking and waterfalls | Things to do |
+| Boats, dolphins and island trips | Things to do |
 | A morning in Hagåtña | Things to do |
+| World War II sites | Things to do |
+| Latte stones and ancient CHamoru sites | Things to do |
 | Driving the southern villages | Things to do |
+| A day in northern Guam | Things to do |
+| Markets and shopping | Things to do |
 | Local food to try | Food and culture |
+| Fiestas and festivals through the year | Food and culture |
 | Local customs and being a good guest | Food and culture |
 
-On `/admin/guides`, press **Add the starter guides as drafts**. They are added
-as drafts, which readers can't see. Open each one, read it, change anything
-you know better (opening days, your favorite places, what changed recently),
-and publish it. Add only the ones you want: delete the others.
+On `/admin/guides`, the **Starter guides** box lists the ones you don't have
+yet, each with a tick. Untick any you don't want and press **Add the ticked
+guides as drafts**. They are added as drafts, which readers can't see. Open
+each one, read it, change anything you know better (opening days, your
+favorite places, what changed recently), and publish it.
+
+The guides link to each other (*Things to do on Guam* links to all of them).
+A link to a guide you haven't published yet leads to a "not found" page, so
+publish the guides that others link to, or take those links out.
+
+A starter guide you deleted shows in the box again, so you can get it back
+later; just leave it unticked. New versions of the site may bring new
+starter guides, which show in the same box.
 
 The starter guides avoid prices, opening hours and other facts that change
 often. Before you publish, check the places and facts you are not sure about.
