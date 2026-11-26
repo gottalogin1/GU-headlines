@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{# A subscriber's own page (/bids/alerts/manage?t=...): the state of the
+   subscription, the trades and words, and cancelling. The token in the
+   address is the only key: there is no login. #}
+{% block main %}
+<header class="page-head">
+  <h1>Your bid alerts</h1>
+  <p class="muted">For {{ sub.email }}</p>
+</header>
+
+{% if result %}
+<p class="signup-result {{ 'ok' if result.ok else 'error' }}" role="status">{{ result.text }}</p>
+{% endif %}
+
+<section class="site-note bid-alert-state">
+  <h2>{{ state.title }}</h2>
+  <p>{{ state.text }}</p>
+  {% if sub.status == "pending" %}
+  <p class="bid-alert-actions"><a class="btn" href="/bids/alerts/pay?t={{ sub.token }}" rel="nofollow">Pay with PayPal</a></p>
+  {% elif state.ended %}
+  <p class="bid-alert-actions"><a class="btn" href="/bids/alerts">Sign up again</a></p>
+  {% endif %}
+</section>
+
+{% if not state.ended %}
+<form class="search-form bid-alert-form" action="/bids/alerts/manage" method="post">
+  <h2 class="grow">What you get alerts for</h2>
+  <input type="hidden" name="t" value="{{ sub.token }}">
+  {% with chosen = sub %}{% include "_bid_alert_choices.html" %}{% endwith %}
+  <div class="field actions grow">
+    <button type="submit">Save</button>
+  </div>
+</form>
+{% endif %}
+
+{% if sub.status in ("active", "suspended") %}
+<form class="site-note bid-alert-cancel" action="/bids/alerts/cancel" method="post">
+  <h2>Cancel</h2>
+  <input type="hidden" name="t" value="{{ sub.token }}">
+  <p>PayPal stops the monthly payment.{% if sub.status == "active" and paid_until %} Your alerts go on until {{ paid_until }}, the end of the time you paid for.{% endif %}</p>
+  <p><button class="btn" type="submit">Cancel my subscription</button></p>
+</form>
+{% endif %}
+
+<p class="muted small bid-alert-fine">Keep the address of this page private: anyone who has it can change or cancel your alerts. Every alert email has the link. You can also see and cancel the payment in your PayPal account, under automatic payments.</p>
+{% endblock %}

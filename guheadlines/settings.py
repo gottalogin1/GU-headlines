@@ -169,6 +169,16 @@ class Settings:
     # by the edition, through PayPal. Prices in US cents; 0: not for sale.
     sponsor_week_price_cents: int = 0
     newsletter_sponsor_price_cents: int = 0
+    # Sending email (see mail.py): an SMTP server (a mail server) and the
+    # sender address. No server or no sender: no email is sent.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    mail_from: str = ""
+    # Bid alerts (see bids/alerts.py): the monthly price, in US cents, of an
+    # email alert for new bids. 0: no bid alerts.
+    bid_alerts_price_cents: int = 0
 
     @property
     def sources_file(self) -> Path:
@@ -443,6 +453,12 @@ def load_settings() -> Settings:
         ),
         sponsor_week_price_cents=_price_cents(env.get("SPONSOR_WEEK_PRICE")),
         newsletter_sponsor_price_cents=_price_cents(env.get("NEWSLETTER_SPONSOR_PRICE")),
+        smtp_host=env.get("SMTP_HOST", "").strip(),
+        smtp_port=_int(env.get("SMTP_PORT"), defaults.smtp_port),
+        smtp_user=env.get("SMTP_USER", "").strip(),
+        smtp_password=env.get("SMTP_PASSWORD", "").strip(),
+        mail_from=" ".join(env.get("MAIL_FROM", "").split()),
+        bid_alerts_price_cents=_price_cents(env.get("BID_ALERTS_PRICE")),
     )
 
 

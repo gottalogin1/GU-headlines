@@ -666,6 +666,36 @@ them.
 - The Sources page's disclaimer gets a paragraph about the details a business
   gives when it books.
 
+## Sending email
+
+The site sends email for the bid alerts: the alerts, the welcome email, and the
+link to a subscriber's own page. It hands each email to a mail server through
+SMTP (the standard way that programs send email). The mail server can run on
+your own server or belong to an email company; its setup steps give the values.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SMTP_HOST` | *(empty)* | The mail server's name, such as `mail.guamheadlines.com`. Empty: no email is sent. |
+| `SMTP_PORT` | `587` | `465` encrypts from the start; other ports (such as `587`) switch to encryption first (STARTTLS). The connection is always encrypted. |
+| `SMTP_USER` | *(empty)* | The user name that the mail server asks for. Empty: no sign-in. |
+| `SMTP_PASSWORD` | *(empty)* | The password that goes with `SMTP_USER`. Secret. |
+| `MAIL_FROM` | *(empty)* | The sender, such as `GU Headlines <alerts@guamheadlines.com>`, at your domain. Shown only in the emails. |
+
+Send a test email with `docker compose exec web guheadlines mail-test
+you@example.com`. The steps are in `.env.example` and in
+[bid-alerts.md](bid-alerts.md#1-set-up-sending-email).
+
+## Bid alerts
+
+| Setting | Default | What it does |
+|---|---|---|
+| `BID_ALERTS_PRICE` | *(empty)* | The monthly price in US dollars, such as `15`. Empty: no bid alerts. |
+
+Bid alerts are on only when the price, PayPal, email and the site's address
+(`SITE_DOMAIN` or `SITE_URL`) are all set. `docker compose exec web
+guheadlines bid-alerts` says what is missing, and lists the subscribers. See
+[bid-alerts.md](bid-alerts.md).
+
 ## Checking for news
 
 | Setting | Default | What it does |

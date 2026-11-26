@@ -546,3 +546,56 @@ class AdSlot(Base):
     booking_id: Mapped[int] = mapped_column(
         ForeignKey("ad_bookings.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
+
+class BidAlertPlan(Base):
+    """The PayPal plan (a monthly price) that new bid alert subscriptions use,
+    made by bids/alerts.py the first time it is needed. One for each PayPal
+    app (client ID) and price, so a new BID_ALERTS_PRICE or a move from the
+    sandbox to live makes a new plan; subscribers keep the plan they joined."""
+
+    __tablename__ = "bid_alert_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[str] = mapped_column(Text, nullable=False)
+    price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    # PayPal's ID of the plan, such as "P-5ML4271244454362WXNWU5NQ".
+    plan_id: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class BidAlertSubscriber(Base):
+    """A business that pays by PayPal for an email when a new bid matches its
+    trades or words (see bids/alerts.py). There is no login: the secret
+    `token` in the links of every email opens the subscriber's own page."""
+
+    __tablename__ = "bid_alert_subscribers"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    # Keys of bids/alerts.py TRADES, and the subscriber's own words.
+    trades: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    keywords: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # "pending" (not paid yet), "active", "suspended" (PayPal could not take a
+    # payment) or "cancelled" (alerts go on until paid_until).
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    # PayPal's ID of the subscription ("I-..."), and the PayPal page where the
+    # subscriber approves it.
+    paypal_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    approve_url: Mapped[str | None] = mapped_column(Text)
+    paypal_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The next PayPal payment: the paid time runs until then.
+    paid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The newest bid (bids.id) already looked at for this subscriber.
+    last_bid_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When PayPal was last asked about the subscription.
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

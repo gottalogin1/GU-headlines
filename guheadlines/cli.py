@@ -198,6 +198,7 @@ def cmd_worker(args, settings: Settings) -> None:
     every CATCH_UP_SECONDS until they are fully loaded, then returns to the
     regular schedule.
     """
+    from .bids import alerts as bid_alerts
     from .schedule import next_wake
 
     wait_for_db()
@@ -272,6 +273,21 @@ def cmd_worker(args, settings: Settings) -> None:
             _run_bids(settings, sources)
         except Exception:
             log.exception("bids check failed")
+            return
+        if bid_alerts.is_on(settings):
+            try:
+                bid_alerts.send_alerts(settings)
+            except Exception:
+                log.exception("bid alerts failed")
+
+    def look_after_bid_alerts() -> None:
+        """Ask PayPal about new and paying bid alert subscriptions (bids/alerts.py)."""
+        if not bid_alerts.is_on(settings):
+            return
+        try:
+            bid_alerts.look_after(settings)
+        except Exception:
+            log.exception("bid alerts check with PayPal failed")
 
     def check_alerts() -> None:
         """Alerts for sources that stopped working or went quiet."""
@@ -350,6 +366,12 @@ def cmd_worker(args, settings: Settings) -> None:
         )
         if settings.alert_keywords:
             log.info("keyword alerts on for: %s", ", ".join(settings.alert_keywords))
+    if bid_alerts.is_on(settings):
+        log.info(
+            "bid alerts on: %s a month through PayPal (%s)",
+            bid_alerts.price_text(settings.bid_alerts_price_cents),
+            settings.paypal_mode,
+        )
     if settings.weather_interval_minutes:
         threading.Thread(
             target=_weather_loop, args=(settings, stop), name="weather", daemon=True
@@ -374,6 +396,7 @@ def cmd_worker(args, settings: Settings) -> None:
         run_jobs_if_due()
         run_events_if_due()
         run_bids_if_due()
+        look_after_bid_alerts()
         check_alerts()
         look_after_photos()
     while not stop.is_set():
@@ -391,6 +414,7 @@ def cmd_worker(args, settings: Settings) -> None:
             run_jobs_if_due()
             run_events_if_due()
             run_bids_if_due()
+            look_after_bid_alerts()
             check_alerts()
             look_after_photos()
     log.info("worker stopped")
@@ -972,6 +996,77 @@ def cmd_paypal_check(args, settings: Settings) -> None:
     print(f"OK: PayPal accepts PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET. Mode: {mode}.")
 
 
+def cmd_mail_test(args, settings: Settings) -> None:
+    """Send a test email to the address given, through the SMTP settings."""
+    from . import mail
+
+    if not mail.enabled(settings):
+        raise SystemExit(
+            "SMTP_HOST or MAIL_FROM is empty, so the site sends no email. Set them in .env "
+            "(see .env.example), then run: docker compose up -d"
+        )
+    try:
+        mail.send(
+            settings,
+            args.to,
+            f"{settings.site_name}: test email",
+            "Email works. The site can send bid alert emails from this address.\n",
+        )
+    except mail.MailError as exc:
+        raise SystemExit(f"Problem: {exc}") from None
+    print(f"Test email sent to {args.to} from {settings.mail_from}. Look in that inbox (and in")
+    print("its spam folder) in a minute.")
+
+
+def cmd_bid_alerts(args, settings: Settings) -> None:
+    """Show whether bid alerts are on and why not, and list the subscribers.
+    --check asks PayPal about the subscriptions now; --send sends the alert
+    emails for new bids now."""
+    from . import mail, paypal
+    from .bids import alerts as bid_alerts
+
+    missing = []
+    if settings.bid_alerts_price_cents <= 0:
+        missing.append("BID_ALERTS_PRICE (the monthly price)")
+    if not paypal.enabled(settings):
+        missing.append("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET")
+    if not mail.enabled(settings):
+        missing.append("SMTP_HOST and MAIL_FROM (sending email)")
+    if not settings.site_url:
+        missing.append("SITE_DOMAIN or SITE_URL (the site's address, for the links)")
+    if missing:
+        print("Bid alerts are off. Still to set in .env:")
+        for item in missing:
+            print(f"  - {item}")
+        print("Then run: docker compose up -d")
+        return
+    wait_for_db()
+    migrate()
+    price = bid_alerts.price_text(settings.bid_alerts_price_cents)
+    print(f"Bid alerts are on: {price} a month, PayPal {settings.paypal_mode}.")
+    print(f"Sign-up page: {settings.site_url}/bids/alerts")
+    if args.check:
+        bid_alerts.look_after(settings)
+        print("Asked PayPal about the subscriptions.")
+    if args.send:
+        print(f"Alert emails sent: {bid_alerts.send_alerts(settings)}")
+    from sqlalchemy import select
+
+    from .db import session_scope
+    from .models import BidAlertSubscriber
+
+    with session_scope() as session:
+        subs = session.scalars(select(BidAlertSubscriber).order_by(BidAlertSubscriber.id)).all()
+    if not subs:
+        print("No subscribers yet.")
+        return
+    print(f"{'status':<10} {'paid until':<12} {'email':<34} alerts for")
+    for sub in subs:
+        until = f"{sub.paid_until:%Y-%m-%d}" if sub.paid_until else "-"
+        what = bid_alerts.choices_text(sub.trades, sub.keywords)
+        print(f"{sub.status:<10} {until:<12} {sub.email:<34} {what}")
+
+
 def main(argv: list[str] | None = None) -> None:
     settings = get_settings()
     setup_logging(settings)
@@ -1033,6 +1128,11 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
     sub.add_parser("paypal-check", help="check that PayPal accepts the PayPal settings")
+    mail_test = sub.add_parser("mail-test", help="send a test email through the SMTP settings")
+    mail_test.add_argument("to", help="the email address to send it to")
+    alerts = sub.add_parser("bid-alerts", help="show the bid alert subscribers")
+    alerts.add_argument("--check", action="store_true", help="ask PayPal about them now")
+    alerts.add_argument("--send", action="store_true", help="send alerts for new bids now")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("outages", help="read the power and water outage notices now")
     sub.add_parser("photos", help="show the space the saved photos use, and tidy them up now")
@@ -1066,6 +1166,8 @@ def main(argv: list[str] | None = None) -> None:
         "alert-test": cmd_alert_test,
         "sendfox-check": cmd_sendfox_check,
         "paypal-check": cmd_paypal_check,
+        "mail-test": cmd_mail_test,
+        "bid-alerts": cmd_bid_alerts,
         "weather": cmd_weather,
         "outages": cmd_outages,
         "photos": cmd_photos,

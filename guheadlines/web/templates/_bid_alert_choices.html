@@ -1,0 +1,20 @@
+{# The fields of a bid alert: the email address, the trades and the
+   subscriber's own words. Used on the sign-up page and the subscriber's own
+   page. `chosen` is the subscriber (or None). #}
+<div class="field bid-alert-email">
+  <label for="ba-email">Email address</label>
+  <input id="ba-email" type="email" name="email" required maxlength="254" autocomplete="email"
+         inputmode="email" value="{{ chosen.email if chosen else '' }}" placeholder="you@yourbusiness.com">
+</div>
+<fieldset class="bid-trades">
+  <legend>Trades</legend>
+  {% for trade in trades %}
+  <label><input type="checkbox" name="trade" value="{{ trade.key }}" {% if chosen and trade.key in chosen.trades %}checked{% endif %}> {{ trade.name }}</label>
+  {% endfor %}
+</fieldset>
+<div class="field bid-alert-words">
+  <label for="ba-words">Your own words (optional)</label>
+  <input id="ba-words" type="text" name="words" maxlength="1000" autocomplete="off"
+         value="{{ chosen.keywords|join(', ') if chosen else '' }}" placeholder="e.g. roofing, generator, school buses">
+  <p class="muted small">A comma between words. A word also finds itself with “s” at the end, and a word that ends in * finds every word that starts with it (inspect* finds inspection). Pick no trade and type no word to get every new bid.</p>
+</div>
