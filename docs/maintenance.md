@@ -38,7 +38,9 @@ that shows **0** new stories for days deserves a look; see
 docker compose ps
 ```
 
-All four (`db`, `web`, `worker`, `caddy`) should say **Up**. To see what the
+All four (`db`, `web`, `worker`, `caddy`) should say **Up** (six, with
+`mailserver` and `webmail`, when [your own email server](email-server.md) is
+on). To see what the
 news collector has been doing:
 
 ```sh
@@ -67,6 +69,9 @@ Your collection lives in two places:
    This is the important part.
 2. **The saved photos**, in Docker's `media` storage.
 
+With [your own email server](email-server.md) on, the mailboxes are a third
+place. `backup.sh` saves them too (see below).
+
 ### Backing up the database
 
 ```sh
@@ -76,6 +81,11 @@ Your collection lives in two places:
 This saves a compressed copy to the `backups` folder, named with the date and
 time, for example `backups/guheadlines-20260927-0315.sql.gz`, and deletes
 backups older than 30 days. It's safe to run while the site is running.
+
+With your own email server on, it also saves the mailboxes and the mail
+server's settings to `backups/mail-<date>.tar.gz`, at most once a day, and
+keeps the last 7 days. How to put one back:
+[email-server.md](email-server.md#looking-after-it).
 
 ### Backing up automatically every night
 
@@ -219,7 +229,9 @@ on GitHub has new commits (for example after a pull request is merged). If
 it has, the server does the steps above by itself: it downloads the new
 version, makes a database backup, and rebuilds and restarts the site. If the
 new version doesn't answer within 5 minutes, the server goes back to the
-version before. It also checks every 5 minutes that the site answers.
+version before. It also checks every 5 minutes that the site answers. With
+[your own email server](email-server.md) on, it downloads new versions of the
+mail server and the webmail once a week too (they bring security fixes).
 
 It's meant for a Linux server. On a Windows or Mac computer, update by hand.
 
@@ -657,7 +669,9 @@ docker compose down
 ```
 
 **Delete all stories and photos and start fresh.** This cannot be undone;
-make a backup first if in doubt:
+make a backup first if in doubt. With [your own email server](email-server.md)
+on, it deletes all mailboxes and mail too, and the mail server's DKIM key (you
+would have to change that DNS record):
 
 ```sh
 docker compose down -v

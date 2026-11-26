@@ -666,12 +666,26 @@ them.
 - The Sources page's disclaimer gets a paragraph about the details a business
   gives when it books.
 
+## Your own email server
+
+| Setting | Default | What it does |
+|---|---|---|
+| `COMPOSE_PROFILES` | *(empty)* | `mail` starts your own mail server and webmail (two more containers). Only Docker Compose reads it. |
+| `MAIL_HOSTNAME` | *(empty)* | The mail server's name, such as `mail.guamheadlines.com`. Your addresses are name@guamheadlines.com, and the webmail is at `https://mail.guamheadlines.com`. |
+
+With both set, you get email addresses at your domain, webmail, and the site
+sends its own emails (bid alerts) from your server. It also needs DNS records
+and reverse DNS from your server company. The whole setup, step by step, is in
+[email-server.md](email-server.md); `./scripts/mail.sh` does most of the work.
+
 ## Sending email
 
 The site sends email for the bid alerts: the alerts, the welcome email, and the
 link to a subscriber's own page. It hands each email to a mail server through
 SMTP (the standard way that programs send email). The mail server can run on
 your own server or belong to an email company; its setup steps give the values.
+With [your own email server](email-server.md), `./scripts/mail.sh setup` makes
+the site's mailbox and prints all five values.
 
 | Setting | Default | What it does |
 |---|---|---|

@@ -35,6 +35,7 @@ needed; you will copy and paste a few commands.
 | [Events](docs/events.md) | The Events page: the month calendar, which calendars are read, and adding a free Google key for the Legislature's calendar |
 | [Bids and RFPs](docs/bids.md) | The Bids page: open Government of Guam bids and requests for proposals, which lists are read, and which bids are shown |
 | [Bid alerts](docs/bid-alerts.md) | Paid email alerts for new bids through PayPal: setting up email, testing, and what happens after a business subscribes |
+| [Your own email server](docs/email-server.md) | Email addresses at your domain, webmail, and the site's own emails sent from your server: setup step by step |
 
 ---
 
@@ -182,9 +183,11 @@ GU-headlines/
 │   └── categories.yaml the topics and their keywords
 ├── docs/               the guides linked above
 ├── docker-compose.yml  tells Docker how to run everything
+├── mail/               settings of your own mail server and webmail (optional)
 ├── scripts/
 │   ├── backup.sh       makes a database backup
-│   └── auto-update.sh  keeps a server up to date and watched (optional)
+│   ├── auto-update.sh  keeps a server up to date and watched (optional)
+│   └── mail.sh         sets up and looks after your own mail server (optional)
 └── guheadlines/        the program itself (you don't need to touch this)
 ```
 

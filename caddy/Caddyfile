@@ -29,3 +29,36 @@
 		-Via
 	}
 }
+
+# The webmail of your own mail server (see docs/email-server.md).
+#
+# WEBMAIL_ADDRESS comes from MAIL_HOSTNAME in .env:
+#
+#   MAIL_HOSTNAME empty                    ->  http://mail.invalid
+#     A name that does not exist, so nobody reaches this part, and Caddy
+#     asks for no certificate.
+#
+#   MAIL_HOSTNAME=mail.guamheadlines.com   ->  mail.guamheadlines.com
+#     https:// for that name, with the webmail (Roundcube). The mail server
+#     uses the same certificate for its own encrypted connections, so the
+#     name must point at this server, like SITE_DOMAIN.
+{$WEBMAIL_ADDRESS} {
+	# Only from Let's Encrypt. The mail server reads the certificate from
+	# Caddy's storage, at a path that includes the name of the company that
+	# issued it, so it must always be the same company.
+	tls {
+		issuer acme
+	}
+
+	reverse_proxy webmail:80
+
+	header {
+		-Server
+		-Via
+		Strict-Transport-Security "max-age=31536000"
+		# The login page is not for search engines.
+		X-Robots-Tag "noindex, nofollow"
+		Referrer-Policy "same-origin"
+		X-Content-Type-Options "nosniff"
+	}
+}

@@ -17,7 +17,10 @@
 #      (docker compose up -d --build). If the site does not answer within 5
 #      minutes, it goes back to the version before and sends an alert. A
 #      version that failed is not tried again; the next new commit is.
-#   2. Watch. If the site does not answer in two rounds in a row (about 10
+#   2. Once a week, when your own mail server is on (docs/email-server.md),
+#      it downloads new versions of the mail server and the webmail, which
+#      bring security fixes, and restarts them.
+#   3. Watch. If the site does not answer in two rounds in a row (about 10
 #      minutes), it sends an alert, and another when the site answers again.
 #      The same when the news has not been checked for 3 hours.
 #
@@ -152,7 +155,35 @@ switch_to() {
     if ! git diff --quiet "$1" "$2" -- caddy/; then
         docker compose restart caddy >/dev/null 2>&1
     fi
+    # The same for the mail server's files in mail/ (when the mail server is on).
+    if mail_on && ! git diff --quiet "$1" "$2" -- mail/; then
+        docker compose restart mailserver webmail >/dev/null 2>&1
+    fi
     wait_until_up
+}
+
+# Is your own mail server on? (COMPOSE_PROFILES=mail in .env)
+mail_on() {
+    env_value COMPOSE_PROFILES | tr ',' '\n' | grep -qx '[[:space:]]*mail[[:space:]]*'
+}
+
+# Once a week, download the newest versions of the mail server and the
+# webmail (security fixes) and restart them when there is one. Mail that
+# arrives during the few seconds of the restart waits at the sender and comes
+# a little later.
+update_mail() {
+    mail_on || return 0
+    [ -n "$(find "$STATE/mail-updated" -mtime -7 2>/dev/null)" ] && return 0
+    if docker compose pull --quiet mailserver webmail >"$STATE/mail-update.out" 2>&1 &&
+        docker compose up -d mailserver webmail >>"$STATE/mail-update.out" 2>&1; then
+        say "checked the mail server and webmail for new versions"
+        touch "$STATE/mail-updated"
+        docker image prune -f >/dev/null 2>&1
+    else
+        say "could not update the mail server: $(tail -n 1 "$STATE/mail-update.out")"
+        # Try again in a day, not every 5 minutes.
+        touch -d '6 days ago' "$STATE/mail-updated"
+    fi
 }
 
 # blocked COMMIT MESSAGE: the update to COMMIT can't be done. Alert once for
@@ -321,6 +352,7 @@ main() {
     flock -n 9 || return 0
 
     update
+    update_mail
     watch
     if [ -t 1 ]; then # run by hand: say where things stand
         echo "On commit $(git log -1 --format='%h: %s')."

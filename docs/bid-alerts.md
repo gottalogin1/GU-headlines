@@ -57,6 +57,11 @@ mail server that takes SMTP works. Its own setup steps give you the values
 below, and the DNS records (often named SPF, DKIM and DMARC) that prove the
 emails come from your domain and keep them out of spam folders.
 
+GU Headlines can run that mail server itself: see
+[Your own email server](email-server.md). Its `./scripts/mail.sh setup` makes
+the site's mailbox (`alerts@` your domain) and prints the five lines for
+`.env`.
+
 How many emails: each subscriber gets at most one alert email per bids check
 (4 a day with the default `BIDS_INTERVAL_HOURS=6`), plus a welcome email and,
 when asked for, the link to their page.
@@ -68,7 +73,7 @@ The steps (they are in `.env.example` too):
    ```
    SMTP_HOST=mail.guamheadlines.com
    SMTP_PORT=587
-   SMTP_USER=alerts
+   SMTP_USER=alerts@guamheadlines.com
    SMTP_PASSWORD=the_password
    MAIL_FROM=GU Headlines <alerts@guamheadlines.com>
    ```
@@ -86,6 +91,9 @@ certificate for the name in `SMTP_HOST`.
 
 The sender address shows only in the emails, never on the site. It does not
 need a mailbox: the emails tell subscribers to use the link to their own page.
+With your own email server it is the site's mailbox, so it must be the same
+address as `SMTP_USER`, and replies and bounced emails land there (read them in
+the webmail).
 
 ## 2. Turn bid alerts on and test them
 

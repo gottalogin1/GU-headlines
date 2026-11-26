@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Your own email server, with webmail.** Turn it on with
+  `COMPOSE_PROFILES=mail` and `MAIL_HOSTNAME=mail.guamheadlines.com` in
+  `.env`, and you get email addresses at your domain, webmail at
+  `https://mail.guamheadlines.com` (Roundcube; phone mail apps work too), and
+  the site sends its own emails (the bid alerts) from your server instead of
+  through an email company. It runs as two more containers: `mailserver`
+  (docker-mailserver, with the Rspamd spam filter, DKIM signing and Fail2Ban
+  against password guessing) and `webmail`. Caddy gets the certificate for the
+  mail server's name, and the mail server uses it too. `./scripts/mail.sh`
+  checks the server (`check`), makes your mailbox and the site's mailbox and
+  starts it all (`setup`), lists the DNS records to add with your own values
+  and which ones are in place (`dns`), and adds mailboxes and aliases, changes
+  passwords, sends a test email and unblocks addresses. Automatic updates
+  download new versions of the mail server once a week, and `backup.sh` saves
+  the mailboxes (kept 7 days). It also needs DNS records and reverse DNS from
+  your server company; [Your own email server](docs/email-server.md) walks
+  through every step. Nothing changes until you turn it on.
 - **Paid listings through PayPal: classifieds, a business directory, and
   featured jobs and events.** People can post a classified ad (for sale,
   cars and trucks, housing, services, wanted) on a new **Classifieds** page;
