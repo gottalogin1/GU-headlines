@@ -356,6 +356,14 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
    ad to show. */
 .ad-slot ins.adsbygoogle { display: block; min-height: 250px; }
 .ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }
+/* The ad between the stories (_ad_stories.html), spaced like a story card. */
+.ad-between { padding: 14px; margin-bottom: 14px; border-radius: var(--r-xl); }
+.ad-label { margin: 0 0 8px; font-size: .72rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+/* The "Buy me a coffee" box (_donate.html). */
+.donate-link { display: inline-block; margin: 8px 0 6px; }
+.donate-link:hover { text-decoration: none; filter: brightness(1.08); }
+/* The "Plan a trip" box (_travel.html): a tap area of 24px or more. */
+.travel .facets a { display: flex; align-items: center; min-height: 24px; }
 /* The sponsor spot (_sponsor.html): the picture is as wide as the column, or
    its own width if it is smaller. */
 .sponsor a { display: block; }

@@ -23,6 +23,19 @@ release, see [Updating](docs/maintenance.md#updating).
   `PAYPAL_CLIENT_SECRET`), `STATS_PASSWORD` and a price; without them the site
   is as before. When you update, the database gets two new tables, by itself.
   See [Advertise page](docs/settings.md#advertise-page).
+- **A "Buy me a coffee" box, a "Plan a trip" box and a second ad.** With
+  `PAYPAL_DONATE_LINK` set (a PayPal.Me or PayPal Donate button link), every
+  page shows a **Support this site** box with a **Buy me a coffee** button
+  that opens your PayPal page. With one or more `AFFILIATE_*_LINK` settings
+  (hotels, flights, tours and car rentals), the Weather page and the Events
+  pages show a **Plan a trip** box of affiliate links, with a note that tells
+  readers the site can earn a commission. With `ADSENSE_STORIES_SLOT` set,
+  the home page and the Obituaries page show a second AdSense ad after the
+  fifth story. All three are off until you set them, load no outside script,
+  and add a paragraph to the disclaimer on the Sources page where needed. See
+  [Coffee donations](docs/settings.md#coffee-donations),
+  [Affiliate links](docs/settings.md#affiliate-links) and
+  [The ad between the stories](docs/settings.md#advertising).
 - **A Bids page.** A new **Bids** link lists the Government of Guam's open
   bids and requests for proposals, soonest due first: what each is for, its
   number, the agency, when offers are due (Guam time, with the days left),

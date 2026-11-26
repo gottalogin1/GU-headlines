@@ -699,6 +699,25 @@ def sponsor_ad() -> dict | None:
     }
 
 
+# The lines of the "Plan a trip" box (_travel.html), each with the setting
+# that holds its affiliate link.
+TRAVEL_LINKS = (
+    ("Hotels", "affiliate_hotels_link"),
+    ("Flights", "affiliate_flights_link"),
+    ("Tours and activities", "affiliate_tours_link"),
+    ("Car rentals", "affiliate_cars_link"),
+)
+
+
+def travel_links() -> list[dict]:
+    """The "Plan a trip" box: one line for each affiliate link that is set."""
+    return [
+        {"label": label, "href": getattr(settings, name)}
+        for label, name in TRAVEL_LINKS
+        if getattr(settings, name)
+    ]
+
+
 def _days_text(days: tuple[int, ...], word: str) -> str:
     """(1, 4), "and" -> "Tuesday and Friday"."""
     names = [DAY_NAMES[d].capitalize() for d in days]
@@ -746,6 +765,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
     context.setdefault("title", None)
     count_view = context.pop("count_view", True)
     show_signup = context.pop("show_signup", True)
+    show_travel = context.pop("show_travel", False)
     # The ad block, on the pages that ask for it, once AdSense is set up.
     show_ad = context.pop("show_ad", False) and bool(
         settings.adsense_client and settings.adsense_slot
@@ -778,6 +798,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "advertise": [offer.kind for offer in advertising()],
             "signup": signup_info(),
             "show_signup": show_signup,
+            "travel": travel_links() if show_travel else None,
             "weather": (
                 for_page(
                     weather_reports(),
@@ -1073,6 +1094,7 @@ def status(request: Request):
         sources=sources,
         uncollectable=config.uncollectable_sources,
         runs=runs,
+        affiliate_links=bool(travel_links()),
         title="Sources",
         active_nav="status",
         canonical={},
@@ -1098,6 +1120,7 @@ def weather_view(request: Request):
         active_nav="weather",
         canonical={},
         breadcrumbs=[("Weather", None)],
+        show_travel=True,
     )
 
 
@@ -1238,6 +1261,7 @@ def events(
         robots="noindex, follow" if event_filters.q or month or day else None,
         breadcrumbs=[("Events", None)],
         show_ad=True,
+        show_travel=True,
     )
 
 
@@ -1318,6 +1342,7 @@ def event_page(request: Request, event_id: int):
         breadcrumbs=[("Events", "/events"), (event.title, None)],
         structured=[structured] if structured else None,
         show_ad=True,
+        show_travel=True,
     )
 
 

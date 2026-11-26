@@ -12,7 +12,6 @@
   <script nonce="{{ csp_nonce }}">
   (adsbygoogle = window.adsbygoogle || []).push({});
   (function () {
-    var slot = document.currentScript.closest(".ad-slot");
     var events = ["scroll", "pointerdown", "pointermove", "keydown", "touchstart"], loaded = false;
     function load(e) {
       // Chrome sends a pointer move of its own, with no movement, when it
@@ -23,8 +22,11 @@
       var script = document.createElement("script");
       script.async = true;
       script.crossOrigin = "anonymous";
-      // An ad blocker stops the code: then the empty block is taken away.
-      script.onerror = function () { slot.hidden = true; };
+      // An ad blocker stops the code: then the empty blocks are taken away,
+      // this one and the one between the stories (_ad_stories.html).
+      script.onerror = function () {
+        document.querySelectorAll(".ad-slot").forEach(function (slot) { slot.hidden = true; });
+      };
       script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ settings.adsense_client }}";
       document.head.appendChild(script);
     }

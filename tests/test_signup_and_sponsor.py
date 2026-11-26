@@ -1,4 +1,5 @@
-"""The newsletter sign-up box (sendfox.py) and the sponsor spot (web/sponsor.py)."""
+"""The newsletter sign-up box (sendfox.py), the sponsor spot (web/sponsor.py) and
+the "Buy me a coffee" box (PAYPAL_DONATE_LINK)."""
 
 from __future__ import annotations
 
@@ -458,3 +459,76 @@ def test_sponsor_settings(monkeypatch):
         "https://shop.example.com/",
         "Island Coffee",
     )
+
+
+# ------------------------------------------------------------ coffee box
+
+DONATE = "https://www.paypal.com/donate/?hosted_button_id=ABC123XYZ"
+
+
+def test_no_coffee_box_until_a_paypal_link_is_set(client):
+    for path in PAGES:
+        assert "panel donate" not in client.get(path).text, path
+    assert "Coffee money" not in client.get("/status").text
+
+
+def test_coffee_box_on_every_page(client, monkeypatch):
+    _set(monkeypatch, paypal_donate_link=DONATE, sendfox_api_token=TOKEN)
+    for path in (*PAGES, "/weather", "/newsletter"):
+        page = client.get(path)
+        sidebar = _sidebar(page.text)
+        box = sidebar.split('<section class="panel donate" aria-labelledby="donate-title">', 1)[1]
+        box = box.split("</section>", 1)[0]
+        assert '<h2 id="donate-title">Support this site</h2>' in box
+        assert (
+            f'<a class="btn donate-link" href="{DONATE}" target="_blank" rel="noopener">'
+            '<span aria-hidden="true">☕</span> Buy me a coffee</a>'
+        ) in box
+        assert "Paid through PayPal." in box
+        # A plain link: no PayPal script, and the strict security rules stay.
+        assert "paypal" not in page.headers["content-security-policy"]
+        assert "'nonce-" not in page.headers["content-security-policy"]
+        # Under the newsletter box, where there is one.
+        if "panel signup" in sidebar:
+            assert sidebar.index("panel signup") < sidebar.index("panel donate")
+    assert "Coffee money." in client.get("/status").text
+
+
+def test_paypal_link_setting(monkeypatch):
+    from guheadlines.settings import _paypal_link
+
+    for good, link in (
+        (" https://paypal.me/GuamHeadlines ", "https://paypal.me/GuamHeadlines"),
+        ("paypal.me/GuamHeadlines/5", "https://paypal.me/GuamHeadlines/5"),
+        ("www.paypal.com/paypalme/GuamHeadlines", "https://www.paypal.com/paypalme/GuamHeadlines"),
+        (DONATE, DONATE),
+        (
+            "https://www.paypal.com/donate/?business=ABCDEFG1234&currency_code=USD",
+            "https://www.paypal.com/donate/?business=ABCDEFG1234&currency_code=USD",
+        ),
+    ):
+        assert _paypal_link(good) == link, good
+    for bad in (
+        "",
+        None,
+        "http://paypal.me/GuamHeadlines",
+        "https://paypal.me.example.com/x",
+        "https://notpaypal.com/donate",
+        "https://ko-fi.com/guamheadlines",
+        "javascript:alert(1)",
+        # A donate link with an email address in it: the site never shows one.
+        "https://www.paypal.com/donate/?business=me@example.com&currency_code=USD",
+        "https://www.paypal.com/donate/?business=me%40example.com",
+        '<form action="https://www.paypal.com/donate" method="post">',
+    ):
+        assert _paypal_link(bad) == "", bad
+
+    monkeypatch.setenv("PAYPAL_DONATE_LINK", "paypal.me/GuamHeadlines")
+    monkeypatch.setenv("ADSENSE_STORIES_SLOT", " 1122334455 ")
+    monkeypatch.setenv("AFFILIATE_HOTELS_LINK", "https://www.example.com/guam-hotels?aid=1")
+    monkeypatch.setenv("AFFILIATE_TOURS_LINK", "not a link")
+    settings = load_settings()
+    assert settings.paypal_donate_link == "https://paypal.me/GuamHeadlines"
+    assert settings.adsense_stories_slot == "1122334455"
+    assert settings.affiliate_hotels_link == "https://www.example.com/guam-hotels?aid=1"
+    assert (settings.affiliate_tours_link, settings.affiliate_flights_link) == ("", "")

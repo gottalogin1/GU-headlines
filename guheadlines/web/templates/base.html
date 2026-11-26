@@ -65,7 +65,9 @@
       {% if sponsor %}{% include "_sponsor.html" %}
       {% elif "site" in advertise %}{% include "_sponsor_open.html" %}{% endif %}
       {% if show_ad %}{% include "_ad.html" %}{% endif %}
+      {% if travel %}{% include "_travel.html" %}{% endif %}
       {% if signup and show_signup %}{% include "_signup_box.html" %}{% endif %}
+      {% if settings.paypal_donate_link %}{% include "_donate.html" %}{% endif %}
       {% block sidebar %}{% include "_sidebar.html" %}{% endblock %}
     </aside>
   </div>

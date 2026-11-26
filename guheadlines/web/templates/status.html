@@ -113,6 +113,18 @@
     about it, and are not shown on the site or shared. Payments are made through PayPal, and
     {{ site }} never sees your card or PayPal account.</p>
   {% endif %}
+  {% if settings.paypal_donate_link %}
+  <p><strong>Coffee money.</strong> Money sent with the "Buy me a coffee" button goes through
+    PayPal to the person who runs {{ site }}. It is a personal gift, not a donation to a charity,
+    so it is not tax-deductible. It does not buy a service and does not change what the site
+    shows.</p>
+  {% endif %}
+  {% if affiliate_links %}
+  <p><strong>Affiliate links.</strong> The "Plan a trip" links on the Weather and Events pages
+    are affiliate links. If you book through one, {{ site }} can earn a commission from the
+    booking site, at no extra cost to you. They do not imply an endorsement of the booking site
+    or of what it sells.</p>
+  {% endif %}
   {% if settings.adsense_client %}
   <p><strong>Advertising and cookies.</strong> This site shows ads served by Google AdSense. Ads
     are marked "Advertisement", are chosen by Google, and do not imply an endorsement by
