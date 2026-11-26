@@ -146,6 +146,17 @@ class Settings:
     sponsor_image: str = ""
     sponsor_link: str = ""
     sponsor_alt: str = ""
+    # PayPal (see paypal.py): the Client ID and Secret of an app in the PayPal
+    # developer dashboard, and which PayPal they belong to: "sandbox" (test
+    # payments with pretend money) or "live" (real payments).
+    paypal_client_id: str = ""
+    paypal_client_secret: str = ""
+    paypal_mode: str = "sandbox"
+    # The Advertise page (/advertise, see ads.py): businesses book and pay for
+    # the sponsor spot by the week, and for a sponsor line in the newsletter
+    # by the edition, through PayPal. Prices in US cents; 0: not for sale.
+    sponsor_week_price_cents: int = 0
+    newsletter_sponsor_price_cents: int = 0
 
     @property
     def sources_file(self) -> Path:
@@ -242,6 +253,21 @@ def _file_name(value: str | None) -> str:
     return ""
 
 
+MAX_PRICE_CENTS = 1_000_000  # $10,000
+
+
+def _price_cents(value: str | None) -> int:
+    """SPONSOR_WEEK_PRICE "25", "25.50", "$25" or "1,200" -> 2500, 2550,
+    2500, 120000 (US cents). 0 (not for sale) when empty, not a price, or
+    over $10,000."""
+    text = (value or "").strip().removeprefix("$").replace(",", "").strip()
+    found = re.fullmatch(r"(\d{1,7})(?:\.(\d{1,2}))?", text)
+    if not found:
+        return 0
+    cents = int(found[1]) * 100 + int((found[2] or "0").ljust(2, "0"))
+    return cents if cents <= MAX_PRICE_CENTS else 0
+
+
 def _tide_station(value: str | None, default: str) -> str:
     """A NOAA station ID (letters and digits, such as 1630000), the default
     when the setting is missing, or "" (no tides) when it is empty or not an
@@ -292,6 +318,11 @@ def _clock(value: str | None, default: time) -> time:
     if hour > 23 or minute > 59:
         return default
     return time(hour, minute)
+
+
+def _paypal_mode(value: str | None) -> str:
+    """PAYPAL_MODE: "live" for real payments; anything else is "sandbox"."""
+    return "live" if (value or "").strip().lower() in ("live", "production") else "sandbox"
 
 
 def load_settings() -> Settings:
@@ -366,6 +397,11 @@ def load_settings() -> Settings:
         sponsor_image=_file_name(env.get("SPONSOR_IMAGE")),
         sponsor_link=_web_address(env.get("SPONSOR_LINK")),
         sponsor_alt=" ".join(env.get("SPONSOR_ALT", "").split())[:200],
+        paypal_client_id=env.get("PAYPAL_CLIENT_ID", "").strip(),
+        paypal_client_secret=env.get("PAYPAL_CLIENT_SECRET", "").strip(),
+        paypal_mode=_paypal_mode(env.get("PAYPAL_MODE")),
+        sponsor_week_price_cents=_price_cents(env.get("SPONSOR_WEEK_PRICE")),
+        newsletter_sponsor_price_cents=_price_cents(env.get("NEWSLETTER_SPONSOR_PRICE")),
     )
 
 

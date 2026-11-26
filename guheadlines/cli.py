@@ -955,6 +955,23 @@ def cmd_sendfox_check(args, settings: Settings) -> None:
         print(f'Sign-ups from the website join the list "{picked.name}" ({picked.id}).')
 
 
+def cmd_paypal_check(args, settings: Settings) -> None:
+    """Check that PayPal accepts PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET."""
+    from . import paypal
+
+    if not paypal.enabled(settings):
+        raise SystemExit(
+            "PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET is empty, so the site takes no payments. "
+            "Set both in .env (see .env.example), then run: docker compose up -d"
+        )
+    try:
+        paypal.access_token(settings)
+    except paypal.PayPalError as exc:
+        raise SystemExit(f"Problem: {exc}") from None
+    mode = "Live (real payments)" if settings.paypal_mode == "live" else "Sandbox (test payments)"
+    print(f"OK: PayPal accepts PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET. Mode: {mode}.")
+
+
 def main(argv: list[str] | None = None) -> None:
     settings = get_settings()
     setup_logging(settings)
@@ -1015,6 +1032,7 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
+    sub.add_parser("paypal-check", help="check that PayPal accepts the PayPal settings")
     sub.add_parser("weather", help="read the weather, the storm list and the tides now")
     sub.add_parser("outages", help="read the power and water outage notices now")
     sub.add_parser("photos", help="show the space the saved photos use, and tidy them up now")
@@ -1047,6 +1065,7 @@ def main(argv: list[str] | None = None) -> None:
         "bids": cmd_bids,
         "alert-test": cmd_alert_test,
         "sendfox-check": cmd_sendfox_check,
+        "paypal-check": cmd_paypal_check,
         "weather": cmd_weather,
         "outages": cmd_outages,
         "photos": cmd_photos,
