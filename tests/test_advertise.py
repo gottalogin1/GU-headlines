@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select, update
 
-from guheadlines import ads, paypal
+from guheadlines import ads, mail, paypal, renewals
 from guheadlines.db import session_scope
 from guheadlines.models import AdBooking, AdSlot, Article, NewsletterEdition, PageViews, Source
 from guheadlines.scraper.text import GUAM_TZ
@@ -663,3 +663,113 @@ def test_newsletter_sponsor_line_in_the_feed(site):
     with session_scope() as session:
         session.add(NewsletterEdition(formed_at=formed_at + timedelta(days=3), article_ids=[story]))
     assert "Sponsor:" not in site.get("/feed.xml").text
+
+
+# ---------------------------------------------------------------- renewals
+
+
+def _approved(client, days=None, **fields) -> AdBooking:
+    code = _code(_book(client, days=days, **fields))
+    _pay(client, code)
+    _decide(client, _booking(code).id, "approve")
+    return _booking(code)
+
+
+def _mail_settings():
+    from guheadlines.web import app as web
+
+    return dataclasses.replace(
+        web.settings,
+        smtp_host="mail.example",
+        mail_from="GU Headlines <alerts@guamheadlines.example>",
+        site_url="https://guamheadlines.example",
+    )
+
+
+def test_an_approved_ad_is_booked_again_from_its_page(site):
+    first = _approved(site, days=[_week(0), _week(2)])
+    page = site.get(f"/advertise/booking/{first.code}").text
+    assert "Run this ad again" in page and "$25 a week" in page
+    # The first free weeks after the ad's own are ticked, as many as it booked.
+    ticked = re.findall(r'value="([\d-]+)" checked', page)
+    assert ticked == [_week(3).isoformat(), _week(4).isoformat()]
+    assert f'value="{_week(2).isoformat()}" disabled' in page
+
+    again = site.post(
+        f"/advertise/booking/{first.code}/again",
+        data={"day": [_week(3).isoformat()]},
+        headers=FROM_SITE,
+        follow_redirects=False,
+    )
+    second = _booking(_code(again))
+    assert (second.status, second.days, second.amount_cents) == ("new", [_week(3)], 2500)
+    assert (second.business, second.email, second.link, second.words) == (
+        first.business,
+        first.email,
+        first.link,
+        first.words,
+    )
+    assert second.picture == first.picture
+    # It is paid and approved the usual way.
+    assert _pay(site, second.code).headers["location"].endswith("note=paid")
+    assert _booking(second.code).status == "paid"
+
+    def press(days):
+        response = site.post(
+            f"/advertise/booking/{first.code}/again",
+            data={"day": days},
+            headers=FROM_SITE,
+            follow_redirects=False,
+        )
+        return response.headers["location"]
+
+    assert press([]).endswith("note=pick")
+    assert press([_week(3).isoformat()]).endswith("note=taken-again")
+    assert "someone else has just booked" in site.get(press([_week(3).isoformat()])).text
+    blocked = site.post(f"/advertise/booking/{first.code}/again", data={"day": []})
+    assert blocked.status_code == 403
+    # Only an approved ad can be booked again.
+    unpaid = _code(_book(site, days=[_week(6)]))
+    assert "Run this ad again" not in site.get(f"/advertise/booking/{unpaid}").text
+
+
+def test_a_reminder_email_goes_out_before_an_ad_ends(site, monkeypatch):
+    sent = []
+    monkeypatch.setattr(mail, "send", lambda settings, to, *email, **kw: sent.append((to, *email)))
+    booking = _approved(site, days=[_week(0)])
+    news = _approved(
+        site,
+        kind="newsletter",
+        days=[ads.choices(_mail_settings(), "newsletter", datetime.now(timezone.utc))[0]],
+        email="news@example.com",
+    )
+    end = renewals.booking_end(booking)
+    assert end == datetime.combine(_week(1), datetime.min.time(), tzinfo=GUAM_TZ)
+    site_mail = _mail_settings()
+    assert renewals.send_reminders(site_mail, end - timedelta(days=4)) == 0
+    assert renewals.send_reminders(site_mail, end - timedelta(days=2)) >= 1
+    to, subject, text, html = next(item for item in sent if item[0] == booking.email)
+    sunday = _week(0) + timedelta(days=6)
+    assert subject == f"Your sponsor spot ends on {sunday:%A, %B} {sunday.day}"
+    link = f"https://guamheadlines.example/advertise/booking/{booking.code}#again"
+    assert f"Book it again: {link}" in text and f'href="{link}"' in html
+    assert renewals.send_reminders(site_mail, end - timedelta(days=1)) == 0  # once
+
+    # A business that has booked a later week already gets no email.
+    sent.clear()
+    with session_scope() as session:
+        session.execute(update(AdBooking).values(reminded_at=None))
+    _approved(site, days=[_week(1)])
+    renewals.send_reminders(site_mail, end - timedelta(days=2))
+    assert booking.email not in [item[0] for item in sent]
+    # No email for what is not sold any more.
+    sent.clear()
+    with session_scope() as session:
+        session.execute(update(AdBooking).values(reminded_at=None))
+    before_end = renewals.booking_end(_booking(news.code)) - timedelta(hours=1)
+    off = dataclasses.replace(site_mail, newsletter_sponsor_price_cents=0)
+    renewals.send_reminders(off, before_end)
+    assert "news@example.com" not in [item[0] for item in sent]
+    renewals.send_reminders(site_mail, before_end)
+    to, subject, text, html = next(item for item in sent if item[0] == "news@example.com")
+    assert subject.startswith("Your last newsletter sponsor line goes out on")

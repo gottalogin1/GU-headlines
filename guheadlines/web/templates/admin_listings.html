@@ -16,7 +16,7 @@
 {% block main %}
 <header class="page-head">
   <h1>Paid listings</h1>
-  <p class="muted">Paid in the last 30 days: <strong>{{ cents|money }}</strong> from {{ paid }} {{ "listing" if paid == 1 else "listings" }} (refunds left out). Payments arrive in your PayPal account.</p>
+  <p class="muted">Paid in the last 30 days: <strong>{{ cents|money }}</strong> from {{ paid }} {{ "payment" if paid == 1 else "payments" }}, renewals included (refunds left out). Payments arrive in your PayPal account.</p>
 </header>
 
 {% if message %}<p class="signup-result" role="status">{{ message }}</p>{% endif %}

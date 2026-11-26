@@ -289,6 +289,15 @@ def cmd_worker(args, settings: Settings) -> None:
         except Exception:
             log.exception("bid alerts check with PayPal failed")
 
+    def send_renewal_reminders() -> None:
+        """Emails to buyers whose paid listing or booked ad ends soon (renewals.py)."""
+        from . import renewals
+
+        try:
+            renewals.send_reminders(settings)
+        except Exception:
+            log.exception("renewal reminders failed")
+
     def check_alerts() -> None:
         """Alerts for sources that stopped working or went quiet."""
         if not settings.discord_webhook_url:
@@ -404,6 +413,7 @@ def cmd_worker(args, settings: Settings) -> None:
         run_events_if_due()
         run_bids_if_due()
         look_after_bid_alerts()
+        send_renewal_reminders()
         check_alerts()
         look_after_photos()
     while not stop.is_set():
@@ -422,6 +432,7 @@ def cmd_worker(args, settings: Settings) -> None:
             run_events_if_due()
             run_bids_if_due()
             look_after_bid_alerts()
+            send_renewal_reminders()
             check_alerts()
             look_after_photos()
     log.info("worker stopped")

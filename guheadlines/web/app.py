@@ -35,7 +35,7 @@ from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import ads, alerts, gas, health, listings, mail, paypal, sendfox
+from .. import ads, alerts, gas, health, listings, mail, paypal, renewals, sendfox
 from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
@@ -2267,23 +2267,50 @@ PAYMENT_RESULTS = {
 }
 
 
+RENEWAL_RESULTS = {
+    "ok": (True, "Thank you, your payment went through. See the new end date below."),
+    "unfinished": (
+        False,
+        "The payment was not finished. Nothing was charged. You can renew below.",
+    ),
+    "declined": PAYMENT_RESULTS["declined"],
+    "error": PAYMENT_RESULTS["error"],
+    "mismatch": PAYMENT_RESULTS["mismatch"],
+    "gone": (
+        False,
+        "This listing is no longer on the site, so it was not renewed. PayPal gives your"
+        " payment back.",
+    ),
+}
+
+
 @app.get("/listing/{listing_id}/{key}", response_class=HTMLResponse)
 def listing_page(
     request: Request,
     listing_id: int,
     key: str,
     paid: str = Query("", max_length=12),
+    renewed: str = Query("", max_length=12),
 ):
     """The poster's own page for a listing: how it looks, what it costs, the
-    PayPal link, and where it is (waiting for review, live, ...)."""
+    PayPal link, where it is (waiting for review, live, ...), and the link to
+    renew it."""
     listing = _own_listing(listing_id, key)
-    found = PAYMENT_RESULTS.get(paid)
+    found = PAYMENT_RESULTS.get(paid) or RENEWAL_RESULTS.get(renewed)
+    renewal = None
+    if listings.renewable(settings, listing):
+        renewal = {
+            "cents": listings.price_cents(settings, listing.kind, featured=True),
+            "days": listings.days(settings, listing.kind),
+            "reminder": renewals.is_on(settings) and listing.email,
+        }
     response = render(
         request,
         "listing.html",
         listing=listing,
         kind=listings.KINDS[listing.kind],
         result={"ok": found[0], "text": found[1]} if found else None,
+        renewal=renewal,
         address=seo.absolute_url(request, f"/listing/{listing.id}/{listing.key}"),
         now=datetime.now(timezone.utc),
         title=f"Your {listings.KINDS[listing.kind].name.lower()}",
@@ -2366,6 +2393,51 @@ def listing_paid(
     result = _settle(request, listing, token)
     return RedirectResponse(
         f"{page}?paid={result}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+@app.get("/listing/{listing_id}/{key}/renew")
+def listing_renew(request: Request, listing_id: int, key: str):
+    """Make a PayPal order that keeps a live listing on the site for more
+    days, and send the poster to PayPal to pay it (see renewals.py)."""
+    listing = _own_listing(listing_id, key)
+    page = f"/listing/{listing.id}/{listing.key}"
+    if not listings.renewable(settings, listing):
+        return RedirectResponse(page, status_code=303, headers={"Cache-Control": "no-store"})
+    amount = listings.price_cents(settings, listing.kind, featured=True)
+    length = listings.days(settings, listing.kind)
+    try:
+        order = paypal.create_order(
+            settings,
+            amount_cents=amount,
+            description=f"{listings.KINDS[listing.kind].name}, {length} days more: {listing.title}",
+            custom_id=f"listing-{listing.id}-renewal",
+            return_url=seo.absolute_url(request, f"{page}/renewed"),
+            cancel_url=seo.absolute_url(request, page),
+        )
+    except paypal.PayPalError as exc:
+        log.warning("PayPal order to renew listing %s failed: %s", listing.id, exc)
+        return RedirectResponse(f"{page}?renewed=error", status_code=303)
+    with session_scope() as session:
+        listings.start_renewal(session, listing.id, order.id, amount, length)
+    return RedirectResponse(
+        order.approve_url, status_code=303, headers={"Cache-Control": "no-store"}
+    )
+
+
+@app.get("/listing/{listing_id}/{key}/renewed")
+def listing_renewed(
+    request: Request, listing_id: int, key: str, token: str = Query("", max_length=64)
+):
+    """Where PayPal sends the poster back after approving a renewal, with
+    ?token=<the order's ID>."""
+    listing = _own_listing(listing_id, key)
+    page = f"/listing/{listing.id}/{listing.key}"
+    if not re.fullmatch(r"[A-Za-z0-9-]{5,64}", token):
+        return RedirectResponse(f"{page}?renewed=unfinished", status_code=303)
+    result = renewals.settle(settings, listing.id, token)
+    return RedirectResponse(
+        f"{page}?renewed={result}", status_code=303, headers={"Cache-Control": "no-store"}
     )
 
 
@@ -2699,6 +2771,13 @@ BOOKING_NOTES = {
         "PayPal couldn't be reached just now, and nothing was charged. Please try again in a"
         " few minutes.",
     ),
+    "pick": (False, "Pick at least one date to book your ad again."),
+    "taken-again": (
+        False,
+        "Sorry, someone else has just booked one of those dates. Please pick again.",
+    ),
+    "refused": (False, "Sorry, this ad can't be booked again on this site."),
+    "busy": (False, "Too many bookings in a short time. Please try again in an hour."),
 }
 
 
@@ -2735,6 +2814,7 @@ def ad_booking_page(request: Request, code: str, note: str = Query("", max_lengt
             ads.release_expired(session, now)
             session.refresh(booking)
         results = ads.results(session, booking, now.astimezone(GUAM_TZ).date())
+        again = _book_again_choices(session, booking, now)
     found = BOOKING_NOTES.get(note)
     response = render(
         request,
@@ -2747,8 +2827,28 @@ def ad_booking_page(request: Request, code: str, note: str = Query("", max_lengt
         expires_at=booking.created_at + timedelta(minutes=ads.HOLD_MINUTES),
         can_pay=booking.status == "new" and paypal.enabled(settings),
         message={"ok": found[0], "text": found[1]} if found else None,
+        again=again,
     )
     return _private(response)
+
+
+def _book_again_choices(session, booking: AdBooking, now: datetime) -> dict | None:
+    """For an approved ad whose kind is still sold: its offer, and the dates
+    that can be booked, as (day, last day of its week or None, taken,
+    ticked). The first free dates after the ad's own are ticked, as many as
+    it booked."""
+    offer = next((o for o in advertising() if o.kind == booking.kind), None)
+    if booking.status != "approved" or offer is None:
+        return None
+    days = ads.choices(settings, booking.kind, now)
+    held = ads.taken(session, booking.kind, days)
+    free_after = [d for d in days if d not in held and d > max(booking.days)]
+    ticked = set(free_after[: len(booking.days)])
+    last = timedelta(days=6) if booking.kind == ads.SITE else None
+    return {
+        "offer": offer,
+        "days": [(d, last and d + last, d in held, d in ticked) for d in days],
+    }
 
 
 @app.get("/advertise/booking/{code}/picture.webp")
@@ -2872,6 +2972,55 @@ def ad_booking_paid(request: Request, code: str, token: str = Query("", max_leng
         alert = _booking_alert(booking, request)
     threading.Thread(target=alerts.send, args=(settings, alert), daemon=True).start()
     return _to_booking(code, "paid")
+
+
+@app.post("/advertise/booking/{code}/again")
+async def ad_booking_again(request: Request, code: str):
+    """Book the same ad (its picture or words, and its website) again for new
+    weeks or editions. This makes a new booking, which is paid and approved
+    the usual way, and opens its page."""
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the booking's page.", status_code=403)
+    body = (await request.body())[:_MAX_SIGNUP_BODY]
+    picked_text = parse_qs(body.decode("utf-8", "replace"), max_num_fields=80).get("day", [])
+    now = datetime.now(timezone.utc)
+    offers = {offer.kind: offer for offer in advertising()}
+    with session_scope() as session:
+        old = ads.by_code(session, code)
+        if old is None:
+            raise HTTPException(404)
+    offer = offers.get(old.kind)
+    if old.status != "approved" or offer is None:
+        return _to_booking(code)
+    if ads.refused([old.business, old.link, old.words], _muted()):
+        return _to_booking(code, "refused")
+    allowed = {d.isoformat(): d for d in ads.choices(settings, old.kind, now)}
+    picked = sorted({allowed[d] for d in picked_text if d in allowed})
+    if not picked:
+        return _to_booking(code, "pick")
+    if not booking_limit.allow(request.client.host if request.client else ""):
+        log.warning("ad booking refused: too many bookings in the last hour")
+        return _to_booking(code, "busy")
+    picture = (old.picture, old.picture_width, old.picture_height) if old.picture else None
+    try:
+        with session_scope() as session:
+            booking = ads.book(
+                session,
+                kind=old.kind,
+                days=picked,
+                business=old.business,
+                email=old.email,
+                link=old.link,
+                words=old.words,
+                price_cents=offer.price_cents,
+                picture=picture,
+                now=now,
+            )
+            new_code = booking.code
+            log.info("ad booking %d made again from booking %d (not paid yet)", booking.id, old.id)
+    except ads.NotAvailable:
+        return _to_booking(code, "taken-again")
+    return _to_booking(new_code)
 
 
 @app.post("/advertise/booking/{code}/cancel")

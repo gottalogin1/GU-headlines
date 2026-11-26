@@ -590,6 +590,10 @@ The listings need `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and
 Write prices without the `$` sign (Docker Compose changes values that contain
 it). A new price applies to listings sent after `docker compose up -d`.
 
+Listings end by themselves after their number of days. A few days before,
+the poster gets an email, and can renew from the listing's own page: see
+[Renewal reminders](#renewal-reminders).
+
 ## Advertise page
 
 The Advertise page (`/advertise`) lets a local business book and pay for an
@@ -665,6 +669,9 @@ them.
   stories that are never shown do) cannot be booked.
 - The Sources page's disclaimer gets a paragraph about the details a business
   gives when it books.
+- A few days before an approved ad ends, the business gets an email, and its
+  booking's page has a **Run this ad again** form: see
+  [Renewal reminders](#renewal-reminders).
 
 ## Your own email server
 
@@ -680,9 +687,10 @@ and reverse DNS from your server company. The whole setup, step by step, is in
 
 ## Sending email
 
-The site sends email for the bid alerts: the alerts, the welcome email, and the
-link to a subscriber's own page. It hands each email to a mail server through
-SMTP (the standard way that programs send email). The mail server can run on
+The site sends email for the bid alerts (the alerts, the welcome email, and the
+link to a subscriber's own page) and the
+[renewal reminders](#renewal-reminders). It hands each email to a mail server
+through SMTP (the standard way that programs send email). The mail server can run on
 your own server or belong to an email company; its setup steps give the values.
 With [your own email server](email-server.md), `./scripts/mail.sh setup` makes
 the site's mailbox and prints all five values.
@@ -709,6 +717,41 @@ Bid alerts are on only when the price, PayPal, email and the site's address
 (`SITE_DOMAIN` or `SITE_URL`) are all set. `docker compose exec web
 guheadlines bid-alerts` says what is missing, and lists the subscribers. See
 [bid-alerts.md](bid-alerts.md).
+
+## Renewal reminders
+
+| Setting | Default | What it does |
+|---|---|---|
+| `RENEWAL_REMINDER_DAYS` | `3` | How many days before a paid listing or a booked ad ends its buyer gets one email (0 to 30). `0`: no email. |
+
+Paid listings and booked ads end by themselves: a classified ad and a featured
+job post after their number of days, a business's featured upgrade after
+`BUSINESS_UPGRADE_DAYS` (the entry then stays as a basic one), and a booked ad
+after its last week or edition. A featured event shows until it is over, so it
+gets no reminder.
+
+`RENEWAL_REMINDER_DAYS` before the end, the worker emails the buyer a link to
+their own page (it checks after each news check, every hour by default):
+
+- **A listing** (classified ad, featured job post, business upgrade): the
+  email goes to the address that the poster paid with on PayPal. The
+  listing's page has **Renew for $… with PayPal**: PayPal takes the price
+  that `.env` sets at that moment, and the listing gets as many days more,
+  added to its end date (or to today, when it has ended already). It needs no
+  new review. With `DISCORD_WEBHOOK_URL` set, Discord tells you about each
+  renewal, and `/admin/listings` counts renewals in its 30-day total. If you
+  take a listing down while its poster is on PayPal's page, the payment goes
+  back by itself.
+- **A booked ad**: the email goes to the address in the booking. The
+  booking's page has **Run this ad again**, with the next free weeks or
+  editions ticked. It makes a new booking with the same picture or words,
+  paid and approved like any other. No email goes out when the business has
+  already booked a later date.
+
+Each end date gets one email; when the email fails, the next hour tries
+again. Reminders need [sending email](#sending-email) and `SITE_DOMAIN` or
+`SITE_URL` (for the link). Without them, listings and ads still end on time,
+and buyers can still renew from their own page.
 
 ## Checking for news
 
