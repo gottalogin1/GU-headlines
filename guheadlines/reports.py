@@ -87,7 +87,7 @@ CURRENCY = paypal.CURRENCY
 
 NO_SEARCH = (
     "Donations are not shown: PayPal's Transaction search is not turned on for your "
-    "PayPal app. See REPORT_TIME in .env.example for the steps."
+    'PayPal app. See "How to turn on Transaction search" in .env.example.'
 )
 
 
@@ -464,7 +464,7 @@ def weekly_alert(
             headline, source, n = week.top_story
             seen.append(f"• Most clicked story: {_plain(headline)} ({source}), {n:,} clicks")
         if week.came_from:
-            sites = ", ".join(f"{site} {n:,}" for site, n in week.came_from)
+            sites = ", ".join(f"{_plain(site)} {n:,}" for site, n in week.came_from)
             seen.append(f"• Readers came from: {sites}")
     else:
         seen.append(

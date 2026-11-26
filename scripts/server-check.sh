@@ -419,7 +419,10 @@ main() {
     esac
     # One round at a time.
     exec 8>"$STATE/lock"
-    flock -n 8 || return 0
+    if ! flock -n 8; then
+        show "Another check is running right now. Try again in a minute."
+        return 0
+    fi
     check_disk
     check_memory
     check_certs

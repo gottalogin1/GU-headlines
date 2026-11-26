@@ -6,6 +6,22 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Reports and server checks in Discord.** Every morning at 8:00 (Guam
+  time), a money summary: yesterday's paid listings, booked ads, bid alert
+  payments and donations, money given back, and the listings and ads that
+  wait for your approval, with the links. Every Monday, a weekly report:
+  page views, story clicks, the busiest day, the most clicked story, where
+  readers came from, ad clicks, newsletter sign-ups, new bid alert
+  subscribers and the money of the week, each compared with the week before.
+  `guheadlines report daily` (or `weekly`) posts one now. Donations and
+  refunds need PayPal's Transaction search turned on for your app (the steps
+  are in `.env.example`). The server now also checks itself with each
+  automatic-update round (`scripts/server-check.sh`): an alert when the disk
+  is 90% full, when memory stays 90% used, when an https certificate ends
+  within 14 days, and (with your own mail server on) when its IP address is
+  on a spam block list; and once a week it deletes Docker's leftovers. New
+  settings: `REPORT_TIME`, `DAILY_REPORT`, `WEEKLY_REPORT_DAY`,
+  `DISK_ALERT_PERCENT`, `MEMORY_ALERT_PERCENT`, `CERT_ALERT_DAYS`.
 - **Your own email server, with webmail.** Turn it on with
   `COMPOSE_PROFILES=mail` and `MAIL_HOSTNAME=mail.guamheadlines.com` in
   `.env`, and you get email addresses at your domain, webmail at
