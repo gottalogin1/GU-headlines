@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pagination %}
+{% from "_listing.html" import featured_events with context %}
 {% block main %}
 {% set blank %}<span class="not-given" title="Not given by the calendar">—</span>{% endset %}
 <header class="page-head">
   <h1>Events</h1>
   <p class="muted">What's coming up on Guam over the next 90 days, from {{ calendars|length }} {{ "calendar" if calendars|length == 1 else "calendars" }}, checked every {{ settings.events_interval_hours }} hours. Every event links to the calendar that published it.</p>
+  {% if offers.event %}<p class="post-offer"><a class="btn" href="/post/event">Feature your event</a> <span class="muted small">At the top of this page and on the home page until it is over: {{ offers.event.price }}.</span></p>{% endif %}
 </header>
+
+{{ featured_events(featured) }}
 
 <form class="search-form event-filter" action="/events" method="get">
   <div class="field event-words">
@@ -61,6 +65,7 @@
   <p class="cal-legend small">
     {% for c in legend %}<span><span class="cal-dot cal-{{ colors[c.calendar.slug] }}" aria-hidden="true"></span>{{ c.calendar.name }}</span>{% endfor %}
     {% if legend|length < calendars|length %}<span><span class="cal-dot" aria-hidden="true"></span>Other calendars</span>{% endif %}
+    {% if featured_legend %}<span><span class="cal-dot cal-gold" aria-hidden="true"></span>Featured (paid)</span>{% endif %}
   </p>
   <p class="muted small cal-note">{% if event_filters.q or event_filters.calendar %}Every matching event{% else %}Main events{% endif %}, at most 3 a day. Pick a day to see everything on it.</p>
   <div class="cal-subscribe">
@@ -100,6 +105,8 @@
   <article class="story no-photo event">
     <p class="event-time">{{ event_time(e, day) }}</p>
     <div class="story-body">
+      {% set paid = item.calendar_slug == featured_calendar %}
+      {% if paid %}<div class="tags"><span class="tag tag-featured">Featured</span></div>{% endif %}
       <h3 class="headline"><a href="/events/{{ e.id }}">{{ e.title }}</a></h3>
       <p class="job-employer">{% if e.organizer and e.organizer != item.calendar_name %}<strong>{{ e.organizer }}</strong> · {% endif %}<span class="cal-dot{% if colors.get(item.calendar_slug) %} cal-{{ colors[item.calendar_slug] }}{% endif %}" aria-hidden="true"></span>{% if item.calendar_homepage %}<a href="{{ item.calendar_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.calendar_name }}</a>{% else %}{{ item.calendar_name }}{% endif %}</p>
       <dl class="job-facts event-facts">
@@ -110,7 +117,7 @@
       {% if e.url or e.agenda_url %}
       <p class="job-links">
         {% if e.url %}
-        <a class="read-link" href="{{ e.url|safe_url }}" target="_blank" rel="noopener">Details at <span class="read-domain">{{ e.url|domain }}</span>
+        <a class="read-link" href="{{ e.url|safe_url }}" target="_blank" rel="{{ 'sponsored noopener' if paid else 'noopener' }}">Details at <span class="read-domain">{{ e.url|domain }}</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
         </a>
         {% endif %}

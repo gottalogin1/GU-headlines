@@ -18,7 +18,7 @@ from sqlalchemy import or_, select, update
 
 from ..config import CalendarConfig
 from ..db import EVENTS_LOCK_KEY, advisory_lock, session_scope
-from ..models import Event, EventCalendar
+from ..models import FEATURED_CALENDAR, Event, EventCalendar
 from ..scraper.http import FetchError, HttpClient
 from ..settings import Settings
 from .ical import CalendarError, CalendarEvent
@@ -59,7 +59,9 @@ def window(now: datetime | None = None) -> tuple[datetime, datetime]:
 
 
 def sync_calendars(session, calendars: list[CalendarConfig]) -> dict[str, int]:
-    """Rows in event_calendars to match events.yaml (removed calendars are only disabled)."""
+    """Rows in event_calendars to match events.yaml (removed calendars are only
+    disabled). The calendar of paid featured events (listings.py) is not in
+    events.yaml and stays as it is."""
     existing = {c.slug: c for c in session.scalars(select(EventCalendar))}
     for calendar in calendars:
         row = existing.get(calendar.slug)
@@ -72,7 +74,7 @@ def sync_calendars(session, calendars: list[CalendarConfig]) -> dict[str, int]:
         row.enabled = calendar.enabled
     configured = {c.slug for c in calendars}
     for slug, row in existing.items():
-        if slug not in configured:
+        if slug not in configured and slug != FEATURED_CALENDAR:
             row.enabled = False
     session.flush()
     return {slug: row.id for slug, row in existing.items()}
