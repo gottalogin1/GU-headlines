@@ -429,6 +429,37 @@ sends the buyer back to your site, and the server takes the money (it
 buyer nothing. Each step can be done again safely: the server asks PayPal to
 do the same request only once. A refund gives all of a payment back.
 
+## Sending email
+
+The site sends email for the bid alerts: the alerts, the welcome email, and the
+link to a subscriber's own page. It gives each email to an email service
+through SMTP (the standard way that programs send email). The recommended
+service is [Resend](https://resend.com): its free plan sends 3,000 emails a
+month, at most 100 a day. Any other SMTP service works too.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SMTP_HOST` | *(empty)* | The SMTP server, such as `smtp.resend.com`. Empty: no email is sent. |
+| `SMTP_PORT` | `587` | `465` encrypts from the start; other ports (`587`, `2587`) switch to encryption first (STARTTLS). |
+| `SMTP_USER` | *(empty)* | The user name. For Resend: `resend`. |
+| `SMTP_PASSWORD` | *(empty)* | The password. For Resend: an API key (starts with `re_`). Secret. |
+| `MAIL_FROM` | *(empty)* | The sender, such as `GU Headlines <alerts@guamheadlines.com>`, at a domain that the service has verified. Shown only in the emails. |
+
+Send a test email with `docker compose exec web guheadlines mail-test
+you@example.com`. The steps for Resend are in `.env.example` and in
+[bid-alerts.md](bid-alerts.md#1-set-up-email-with-resend).
+
+## Bid alerts
+
+| Setting | Default | What it does |
+|---|---|---|
+| `BID_ALERTS_PRICE` | *(empty)* | The monthly price in US dollars, such as `15`. Empty: no bid alerts. |
+
+Bid alerts are on only when the price, PayPal, email and the site's address
+(`SITE_DOMAIN` or `SITE_URL`) are all set. `docker compose exec web
+guheadlines bid-alerts` says what is missing, and lists the subscribers. See
+[bid-alerts.md](bid-alerts.md).
+
 ## Checking for news
 
 | Setting | Default | What it does |

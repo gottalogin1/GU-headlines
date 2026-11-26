@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Paid bid alerts.** Businesses can pay a monthly price through PayPal to
+  get an email when a new bid on the Bids page matches their trades (such as
+  construction, IT or medical) or their own words. The new page
+  `/bids/alerts` takes the sign-up; the buyer pays on PayPal's own page, so
+  the site loads no PayPal script and its security rules do not change.
+  There is no login: every email links to the subscriber's own page, where
+  they change their choices or cancel, and a lost link can be sent again.
+  The worker sends one email per subscriber after each bids check, asks
+  PayPal about the subscriptions twice a day, pauses the alerts after failed
+  payments, and keeps them going after a cancel until the paid month ends.
+  The emails go out through an email service over SMTP (Resend is
+  recommended; its free plan sends 100 a day). New settings:
+  `BID_ALERTS_PRICE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
+  and `MAIL_FROM`, with step-by-step notes in `.env.example`. New commands:
+  `guheadlines bid-alerts` and `guheadlines mail-test`. See
+  [Bid alerts](docs/bid-alerts.md). When you update, the database gets two
+  new tables by itself; bid alerts stay off until you set them up.
 - **A Bids page.** A new **Bids** link lists the Government of Guam's open
   bids and requests for proposals, soonest due first: what each is for, its
   number, the agency, when offers are due (Guam time, with the days left),

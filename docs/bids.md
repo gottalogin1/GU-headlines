@@ -35,6 +35,9 @@ listed.
 
 ---
 
+Businesses can pay for an email when a new bid matches their trade: see
+[Bid alerts](bid-alerts.md).
+
 ## The sources
 
 They are listed in `config/bids.yaml`. Out of the box:
