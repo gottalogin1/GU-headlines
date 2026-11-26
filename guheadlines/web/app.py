@@ -773,7 +773,8 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "show_ad": show_ad,
             "csp_nonce": nonce,
             "sponsor": sponsor_ad(),
-            "advertise": bool(advertising()),
+            # What the Advertise page sells ("site", "newsletter"): its links show.
+            "advertise": [offer.kind for offer in advertising()],
             "signup": signup_info(),
             "show_signup": show_signup,
             "weather": (
@@ -1601,6 +1602,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/events": "Events",
         "/weather": "Weather",
         "/outages": "Outages",
+        "/advertise": "Advertise",
         "/status": "Sources",
         "/search": "Search",
         **{f"/category/{c.slug}": c.name for c in config.categories},
@@ -1660,6 +1662,9 @@ def robots(request: Request):
         "Disallow: /healthz\n"
         # The counting stop in front of each story link (/go/<id>).
         "Disallow: /go/\n"
+        # A booking's own page and the owner's review page (the Advertise page
+        # itself, /advertise, is for everyone).
+        "Disallow: /advertise/\n"
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
     )
@@ -1705,6 +1710,7 @@ def sitemap(request: Request):
         weather=bool(settings.weather_interval_minutes),
         outages=bool(settings.outages_interval_minutes),
         events=found["events"],
+        advertise=bool(advertising()),
     )
     return Response(
         seo.sitemap_xml(entries),

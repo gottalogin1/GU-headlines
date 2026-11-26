@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{# A booking's own page (/advertise/booking/<code>), which only the business
+   that booked the ad has the address of: what it booked, the PayPal button
+   while it is not paid, where it stands, and how the ad has done. See
+   guheadlines/ads.py. #}
+{% set labels = {
+  "new": "Not paid yet",
+  "paid": "Paid, waiting for a check",
+  "approved": "Approved",
+  "rejected": "Not accepted",
+  "cancelled": "Cancelled",
+} %}
+{% block main %}
+<header class="page-head">
+  <p class="crumbs"><a href="/advertise">Advertise</a></p>
+  <h1>Your ad booking</h1>
+  <p class="muted">Keep this page's address: it is the only way back to your booking. Bookmark it now.</p>
+</header>
+
+{% if message %}
+<p class="signup-result {{ 'ok' if message.ok else 'error' }}" role="status">{{ message.text }}</p>
+{% endif %}
+
+<section class="site-note ad-booking" aria-labelledby="booking-title">
+  <h2 id="booking-title">{{ ad_names[booking.kind] }} <span class="badge">{{ labels[booking.status] }}</span></h2>
+  <dl class="job-facts">
+    <div><dt>Business</dt><dd>{{ booking.business }}</dd></div>
+    <div><dt>When</dt><dd>{{ ad_when(booking)|capitalize }}</dd></div>
+    <div><dt>Total</dt><dd>{{ money(booking.amount_cents) }}</dd></div>
+    <div><dt>Website</dt><dd>{{ booking.link|domain }}</dd></div>
+  </dl>
+  {% if booking.picture %}
+  <figure class="ad-preview">
+    <img src="/advertise/booking/{{ booking.code }}/picture.webp" width="{{ booking.picture_width }}" height="{{ booking.picture_height }}" alt="{{ booking.words }}">
+    <figcaption class="muted small">As it shows in the side column. Words for people who can't see it: "{{ booking.words }}"</figcaption>
+  </figure>
+  {% else %}
+  <blockquote class="ad-line"><strong>Sponsor: {{ booking.business }}</strong><br>{{ booking.words }}</blockquote>
+  {% endif %}
+
+  {% if booking.status == "new" %}
+  <p>Your {{ "weeks are" if booking.kind == "site" else "editions are" }} held for you until
+    <strong>{{ expires_at|fmt_time }}</strong> (Guam time). Pay to keep them.</p>
+  {% if can_pay %}
+  <p class="ad-actions">
+    <a class="btn" href="/advertise/booking/{{ booking.code }}/pay" rel="nofollow">Pay {{ money(booking.amount_cents) }} with PayPal</a>
+  </p>
+  <p class="muted small">You can pay with a PayPal account, or with a debit or credit card on PayPal's page.
+    You are only charged when you finish on PayPal.</p>
+  {% else %}
+  <p class="ad-error">Payments are not open just now. Please try again later.</p>
+  {% endif %}
+  <form class="ad-cancel" action="/advertise/booking/{{ booking.code }}/cancel" method="post">
+    <button type="submit" class="btn-quiet">Cancel this booking</button>
+  </form>
+  {% elif booking.status == "paid" %}
+  <p>Paid on {{ booking.paid_at|fmt_datetime }}. Your ad is waiting for a quick check, usually
+    within a day. When it's approved, this page says so, and the ad shows on the dates you booked.
+    If it isn't accepted, your payment is refunded in full.</p>
+  {% elif booking.status == "approved" %}
+  <p>Approved. Your ad shows {{ ad_when(booking) }}. Thank you for supporting local news!</p>
+  {% elif booking.status == "rejected" %}
+  <p>Sorry, this ad was not accepted{% if booking.note %}: {{ booking.note }}{% else %}.{% endif %}
+    {% if booking.paypal_capture_id %} Your payment has been refunded in full. PayPal shows the
+    refund within a few days.{% endif %}</p>
+  {% else %}
+  <p>This booking is cancelled{% if booking.note %} ({{ booking.note|lower|trim('.') }}){% endif %}, and nothing was
+    charged. <a href="/advertise">Book again</a></p>
+  {% endif %}
+</section>
+
+{% if results %}
+<h2 class="section-title">How your ad is doing</h2>
+<p class="muted section-note">Counted on this site's own server; robots are left out.
+  {% if not results.done %}The numbers grow while your ad runs.{% endif %}</p>
+<dl class="job-facts stats-totals">
+  {% if booking.kind == "site" %}
+  <div><dt>Days shown</dt><dd>{{ results.days }}</dd></div>
+  <div><dt>Page views</dt><dd>{{ "{:,}".format(results.views) }}</dd></div>
+  <div><dt>Clicks</dt><dd>{{ "{:,}".format(results.clicks) }}</dd></div>
+  <div><dt>Clicks per 1,000 views</dt><dd>{{ "%.1f"|format(results.clicks * 1000 / results.views) if results.views else "–" }}</dd></div>
+  {% else %}
+  <div><dt>Editions sent</dt><dd>{{ results.days }}</dd></div>
+  <div><dt>Clicks</dt><dd>{{ "{:,}".format(results.clicks) }}</dd></div>
+  {% endif %}
+</dl>
+{% endif %}
+{% endblock %}

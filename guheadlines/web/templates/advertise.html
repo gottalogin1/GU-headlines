@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{# The Advertise page (/advertise): the site's real numbers from the visitor
+   counts, what a business can book (the sponsor spot by the week, the
+   newsletter's sponsor line by the edition), and the booking forms. See
+   guheadlines/ads.py. Plain forms: the payment happens on PayPal's own page
+   afterwards, so no PayPal script loads here. #}
+{% block main %}
+<header class="page-head">
+  <h1>Advertise on {{ settings.site_name }}</h1>
+  <p class="muted">Put your business in front of people across Guam who come here for the local
+    news. Book online, pay with PayPal, and your ad goes up after a quick check.</p>
+</header>
+
+<section aria-labelledby="numbers-title">
+  <h2 class="section-title" id="numbers-title">The numbers, last {{ numbers.days }} days</h2>
+  <dl class="job-facts stats-totals">
+    <div><dt>Page views</dt><dd>{{ "{:,}".format(numbers.views) }}</dd></div>
+    <div><dt>A day, on average</dt><dd>{{ "{:,}".format(numbers.per_day) }}</dd></div>
+    {% if numbers.sponsor_clicks %}
+    <div><dt>Clicks on the sponsor spot</dt><dd>{{ "{:,}".format(numbers.sponsor_clicks) }}</dd></div>
+    {% endif %}
+    {% if numbers.newsletter_clicks %}
+    <div><dt>Story clicks from the newsletter</dt><dd>{{ "{:,}".format(numbers.newsletter_clicks) }}</dd></div>
+    {% endif %}
+  </dl>
+  {% set peak = numbers.daily|map(attribute="views")|max %}
+  {% if peak %}
+  <figure class="stats-chart">
+    <figcaption>Page views per day <span class="muted">(highest: {{ "{:,}".format(peak) }})</span></figcaption>
+    <svg viewBox="0 0 {{ numbers.daily|length * 10 }} 100" preserveAspectRatio="none" role="img" aria-label="Page views per day for the last {{ numbers.days }} days, highest {{ '{:,}'.format(peak) }}.">
+      {% for d in numbers.daily %}{% set height = d.views * 100 / peak %}
+      <rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 100 - height }}" width="8" height="{{ height }}"><title>{{ d.day|fmt_day }}: {{ "{:,}".format(d.views) }}</title></rect>
+      {% endfor %}
+    </svg>
+    <div class="stats-axis muted small"><span>{{ numbers.daily[0].day|fmt_day }}</span><span>{{ numbers.daily[-1].day|fmt_day }}</span></div>
+  </figure>
+  {% endif %}
+  <p class="muted small section-note ad-numbers-note">Counted on this site's own server from real visits.
+    Search engines, link previews and other robots are left out. The numbers are updated every
+    10 minutes.</p>
+</section>
+
+<h2 class="section-title">What you can book</h2>
+{% for f in forms %}
+{% set o = f.offer %}
+{% set mine = form_kind == o.kind %}
+{% set v = values if mine else {} %}
+{% set e = errors if mine else {} %}
+<section class="site-note ad-offer" id="book-{{ o.kind }}" aria-labelledby="offer-{{ o.kind }}">
+  <h2 id="offer-{{ o.kind }}">{{ o.name }} · {{ money(o.price_cents) }} {{ "a week" if o.unit == "week" else "an edition" }}</h2>
+  {% if o.kind == "site" %}
+  <p>Your picture at the top of the side column on every page of the site (below the stories on
+    phones), with a link to your website. One business a week, Monday to Sunday, Guam time.
+    {% if numbers.per_week %}In the last {{ numbers.days }} days, a week had about
+    {{ "{:,}".format(numbers.per_week) }} page views.{% endif %}</p>
+  {% else %}
+  <p>A sponsor line with a link to your website, first in the newsletter email that goes out
+    every {{ newsletter_schedule }}, Guam time. One sponsor an edition. The line is marked
+    "Sponsor".</p>
+  {% endif %}
+
+  <form class="ad-form" action="/advertise#book-{{ o.kind }}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="kind" value="{{ o.kind }}">
+    {% if e.form %}<p class="ad-error" role="alert">{{ e.form }}</p>{% endif %}
+
+    <fieldset class="ad-days">
+      <legend>{{ "Weeks, Monday to Sunday" if o.unit == "week" else "Editions" }}</legend>
+      <div class="ad-day-list">
+      {% for day, taken in f.days %}
+      {% set iso = day.isoformat() %}
+      <label class="ad-day{{ ' is-taken' if taken }}">
+        <input type="checkbox" name="day" value="{{ iso }}"{{ ' disabled' if taken }}{{ ' checked' if iso in (v.days or []) and not taken }}>
+        <span>{% if o.unit == "week" %}Week of {{ day.strftime("%b") }} {{ day.day }}{% else %}{{ day.strftime("%a, %b") }} {{ day.day }}{% endif %}{% if taken %} <span class="muted">· booked</span>{% endif %}</span>
+      </label>
+      {% endfor %}
+      </div>
+      {% if e.days %}<p class="ad-error" role="alert">{{ e.days }}</p>{% endif %}
+      <p class="muted small">{{ money(o.price_cents) }} for each {{ o.unit }} you pick.</p>
+    </fieldset>
+
+    <div class="ad-fields">
+      <div class="field">
+        <label for="{{ o.kind }}-business">Business name</label>
+        <input id="{{ o.kind }}-business" name="business" required maxlength="80" autocomplete="organization" value="{{ v.business or '' }}">
+        {% if e.business %}<p class="ad-error" role="alert">{{ e.business }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="{{ o.kind }}-email">Your email address</label>
+        <input id="{{ o.kind }}-email" name="email" type="email" required maxlength="254" autocomplete="email" value="{{ v.email or '' }}" aria-describedby="{{ o.kind }}-email-hint">
+        <p class="muted small" id="{{ o.kind }}-email-hint">So we can reach you about the ad. It is never shown on the site.</p>
+        {% if e.email %}<p class="ad-error" role="alert">{{ e.email }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="{{ o.kind }}-link">Your website</label>
+        <input id="{{ o.kind }}-link" name="link" required maxlength="2000" inputmode="url" autocomplete="url" placeholder="https://example.com" value="{{ v.link or '' }}" aria-describedby="{{ o.kind }}-link-hint">
+        <p class="muted small" id="{{ o.kind }}-link-hint">Where a click on your ad goes: your website, or a page on Facebook or Instagram.</p>
+        {% if e.link %}<p class="ad-error" role="alert">{{ e.link }}</p>{% endif %}
+      </div>
+      {% if o.kind == "site" %}
+      <div class="field">
+        <label for="site-picture">Your picture</label>
+        <input id="site-picture" name="picture" type="file" required accept="image/jpeg,image/png,image/webp,image/gif" aria-describedby="site-picture-hint">
+        <p class="muted small" id="site-picture-hint">600 × 500 pixels looks best (at least 300 pixels wide). JPEG, PNG, WebP or GIF, up to {{ max_picture_mb }} MB.</p>
+        {% if e.picture %}<p class="ad-error" role="alert">{{ e.picture }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="site-words">What the picture says</label>
+        <input id="site-words" name="words" required maxlength="150" value="{{ v.words or '' }}" aria-describedby="site-words-hint">
+        <p class="muted small" id="site-words-hint">For people who can't see pictures, such as "Island Bakery: fresh pandesal every morning in Tamuning".</p>
+        {% if e.words %}<p class="ad-error" role="alert">{{ e.words }}</p>{% endif %}
+      </div>
+      {% else %}
+      <div class="field">
+        <label for="newsletter-words">Your sponsor line</label>
+        <textarea id="newsletter-words" name="words" required minlength="10" maxlength="200" rows="3" aria-describedby="newsletter-words-hint">{{ v.words or '' }}</textarea>
+        <p class="muted small" id="newsletter-words-hint">One or two sentences, up to 200 letters. Your business name is shown with it.</p>
+        {% if e.words %}<p class="ad-error" role="alert">{{ e.words }}</p>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="signup-trap" aria-hidden="true">
+      <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
+    <button type="submit" class="btn">Continue to payment</button>
+    <p class="muted small">Next you see your booking and pay with PayPal, with a PayPal account or
+      a card. Your {{ o.unit }}s are held for you for {{ hold_minutes }} minutes.</p>
+  </form>
+</section>
+{% endfor %}
+
+<section class="site-note" aria-labelledby="how-title">
+  <h2 id="how-title">How it works</h2>
+  <ol class="ad-steps">
+    <li>Pick your {{ "weeks or editions" if forms|length > 1 else (forms[0].offer.unit ~ "s") }} and fill in the form.</li>
+    <li>Pay with PayPal. You can use a PayPal account, or a debit or credit card.</li>
+    <li>Your ad is checked, usually within a day, and then shows on the dates you booked. If it
+      isn't accepted, you get your money back in full.</li>
+    <li>Your booking has its own page, where you can see how many views and clicks your ad gets.</li>
+  </ol>
+  <h2 class="ad-rules-title">What ads are accepted</h2>
+  <p>Ads for local businesses, services, events and causes that are truthful, legal and suitable
+    for all ages, with a picture and a link that are yours to use. Ads may not look like news
+    stories. Every ad is checked before it goes up, and an ad can be turned down for any reason,
+    with a full refund.</p>
+  <p class="muted small">The details you give, including your email address, are kept to run your
+    ad and to reach you about it. They are not shown on the site or shared. PayPal handles the
+    payment: this site never sees your card or PayPal account.</p>
+</section>
+{% endblock %}

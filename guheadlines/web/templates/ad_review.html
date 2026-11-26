@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{# The owner's review page (/advertise/review, STATS_PASSWORD): every ad
+   booked on the Advertise page, the ones waiting for a decision first. A paid
+   ad shows only after it is approved here; turning one down refunds it
+   through PayPal. See guheadlines/ads.py. #}
+{% set labels = {
+  "new": "Not paid yet",
+  "paid": "Waiting for you",
+  "approved": "Approved",
+  "rejected": "Turned down",
+  "cancelled": "Cancelled",
+} %}
+{% block main %}
+<header class="page-head">
+  <h1>Ad bookings</h1>
+  <p class="muted">Ads that businesses booked on the Advertise page. A paid ad shows only after you
+    approve it. Turning one down gives the money back through PayPal.</p>
+  <p class="small"><a href="/advertise">Advertise page</a> · <a href="/stats">Visitor stats</a></p>
+</header>
+
+{% if not selling %}
+<p class="signup-result">The Advertise page is off, so no new bookings come in. It needs
+  SPONSOR_WEEK_PRICE or NEWSLETTER_SPONSOR_PRICE, and PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET,
+  in .env (see docs/settings.md, "Selling ads on the Advertise page").</p>
+{% endif %}
+
+{% if message %}
+<p class="signup-result {{ 'ok' if message.ok else 'error' }}" role="status">{{ message.text }}</p>
+{% endif %}
+
+{% if not bookings %}
+<div class="empty"><h2>No bookings yet</h2><p class="muted">When a business books an ad, it shows here, and a Discord alert comes when it's paid (with DISCORD_WEBHOOK_URL set).</p></div>
+{% endif %}
+
+{% for b in bookings %}
+{% set r = results[b.id] %}
+{% set finished = b.status == "approved" and last_day(b) < today %}
+<article class="site-note ad-review" id="booking-{{ b.id }}" aria-labelledby="booking-{{ b.id }}-title">
+  <h2 id="booking-{{ b.id }}-title">{{ b.business }}
+    <span class="badge">{{ "Finished" if finished else labels[b.status] }}</span></h2>
+  <dl class="job-facts">
+    <div><dt>What</dt><dd>{{ ad_names[b.kind] }}</dd></div>
+    <div><dt>When</dt><dd>{{ ad_when(b)|capitalize }}</dd></div>
+    <div><dt>Amount</dt><dd>{{ money(b.amount_cents) }}{% if b.paid_at %}, paid {{ b.paid_at|fmt_datetime }}{% endif %}</dd></div>
+    <div><dt>Email</dt><dd><a href="mailto:{{ b.email }}">{{ b.email }}</a></dd></div>
+    <div><dt>Website</dt><dd><a href="{{ b.link|safe_url }}" target="_blank" rel="noopener nofollow">{{ b.link|domain }} ↗</a></dd></div>
+    <div><dt>Booked</dt><dd>{{ b.created_at|fmt_datetime }}</dd></div>
+    {% if b.paypal_capture_id %}<div><dt>PayPal payment</dt><dd>{{ b.paypal_capture_id }}</dd></div>{% endif %}
+  </dl>
+  {% if b.picture %}
+  <figure class="ad-preview">
+    <img src="/advertise/booking/{{ b.code }}/picture.webp" width="{{ b.picture_width }}" height="{{ b.picture_height }}" alt="{{ b.words }}" loading="lazy">
+    <figcaption class="muted small">Words for people who can't see it: "{{ b.words }}". Link: {{ b.link }}</figcaption>
+  </figure>
+  {% else %}
+  <blockquote class="ad-line"><strong>Sponsor: {{ b.business }}</strong><br>{{ b.words }}<br><span class="muted small">Link: {{ b.link }}</span></blockquote>
+  {% endif %}
+  {% if b.note %}<p class="small"><strong>Note:</strong> {{ b.note }}</p>{% endif %}
+  {% if r %}
+  <p class="small">So far: {% if b.kind == "site" %}{{ r.days }} days, {{ "{:,}".format(r.views) }} page views, {% else %}{{ r.days }} {{ "edition" if r.days == 1 else "editions" }}, {% endif %}{{ "{:,}".format(r.clicks) }} {{ "click" if r.clicks == 1 else "clicks" }}.</p>
+  {% endif %}
+
+  {% if b.status in ("paid", "approved") and not finished %}
+  <div class="ad-decide">
+    {% if b.status == "paid" %}
+    <form action="/advertise/review/{{ b.id }}" method="post">
+      <input type="hidden" name="action" value="approve">
+      <button type="submit" class="btn">Approve</button>
+    </form>
+    {% endif %}
+    <form class="ad-reject" action="/advertise/review/{{ b.id }}" method="post">
+      <label class="visually-hidden" for="note-{{ b.id }}">Why (the business sees this)</label>
+      <input id="note-{{ b.id }}" name="note" maxlength="500" placeholder="Why (the business sees this)">
+      <button type="submit" name="action" value="reject" class="btn-quiet">Turn down and refund</button>
+      {% if message and message.booking == b.id and not message.ok %}
+      <button type="submit" name="action" value="reject-kept" class="btn-quiet">Turn down, refunded in PayPal</button>
+      {% endif %}
+    </form>
+  </div>
+  {% endif %}
+</article>
+{% endfor %}
+{% endblock %}
