@@ -3,7 +3,8 @@
 GU Headlines mostly runs by itself. This guide covers the occasional jobs:
 checking it's healthy, backups, updates, alerts, and putting it on the
 internet. To make the server itself safe (ssh keys, firewall, security
-updates), see [Keeping the site safe](security.md).
+updates: mostly one script, `./scripts/harden-server.sh`), see
+[Keeping the site safe](security.md).
 
 All commands are run from inside the `GU-headlines` folder.
 
@@ -430,7 +431,7 @@ every 5 minutes (`scripts/server-check.sh`), and posts in Discord when:
 | Memory | 90% of the memory has been in use for about 15 minutes. | `MEMORY_ALERT_PERCENT` |
 | https certificates | The site's certificate, or the mail server's, ends within 14 days. Caddy renews them about 30 days before the end, so this means renewing has failed. Checked every 6 hours. | `CERT_ALERT_DAYS` |
 | Spam block lists | Once a day, with your own mail server on: the server's IP address is on Spamhaus, Barracuda, SpamCop, PSBL or Mailspike. | (none) |
-| Restart needed | Linux has installed security updates that only work after a restart (see [Keeping the site safe](security.md#5-let-linux-install-its-security-updates)). Posted once, and again after a week. Run `sudo reboot` when it suits you. | (none) |
+| Restart needed | Linux has installed security updates that only work after a restart (see [Keeping the site safe](security.md#4-restart-when-discord-says-so)). Posted once, and again after a week. Run `sudo reboot` when it suits you. | (none) |
 
 It also makes `.env` (every password of the site) and the `backups` folder
 readable by their owner only, so no other user or program on the server can

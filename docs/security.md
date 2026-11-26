@@ -1,21 +1,20 @@
 # Keeping the site safe
 
 The site guards itself against the usual attacks (the first part below). A
-few things can only be done on the server itself, by you: they take about
-half an hour, once (the second part). The last part says what to do if you
-ever think someone got in.
+few things have to be done on the server itself: one script does most of
+them, and a few are yours alone because they happen on your own computer
+or in your accounts (the second part, about 20 minutes, once). The last
+part says what to do if you ever think someone got in.
 
 **Contents**
 
 - [What the site does by itself](#what-the-site-does-by-itself)
 - [What you do on the server](#what-you-do-on-the-server)
-  1. [Sign in with a key instead of a password](#1-sign-in-with-a-key-instead-of-a-password)
-  2. [Turn off password sign-in](#2-turn-off-password-sign-in)
-  3. [Block password guessers](#3-block-password-guessers)
-  4. [Turn on the firewall](#4-turn-on-the-firewall)
-  5. [Let Linux install its security updates](#5-let-linux-install-its-security-updates)
-  6. [Use a long STATS_PASSWORD](#6-use-a-long-stats_password)
-  7. [Two-step sign-in on your accounts](#7-two-step-sign-in-on-your-accounts)
+  1. [Make an ssh key on your computer](#1-make-an-ssh-key-on-your-computer)
+  2. [Run the script on the server](#2-run-the-script-on-the-server)
+  3. [Two-step sign-in on your accounts](#3-two-step-sign-in-on-your-accounts)
+  4. [Restart when Discord says so](#4-restart-when-discord-says-so)
+- [The same steps by hand](#the-same-steps-by-hand)
 - [If you think someone got in](#if-you-think-someone-got-in)
 
 ---
@@ -61,18 +60,23 @@ ever think someone got in.
 ## What you do on the server
 
 These steps are for Ubuntu or Debian, which RackNerd servers usually run.
-Do them in order. Commands start with `sudo`; when you sign in as `root`,
-they work the same.
+Do them in order.
 
 > Before you start: find the **VNC console** (or "Console") in your
 > RackNerd control panel. It opens the server's screen in your browser,
-> also when ssh doesn't let you in. If a step below ever locks you out,
-> sign in there with the server's root password and undo the step.
+> also when ssh doesn't let you in. If anything ever locks you out, sign in
+> there with the server's root password (see
+> [the same steps by hand](#the-same-steps-by-hand) for how to undo each
+> one).
 
-### 1. Sign in with a key instead of a password
+### 1. Make an ssh key on your computer
 
 A key is a pair of long secret files: one stays on your computer, the other
-goes on the server. Nobody can guess it, unlike a password.
+goes on the server. Nobody can guess it, unlike a password. The script in
+step 2 turns ssh passwords off only once you sign in with a key, so this
+comes first. (If you skip it, the script does everything else, keeps
+passwords on, and shows you these same commands with your server's address
+filled in.)
 
 1. On your Windows computer, open **PowerShell** and run:
 
@@ -92,16 +96,99 @@ goes on the server. Nobody can guess it, unlike a password.
    type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@203.0.113.10 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
    ```
 
-3. Check it: open a **new** PowerShell window and run
-   `ssh root@203.0.113.10`. It should let you in after the key's passphrase,
-   without the server's password. Keep this window open for step 2.
+3. Sign in again, from a **new** PowerShell window: `ssh root@203.0.113.10`.
+   It should let you in after the key's passphrase, without the server's
+   password. Stay in this window for step 2.
 
-### 2. Turn off password sign-in
+### 2. Run the script on the server
 
-Only after step 1 works. On the server:
+In the window from step 1, signed in with your key:
 
 ```sh
-sudo tee /etc/ssh/sshd_config.d/10-no-passwords.conf > /dev/null <<'EOF'
+cd GU-headlines
+./scripts/harden-server.sh
+```
+
+(Signed in as a user other than `root`, put `sudo ` in front.) It takes a
+minute or two, and does this:
+
+1. **Automatic Linux security updates.** Linux installs its security fixes
+   every day by itself.
+2. **Fail2Ban.** An address that types 5 wrong ssh passwords within 10
+   minutes is blocked for an hour. Robots try passwords on every server on
+   the internet, all day.
+3. **The firewall (ufw).** Only ssh, the website (ports 80 and 443) and,
+   with [your own mail server](email-server.md), the mail ports stay open.
+   ssh is allowed before the firewall is turned on, so it can't cut you
+   off. A firewall you turned on before is left as it is.
+4. **ssh takes keys only, no passwords.** So that you can't lock yourself
+   out, this happens only when the session that runs the script signed in
+   with a key. If it signed in with a password, the script leaves passwords
+   on and says so; make the key (step 1) and run the script again. It also
+   checks the new ssh settings before using them, and undoes them if ssh
+   doesn't accept them.
+5. **STATS_PASSWORD.** If it is shorter than 12 characters, the script puts
+   a random one of 32 letters and digits in `.env`, restarts the site with
+   it, and shows it **once**, at the end. Keep it in a password manager
+   (Bitwarden is free). An empty one is left empty (the private pages stay
+   off).
+6. **Private files.** `.env` and the `backups` folder become readable by
+   their owner only.
+
+At the end it lists what is still yours to do (steps 3 and 4 below). Every
+step that is done already is left alone, so it is safe to run again, for
+example after you made the key.
+
+To only see where each step stands, without changing anything:
+`./scripts/harden-server.sh --check`.
+
+To sign in from another computer later, repeat step 1 on that computer
+(copy its key from a computer that can already sign in, or add the line
+from its `id_ed25519.pub` file to `~/.ssh/authorized_keys` on the server).
+To let ssh take passwords again: `./scripts/harden-server.sh
+--allow-ssh-passwords`.
+
+### 3. Two-step sign-in on your accounts
+
+Whoever gets into these accounts can take over the site, so turn on two-step
+sign-in (a code from an app such as Google Authenticator, or a security key)
+on each:
+
+- **GitHub** (most important): the server installs whatever reaches the
+  `main` branch, by itself. Settings, then Password and authentication, then
+  Two-factor authentication.
+- **PayPal**: Settings, then Security, then 2-step verification.
+- **RackNerd**: the client area and the control panel. Use a long, unique
+  password there too.
+- Your **domain registrar** (where guamheadlines.com is registered): someone
+  in it could point the domain elsewhere.
+- **Google** (AdSense), **Discord** and **SendFox**.
+
+The Discord webhook link in `.env` is like a password too: anyone who has it
+can post in your alerts channel.
+
+### 4. Restart when Discord says so
+
+Some Linux security updates (such as a new Linux kernel) only work after a
+restart. The [server checks](maintenance.md#server-checks) post in Discord
+when that is so. Then run `sudo reboot` when it suits you; the site is back
+by itself within a minute or two.
+
+Once a month or so, also run `sudo apt update && sudo apt upgrade`, which
+updates the rest (Docker too).
+
+## The same steps by hand
+
+What the script does, step by step, if you'd rather do it yourself or want
+to undo a step. Commands start with `sudo`; when you sign in as `root`, they
+work the same. Do step 1 above (the key) first.
+
+### Turn off password sign-in
+
+Only after signing in with your key works. On the server:
+
+```sh
+sudo tee /etc/ssh/sshd_config.d/10-guheadlines.conf > /dev/null <<'EOF'
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password
@@ -119,19 +206,19 @@ sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin)'
 
 It shows `passwordauthentication no` and `permitrootlogin without-password`.
 
-To sign in from another computer later, repeat step 1 on that computer
-(steps 1 and 2 of it from a computer that can already sign in). To undo this
-step, delete the file and restart ssh: `sudo rm
-/etc/ssh/sshd_config.d/10-no-passwords.conf && sudo systemctl restart ssh`.
+To undo this step, delete the file and restart ssh: `sudo rm
+/etc/ssh/sshd_config.d/10-guheadlines.conf && sudo systemctl restart ssh`
+(or run `./scripts/harden-server.sh --allow-ssh-passwords`, which does the
+same).
 
-### 3. Block password guessers
+### Block password guessers
 
 Robots try passwords on every server on the internet, all day. Fail2Ban
 blocks an address for an hour after 5 wrong tries within 10 minutes:
 
 ```sh
 sudo apt update && sudo apt install -y fail2ban python3-systemd
-sudo tee /etc/fail2ban/jail.d/sshd.local > /dev/null <<'EOF'
+sudo tee /etc/fail2ban/jail.d/guheadlines-sshd.local > /dev/null <<'EOF'
 [sshd]
 enabled = true
 backend = systemd
@@ -150,7 +237,7 @@ hour, or unblock your address from the VNC console:
 server has a Fail2Ban of its own for mail passwords: see
 [email-server.md](email-server.md).)
 
-### 4. Turn on the firewall
+### Turn on the firewall
 
 The firewall refuses connections to anything on the server that isn't meant
 for the internet:
@@ -173,7 +260,7 @@ mail ports) by itself, past `ufw`. That is fine: those are meant to be open,
 and the database and the website have no ports outside Docker at all. The
 firewall protects ssh and anything else that runs on the server.
 
-### 5. Let Linux install its security updates
+### Let Linux install its security updates
 
 ```sh
 sudo apt install -y unattended-upgrades
@@ -181,15 +268,10 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 ```
 
 Answer **Yes**. Linux then installs its security updates every day by
-itself. Some (such as a new Linux kernel) only work after a restart: the
-[server checks](maintenance.md#server-checks) post in Discord when that is
-so. Then run `sudo reboot` when it suits you; the site is back by itself
-within a minute or two.
+itself. Some only work after a restart: see
+[step 4](#4-restart-when-discord-says-so) above.
 
-Once a month or so, also run `sudo apt update && sudo apt upgrade`, which
-updates the rest (Docker too).
-
-### 6. Use a long STATS_PASSWORD
+### Use a long STATS_PASSWORD
 
 It opens every private page and the backups. Make one of 32 letters and
 digits on the server:
@@ -204,29 +286,10 @@ someone else's computer. The browser remembers it until you close the
 browser; there is no "log out" button, so close the browser when you are
 done on a shared computer.
 
-### 7. Two-step sign-in on your accounts
-
-Whoever gets into these accounts can take over the site, so turn on two-step
-sign-in (a code from an app such as Google Authenticator, or a security key)
-on each:
-
-- **GitHub** (most important): the server installs whatever reaches the
-  `main` branch, by itself. Settings, then Password and authentication, then
-  Two-factor authentication.
-- **PayPal**: Settings, then Security, then 2-step verification.
-- **RackNerd**: the client area and the control panel. Use a long, unique
-  password there too.
-- Your **domain registrar** (where guamheadlines.com is registered): someone
-  in it could point the domain elsewhere.
-- **Google** (AdSense), **Discord** and **SendFox**.
-
-The Discord webhook link in `.env` is like a password too: anyone who has it
-can post in your alerts channel.
-
 ## If you think someone got in
 
 1. Make new passwords and keys, and put them in `.env`:
-   - `STATS_PASSWORD`: a new one (step 6).
+   - `STATS_PASSWORD`: a new one (`openssl rand -hex 16` makes one).
    - `PAYPAL_CLIENT_SECRET`: in the PayPal developer dashboard, open the app
      and make a new secret, then delete the old one.
    - `DISCORD_WEBHOOK_URL`: in Discord, delete the webhook and make a new one

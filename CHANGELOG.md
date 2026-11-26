@@ -396,10 +396,15 @@ Agendas page and the other calendars.
   (security fixes), not only of the mail server. The server checks make
   `.env` and the `backups` folder readable by their owner only, and post in
   Discord when Linux needs a restart to finish its security updates. The
-  quick database backups are readable by their owner only. New guide with
-  the steps only you can do on the server (ssh keys, firewall, Fail2Ban,
-  automatic Linux updates, two-step sign-in): `docs/security.md`. No new
-  settings.
+  quick database backups are readable by their owner only. New guide,
+  `docs/security.md`, and a script that makes the server itself safer in one
+  go: `./scripts/harden-server.sh` turns on automatic Linux security
+  updates, Fail2Ban and the firewall, makes ssh take keys only (only when
+  you signed in with a key, so you can't lock yourself out), replaces a
+  `STATS_PASSWORD` shorter than 12 characters with a long random one, and
+  lists what is still yours to do (the ssh key on your computer, two-step
+  sign-in on your accounts). `--check` only shows where each step stands. No
+  new settings.
 - `scripts/backup.sh` (the quick database backup before each automatic
   update) keeps its files 7 days instead of 30, as the nightly backups keep
   14 days of everything. It no longer saves the mailboxes: the nightly
