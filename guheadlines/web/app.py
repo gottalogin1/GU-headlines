@@ -34,7 +34,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import gas, health, sendfox
+from .. import gas, health, mail, paypal, sendfox
+from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
     CalendarConfig,
@@ -739,6 +740,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "sponsor": sponsor_ad(),
             "signup": signup_info(),
             "show_signup": show_signup,
+            "bid_alerts": bid_alerts_info(),
             "weather": (
                 for_page(
                     weather_reports(),
@@ -1634,6 +1636,7 @@ def sitemap(request: Request):
         weather=bool(settings.weather_interval_minutes),
         outages=bool(settings.outages_interval_minutes),
         events=found["events"],
+        bid_alerts=bid_alerts.is_on(settings),
     )
     return Response(
         seo.sitemap_xml(entries),
@@ -1830,6 +1833,327 @@ async def newsletter_signup(request: Request):
         return result("error")
     log.info("newsletter sign-up added to SendFox")
     return result("ok")
+
+
+# ------------------------------------------------------------ bid alerts
+
+
+def bid_alerts_info() -> dict | None:
+    """The bid alerts offer, or None while bid alerts are off (see bids/alerts.py)."""
+    if not bid_alerts.is_on(settings):
+        return None
+    return {"price": bid_alerts.price_text(settings.bid_alerts_price_cents)}
+
+
+bid_alert_limit = SignupLimit()
+
+
+async def _post_form(request: Request) -> dict[str, list[str]] | Response:
+    """The fields of a form sent from a page of this site, or the answer to
+    give when it was not (another site's form) or is too large."""
+    if not bid_alerts.is_on(settings):
+        raise HTTPException(404)
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the site.", status_code=403)
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > _MAX_SIGNUP_BODY:
+            return PlainTextResponse("Too large", status_code=413)
+    return parse_qs(body.decode("utf-8", "replace"), max_num_fields=30)
+
+
+def _field(form: dict[str, list[str]], name: str) -> str:
+    return (form.get(name) or [""])[0].strip()
+
+
+def _choices(form: dict[str, list[str]]) -> tuple[str, list[str], list[str]] | None:
+    """(email, trades, words) from the form, or None if the email address is
+    not one."""
+    email = _field(form, "email")
+    if len(email) > 254 or not _EMAIL.fullmatch(email):
+        return None
+    return (
+        email,
+        bid_alerts.parse_trades(form.get("trade", [])),
+        bid_alerts.parse_words(_field(form, "words")),
+    )
+
+
+def _see_other(url: str) -> RedirectResponse:
+    return RedirectResponse(url, status_code=303, headers={"Cache-Control": "no-store"})
+
+
+def _private(response: HTMLResponse) -> HTMLResponse:
+    """A page for one subscriber: never kept by a cache."""
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _bid_alert_results() -> dict[str, tuple[bool, str]]:
+    return {
+        "sent": (
+            True,
+            "If that address gets bid alerts, the link to its page is on its way. Look in your"
+            " inbox, and in your spam folder if it isn't there in a few minutes.",
+        ),
+        "invalid": (
+            False,
+            "That doesn't look like an email address. Please check it and try again.",
+        ),
+        "busy": (False, "Too many tries in a short time. Please try again in an hour."),
+        "error": (False, "Sorry, that didn't work this time. Please try again later."),
+    }
+
+
+@app.get("/bids/alerts", response_class=HTMLResponse)
+def bid_alerts_page(request: Request, result: str = Query("", max_length=10)):
+    """What bid alerts are, the sign-up form, and the lost-link form."""
+    alerts = bid_alerts_info()
+    if alerts is None:
+        raise HTTPException(404)
+    found = _bid_alert_results().get(result)
+    return render(
+        request,
+        "bid_alerts.html",
+        title="Bid alerts by email",
+        description="Get an email when a new Government of Guam bid or request for proposals"
+        f" matches your trade. {alerts['price']} a month through PayPal; cancel any time.",
+        canonical={},
+        robots="noindex, follow" if result else None,
+        breadcrumbs=[("Bids and RFPs", "/bids"), ("Bid alerts", None)],
+        alerts=alerts,
+        trades=bid_alerts.TRADES,
+        result={"ok": found[0], "text": found[1]} if found else None,
+    )
+
+
+@app.post("/bids/alerts")
+async def bid_alerts_signup(request: Request):
+    """The sign-up form: keep a pending subscriber, then show the review page."""
+    form = await _post_form(request)
+    if isinstance(form, Response):
+        return form
+    if _field(form, "website"):
+        return _see_other("/bids/alerts")  # the field only robots fill in
+    choices = _choices(form)
+    if choices is None:
+        return _see_other("/bids/alerts?result=invalid")
+    if not bid_alert_limit.allow(request.client.host if request.client else ""):
+        log.warning("bid alerts sign-up refused: too many in the last hour")
+        return _see_other("/bids/alerts?result=busy")
+    token = await run_in_threadpool(bid_alerts.new_subscriber, *choices)
+    return _see_other(f"/bids/alerts/review?t={token}")
+
+
+def _review(request: Request, sub, result: dict | None = None) -> HTMLResponse:
+    return _private(
+        render(
+            request,
+            "bid_alerts_review.html",
+            title="Check your bid alerts",
+            robots="noindex, nofollow",
+            breadcrumbs=[("Bids and RFPs", "/bids"), ("Bid alerts", "/bids/alerts")],
+            count_view=False,
+            alerts=bid_alerts_info(),
+            sub=sub,
+            choices=bid_alerts.choices_text(sub.trades, sub.keywords),
+            already=bid_alerts.has_alerts(sub.email),
+            result=result,
+        )
+    )
+
+
+@app.get("/bids/alerts/review", response_class=HTMLResponse)
+def bid_alerts_review(
+    request: Request,
+    t: str = Query("", max_length=64),
+    left: str = Query("", alias="paypal", max_length=20),
+):
+    """The details of a new subscription, to check before paying."""
+    if not bid_alerts.is_on(settings):
+        raise HTTPException(404)
+    sub = bid_alerts.by_token(t)
+    if sub is None:
+        raise HTTPException(404)
+    if sub.status != "pending":
+        return _see_other(f"/bids/alerts/manage?t={sub.token}")
+    result = None
+    if left == "cancelled":
+        result = {
+            "ok": False,
+            "text": "You left PayPal before the end, so nothing was paid. You can try again.",
+        }
+    return _review(request, sub, result)
+
+
+@app.get("/bids/alerts/pay")
+def bid_alerts_pay(request: Request, t: str = Query("", max_length=64)):
+    """Open PayPal's page for the monthly payment. A plain link leads here
+    (not a form): Chrome applies a page's form-action rule, which allows only
+    this site, also to the redirect after a form."""
+    if not bid_alerts.is_on(settings):
+        raise HTTPException(404)
+    sub = bid_alerts.by_token(t)
+    if sub is None:
+        raise HTTPException(404)
+    try:
+        approve = bid_alerts.start_payment(settings, t)
+    except (paypal.PayPalError, bid_alerts.AlertsError) as exc:
+        log.warning("bid alerts: could not start the PayPal payment: %s", exc)
+        return _review(
+            request,
+            sub,
+            {"ok": False, "text": "PayPal could not be reached just now. Please try again soon."},
+        )
+    if approve is None:
+        return _see_other(f"/bids/alerts/manage?t={t}")
+    return _see_other(approve)
+
+
+def _state(sub, now: datetime) -> dict:
+    """The heading and words for a subscription's state on its own page."""
+    price = bid_alerts.price_text(settings.bid_alerts_price_cents)
+    until = fmt_date_long(sub.paid_until) if sub.paid_until else ""
+    if sub.status == "pending":
+        return {
+            "title": "Not paid yet",
+            "text": "The alerts start once PayPal has the payment. If you just approved it on"
+            " PayPal's page, wait a minute and open this page again.",
+            "ended": False,
+        }
+    if sub.status == "suspended":
+        return {
+            "title": "Paused",
+            "text": "PayPal could not take the last payment, so the alerts are paused. Update"
+            " your card or bank in your PayPal account: when PayPal takes the payment, the"
+            " alerts start again.",
+            "ended": False,
+        }
+    if sub.status == "cancelled" and bid_alerts.receiving(sub, now):
+        return {
+            "title": "Cancelled",
+            "text": f"No more payments. Your alerts go on until {until}, the end of the time you"
+            " paid for.",
+            "ended": False,
+        }
+    if sub.status == "cancelled" or not bid_alerts.receiving(sub, now):
+        return {"title": "Ended", "text": "These bid alerts have ended.", "ended": True}
+    return {
+        "title": "On",
+        "text": f"You get an email when a new bid matches. PayPal takes {price} a month"
+        + (f"; the next payment is due on {until}." if until else "."),
+        "ended": False,
+    }
+
+
+def _manage_results() -> dict[str, tuple[bool, str]]:
+    return {
+        "saved": (True, "Saved. The next alert email uses these trades and words."),
+        "cancelled": (True, "Your subscription is cancelled. PayPal takes no more payments."),
+        "invalid": (False, "That doesn't look like an email address. Nothing was changed."),
+        "error": (False, "PayPal could not be reached just now. Please try again soon."),
+    }
+
+
+@app.get("/bids/alerts/manage", response_class=HTMLResponse)
+def bid_alerts_manage(
+    request: Request, t: str = Query("", max_length=64), result: str = Query("", max_length=10)
+):
+    """A subscriber's own page. PayPal sends a new subscriber back here: a
+    pending subscription is checked with PayPal at once."""
+    if not bid_alerts.is_on(settings):
+        raise HTTPException(404)
+    sub = bid_alerts.by_token(t)
+    if sub is None:
+        raise HTTPException(404)
+    now = datetime.now(timezone.utc)
+    found = _manage_results().get(result)
+    shown = {"ok": found[0], "text": found[1]} if found else None
+    if sub.status == "pending" and sub.paypal_id:
+        try:
+            if bid_alerts.check(settings, sub.id, now) == "activated":
+                shown = {
+                    "ok": True,
+                    "text": "Thank you, the payment is done. Your bid alerts are on, and a"
+                    " welcome email with the link to this page is on its way.",
+                }
+        except paypal.PayPalError as exc:
+            log.warning("bid alerts: could not check a new subscription with PayPal: %s", exc)
+        sub = bid_alerts.by_token(t)
+    return _private(
+        render(
+            request,
+            "bid_alerts_manage.html",
+            title="Your bid alerts",
+            robots="noindex, nofollow",
+            breadcrumbs=[("Bids and RFPs", "/bids"), ("Bid alerts", "/bids/alerts")],
+            count_view=False,
+            sub=sub,
+            state=_state(sub, now),
+            paid_until=fmt_date_long(sub.paid_until) if sub.paid_until else "",
+            trades=bid_alerts.TRADES,
+            result=shown,
+        )
+    )
+
+
+@app.post("/bids/alerts/manage")
+async def bid_alerts_save(request: Request):
+    """The form on a subscriber's own page: new address, trades and words."""
+    form = await _post_form(request)
+    if isinstance(form, Response):
+        return form
+    token = _field(form, "t")
+    sub = await run_in_threadpool(bid_alerts.by_token, token)
+    if sub is None:
+        raise HTTPException(404)
+    choices = _choices(form)
+    if choices is None:
+        return _see_other(f"/bids/alerts/manage?t={token}&result=invalid")
+    await run_in_threadpool(bid_alerts.update_choices, sub.id, *choices)
+    return _see_other(f"/bids/alerts/manage?t={token}&result=saved")
+
+
+@app.post("/bids/alerts/cancel")
+async def bid_alerts_cancel(request: Request):
+    """Cancel a subscription: PayPal stops the payments."""
+    form = await _post_form(request)
+    if isinstance(form, Response):
+        return form
+    token = _field(form, "t")
+    sub = await run_in_threadpool(bid_alerts.by_token, token)
+    if sub is None:
+        raise HTTPException(404)
+    try:
+        await run_in_threadpool(bid_alerts.cancel, settings, sub.id)
+    except paypal.PayPalError as exc:
+        log.warning("bid alerts: could not cancel a subscription with PayPal: %s", exc)
+        return _see_other(f"/bids/alerts/manage?t={token}&result=error")
+    return _see_other(f"/bids/alerts/manage?t={token}&result=cancelled")
+
+
+@app.post("/bids/alerts/link")
+async def bid_alerts_link(request: Request):
+    """Email the links of an address's bid alerts again. The answer is the
+    same whether or not the address has any, so the form tells no one who
+    subscribes."""
+    form = await _post_form(request)
+    if isinstance(form, Response):
+        return form
+    if _field(form, "website"):
+        return _see_other("/bids/alerts?result=sent#lost")
+    email = _field(form, "email")
+    if len(email) > 254 or not _EMAIL.fullmatch(email):
+        return _see_other("/bids/alerts?result=invalid#lost")
+    if not bid_alert_limit.allow(request.client.host if request.client else ""):
+        return _see_other("/bids/alerts?result=busy#lost")
+    try:
+        await run_in_threadpool(bid_alerts.send_links, settings, email)
+    except mail.MailError as exc:
+        log.warning("bid alerts: could not email a page link: %s", exc)
+        return _see_other("/bids/alerts?result=error#lost")
+    return _see_other("/bids/alerts?result=sent#lost")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

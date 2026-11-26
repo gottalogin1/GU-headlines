@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{# Checking a new bid alert before paying (/bids/alerts/review?t=...). The
+   PayPal button is a plain link (see /bids/alerts/pay). #}
+{% block main %}
+<header class="page-head">
+  <h1>Check your bid alerts</h1>
+  <p class="muted">Nothing is paid yet.</p>
+</header>
+
+{% if result %}
+<p class="signup-result {{ 'ok' if result.ok else 'error' }}" role="status">{{ result.text }}</p>
+{% endif %}
+
+<section class="site-note bid-alert-review">
+  <dl class="job-facts">
+    <div><dt>Email address</dt><dd>{{ sub.email }}</dd></div>
+    <div><dt>Alerts for</dt><dd>{{ choices }}</dd></div>
+    <div><dt>Price</dt><dd>{{ alerts.price }} a month, through PayPal</dd></div>
+  </dl>
+  {% if already %}
+  <p><strong>This address gets bid alerts already.</strong> To change them, use the link in any alert email, or ask for the link on the <a href="/bids/alerts#lost">bid alerts page</a>. A second subscription is paid for apart.</p>
+  {% endif %}
+  <p>On PayPal's page, sign in to PayPal or pay with a card, and approve the monthly payment. PayPal then sends you back here, and the alerts start at once.</p>
+  <p class="bid-alert-actions">
+    <a class="btn" href="/bids/alerts/pay?t={{ sub.token }}" rel="nofollow">Pay with PayPal</a>
+    <a href="/bids/alerts">Start again</a>
+  </p>
+</section>
+{% endblock %}

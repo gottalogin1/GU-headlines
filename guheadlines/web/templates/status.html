@@ -98,6 +98,13 @@
     SendFox, the service that sends the emails, and is used only for the newsletter. Every email has
     a link to unsubscribe.</p>
   {% endif %}
+  {% if bid_alerts %}
+  <p><strong>Bid alerts.</strong> If you subscribe to bid alerts, your email address and your
+    trades and words are kept on this site's server and used only to send your alerts. PayPal
+    handles the payments, so this site never sees your card or PayPal password. Your address is
+    deleted 30 days after a cancelled subscription ends. Alerts list the bids as the agencies
+    published them; always check the details with the agency before you bid.</p>
+  {% endif %}
   {% if sponsor %}
   <p><strong>Sponsor.</strong> The picture marked "Sponsor" is a paid ad from a local business. It
     does not imply an endorsement by {{ site }} or by the news outlets listed, and {{ site }} is not

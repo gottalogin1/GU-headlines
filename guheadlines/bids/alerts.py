@@ -396,7 +396,8 @@ def start_payment(
         return None
     if sub.paypal_id:
         # Approved in another tab? Then it is paid, and needs no new page.
-        if check(settings, sub.id, now, transport) == "activated":
+        check(settings, sub.id, now, transport)
+        if (by_token(token) or sub).status != "pending":
             return None
         if (
             sub.approve_url
@@ -429,12 +430,10 @@ def start_payment(
     )
     if not isinstance(data.get("id"), str) or not isinstance(approve, str):
         raise paypal.PayPalError("PayPal made no subscription, or gave no page to approve it on")
-    with session_scope() as session:
-        session.execute(
-            update(BidAlertSubscriber)
-            .where(BidAlertSubscriber.id == sub.id, BidAlertSubscriber.status == "pending")
-            .values(paypal_id=data["id"], approve_url=approve, paypal_created_at=now)
-        )
+    if not _set(
+        sub.id, ("pending",), paypal_id=data["id"], approve_url=approve, paypal_created_at=now
+    ):
+        return None  # paid or ended meanwhile: the subscriber's page says which
     return approve
 
 

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{# The bid alerts page (/bids/alerts): what a business gets, the sign-up
+   form, and the form that emails a lost page link again. #}
+{% block main %}
+<header class="page-head">
+  <h1>Bid alerts by email</h1>
+  <p class="muted">Get an email when a new Government of Guam bid or request for proposals matches your trade. {{ alerts.price }} a month through PayPal. Cancel any time.</p>
+</header>
+
+{% if result %}
+<p class="signup-result {{ 'ok' if result.ok else 'error' }}" role="status">{{ result.text }}</p>
+{% endif %}
+
+<section class="site-note">
+  <h2>How it works</h2>
+  <ul class="bid-alert-points">
+    <li>The site reads the same bid lists as the <a href="/bids">Bids page</a> every {{ settings.bids_interval_hours }} hours.</li>
+    <li>When a new bid matches your trades or your own words, you get one email with the new bids: the agency, the due date and a link to the notice.</li>
+    <li>No account or password. Every email has a link to your own page, where you can change your trades or words, or cancel.</li>
+    <li>You pay on PayPal's own page, with a PayPal account or a card. PayPal takes {{ alerts.price }} each month until you cancel. When you cancel, the alerts go on until the end of the month you paid for.</li>
+  </ul>
+</section>
+
+<form class="search-form bid-alert-form" action="/bids/alerts" method="post">
+  <h2 class="grow">Sign up</h2>
+  {% with chosen = None %}{% include "_bid_alert_choices.html" %}{% endwith %}
+  <div class="signup-trap" aria-hidden="true">
+    <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+  </div>
+  <div class="field actions grow">
+    <button type="submit">Continue</button>
+    <span class="muted small">Next, you check the details and pay with PayPal.</span>
+  </div>
+</form>
+
+<section class="site-note" id="lost">
+  <h2>Lost the link to your page?</h2>
+  <p>Type the email address that gets your alerts, and the link is sent to it again.</p>
+  <form class="signup-form" action="/bids/alerts/link" method="post">
+    <label class="visually-hidden" for="ba-link-email">Email address</label>
+    <input id="ba-link-email" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="Your email address">
+    <div class="signup-trap" aria-hidden="true">
+      <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
+    <button type="submit">Email me my link</button>
+  </form>
+</section>
+
+<p class="muted small bid-alert-fine">Your email address is kept on this site's server and is used only for bid alerts. PayPal handles the payments: this site never sees your card or your PayPal password. Bid details come from the agencies' notices; always check them with the agency before you bid.</p>
+{% endblock %}
