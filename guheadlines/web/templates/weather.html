@@ -38,7 +38,9 @@
   <a href="#tides">Tides</a>
   <a href="#week">This week</a>
   <a href="#water">On the water</a>
+  <a href="#dive">Dive and snorkel</a>
   <a href="#storms">Typhoons</a>
+  <a href="#climate">Climate</a>
   <a href="#ready">Be ready</a>
 </nav>
 
@@ -241,6 +243,30 @@
   </div>
 </section>
 
+<section class="wx-card wx-wide" id="dive" aria-labelledby="dive-title">
+  <h2 id="dive-title">Dive and snorkel</h2>
+  {% set d = w.dive %}
+  {% set calm_sides = d.calm|map(attribute=0)|list %}
+  <p class="wx-lead">The sea today, for a swim, a snorkel or a dive. These are forecasts and predictions, not a check of one dive site: look at the water before you go in.</p>
+  <dl class="wx-facts">
+    {% if surf_now and surf_now.rip %}<div><dt>Rip currents</dt><dd>{{ surf_now.rip }} risk</dd></div>{% endif %}
+    {% if d.calm %}<div><dt>Calmest reefs</dt><dd>{{ calm_sides|join(" and ")|capitalize }}, {{ d.calm_surf }}</dd></div>{% endif %}
+    {% if surf_now and surf_now.water_f %}<div><dt>Water</dt><dd>{{ surf_now.water_f }}°F</dd></div>{% endif %}
+    {% if d.lows %}<div><dt>Low {{ "tides" if d.lows|length > 1 else "tide" }} today</dt><dd>{% for t in d.lows %}{{ t.time|fmt_time }} ({{ t.ft }} ft){% if not loop.last %}, {% endif %}{% endfor %}</dd></div>{% endif %}
+    {% if d.range is not none %}<div><dt>Tide range today</dt><dd>{{ d.range }} ft</dd></div>{% endif %}
+    <div><dt>Moon</dt><dd>{{ w.sky.moon }}</dd></div>
+  </dl>
+  <ul class="wx-tips">
+    {% if d.calm %}<li>Today the surf is smallest on the {{ calm_sides|join(" and ")|lower }} reefs ({{ d.calm|map(attribute=1)|join("; ") }}).</li>{% endif %}
+    {% if d.cycle == "spring" %}<li>Spring tides: near a {{ w.sky.moon|lower }}, the low tides are lower and the currents stronger than on most days.</li>
+    {% elif d.cycle == "neap" %}<li>Neap tides: near a {{ w.sky.moon|lower }} moon, the tide rises and falls less and the currents are gentler.</li>{% endif %}
+    <li>At low tide the reef flats can be almost dry. Plan to go out over the reef and come back near high tide.</li>
+    {% if surf_now and surf_now.water_f %}<li>{% if surf_now.water_f >= 80 %}The water is warm: a rash guard is enough for most people.{% else %}A thin wetsuit keeps you warm on a long dive.{% endif %}</li>{% endif %}
+    <li>Caught in a rip current? Stay calm and float. Swim along the shore, not against the current, until it lets you go, then swim back in at an angle. If you can't, face the shore, wave and call for help.</li>
+  </ul>
+  {% call source() %}Rip currents, surf and water temperature from the National Weather Service's {{ link(surf_page_url, "Surf Zone Forecast") }}. Tides from NOAA; the moon is worked out here. Before you swim, see which beaches have too much bacteria in {{ link(beach_report_url, "Guam EPA's beach report") }}.{% endcall %}
+</section>
+
 <section class="wx-card" id="storms" aria-labelledby="storms-title">
   <h2 id="storms-title">Typhoons and tropical storms</h2>
   {% if w.storms %}
@@ -256,6 +282,33 @@
   {% call source() %}The western North Pacific, from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}.{% endcall %}
 </section>
 
+<section class="wx-card wx-wide" id="climate" aria-labelledby="climate-title">
+  <h2 id="climate-title">Guam's climate through the year</h2>
+  {% set cl = w.climate %}
+  <p class="wx-lead">Warm all year: highs of {{ cl.highs[0] }} to {{ cl.highs[1] }}°F and lows of {{ cl.lows[0] }} to {{ cl.lows[1] }}°F.
+    The dry season runs from about January to May, and the rainy season from about July to November.
+    {{ months[cl.wettest.month - 1] }} is the wettest month, with {{ "%.1f"|format(cl.wettest.rain) }} inches of rain; about {{ cl.rain_year }} inches fall in a year.
+    Typhoons can come in any month, most often from July to November.</p>
+  <table class="climate-table">
+    <caption class="visually-hidden">Average high and low temperature and rain on Guam, by month</caption>
+    <thead>
+      <tr><th scope="col">Month</th><th scope="col">High</th><th scope="col">Low</th><th scope="col">Rain</th><th scope="col">Rainy days</th></tr>
+    </thead>
+    <tbody>
+      {% for m in cl.months %}
+      <tr{% if m.now %} class="is-now"{% endif %}>
+        <th scope="row">{{ months[m.month - 1] }}{% if m.now %}<span class="visually-hidden"> (this month)</span>{% endif %}</th>
+        <td>{{ m.high|round|int }}°F</td>
+        <td>{{ m.low|round|int }}°F</td>
+        <td>{{ "%.1f"|format(m.rain) }} in</td>
+        <td>{{ m.rain_days }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% call source() %}Averages for 1991 to 2020 at Guam International Airport, from NOAA's {{ link(climate_url, "climate normals") }}. A rainy day has 0.1 inch of rain or more. This month is in bold.{% endcall %}
+</section>
+
 <section class="wx-card" id="ready" aria-labelledby="ready-title">
   <h2 id="ready-title">Be ready</h2>
   <ul class="wx-list">
@@ -264,6 +317,7 @@
     <li>{{ link(guam_radar_url, "Guam weather radar") }}<span class="muted">Where it is raining now</span></li>
     <li>{{ link("https://rammb-slider.cira.colostate.edu/?sat=himawari", "Himawari satellite") }}<span class="muted">Clouds over the western Pacific</span></li>
     <li>{{ link(jtwc_url, "Joint Typhoon Warning Center") }}<span class="muted">Storm tracks and warnings</span></li>
+    <li>{{ link(airport_schedule_url, "Guam airport flight schedule") }}<span class="muted">Arrivals and departures, for delays in bad weather</span></li>
     {% if st %}<li>{{ link(st.url, "NOAA tide predictions") }}<span class="muted">The tide table for any date</span></li>{% endif %}
     <li>{{ link("https://www.ready.gov/hurricanes", "Ready.gov: typhoons and hurricanes") }}<span class="muted">What to do before, during and after</span></li>
   </ul>

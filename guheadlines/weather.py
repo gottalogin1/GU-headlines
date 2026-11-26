@@ -61,6 +61,9 @@ MARINE_PAGE = NWS_PRODUCT_PAGE + "CWF"
 JTWC_URL = "https://www.metoc.navy.mil/jtwc/jtwc.html"
 # The NWS weather radar at Andersen Air Force Base (PGUA).
 GUAM_RADAR_URL = "https://radar.weather.gov/station/pgua/standard"
+# The airport's own arrivals and departures. Its site turns away automated
+# readers, so the Weather page only links to it.
+AIRPORT_SCHEDULE_URL = "https://www.guamairport.com/passenger/flights/flight-schedule"
 # NOAA's tide predictions (CO-OPS data API). See read_tides.
 TIDES_API = "https://api.tidesandcurrents.noaa.gov"
 TIDES_PAGE = "https://tidesandcurrents.noaa.gov/noaatidepredictions.html"
@@ -77,6 +80,41 @@ TIDES_EVERY = timedelta(hours=6)
 TIDE_DAYS = 31
 # The Weather page's tide views: Day, Week and Month (from today).
 TIDE_VIEWS = {"day": 1, "week": 7, "month": 30}
+# The Dive and snorkel card: around a new or full moon the tides are bigger
+# (spring tides), around a quarter moon smaller (neap tides).
+SPRING_TIDE_MOONS = ("New moon", "Full moon")
+NEAP_TIDE_MOONS = ("First quarter", "Last quarter")
+# Reefs on each side of the island, for the calmest side of the day.
+REEFS = {
+    "North": "Ritidian",
+    "East": "Pago Bay, Talofofo",
+    "South": "Merizo, Cocos Lagoon",
+    "West": "Tumon, Piti, Agat",
+}
+# Guam EPA's weekly report of the beaches with too much bacteria to swim.
+BEACH_REPORT_URL = "https://epa.guam.gov/current-beach-report/"
+# Guam's climate through the year: NOAA's 1991-2020 climate normals for Guam
+# International Airport (station GQW00041415). For each month from January:
+# the average high and low (°F), the rain (inches) and the days with 0.10
+# inch of rain or more.
+CLIMATE_URL = (
+    "https://www.ncei.noaa.gov/access/us-climate-normals/"
+    "#dataset=normals-monthly&timeframe=30&station=GQW00041415"
+)
+CLIMATE = (
+    (85.9, 75.4, 5.34, 11.0),
+    (86.0, 75.0, 4.15, 8.6),
+    (86.9, 75.6, 2.77, 7.6),
+    (88.1, 76.9, 3.50, 8.3),
+    (88.6, 77.8, 4.45, 9.4),
+    (88.7, 78.1, 6.51, 14.0),
+    (87.9, 77.1, 12.25, 17.8),
+    (87.2, 76.5, 17.66, 19.2),
+    (87.2, 76.3, 15.17, 19.3),
+    (87.4, 76.8, 12.73, 18.0),
+    (87.6, 77.3, 8.29, 14.3),
+    (86.8, 76.8, 5.30, 11.5),
+)
 
 SEVERITY_ORDER = {"Extreme": 0, "Severe": 1, "Moderate": 2, "Minor": 3}
 KNOTS_TO_MPH = 1.15078
@@ -695,10 +733,66 @@ def forecast_days(periods: list[dict]) -> list[dict]:
     return days
 
 
+def calm_reefs(surf: list) -> list[str]:
+    """The sides of the island with the smallest surf ("West"), from the surf
+    forecast's [[side, "2 to 4 ft"], ...]. Empty when no side is calmer."""
+    heights = {}
+    for side, height in surf:
+        feet = [int(n) for n in re.findall(r"\d+", height)]
+        if feet:
+            heights[side] = max(feet)
+    if len(set(heights.values())) < 2:
+        return []
+    lowest = min(heights.values())
+    return [side for side, feet in heights.items() if feet == lowest]
+
+
+def dive_conditions(surf_now: dict | None, today_tides: list[dict], moon: str) -> dict:
+    """What the Dive and snorkel card shows: the calmest reefs, today's low
+    tides and the tide's range, and spring or neap tides."""
+    highs = [t["ft"] for t in today_tides if t["high"]]
+    lows = [t for t in today_tides if not t["high"]]
+    calm = calm_reefs(surf_now["surf"]) if surf_now else []
+    return {
+        "calm": [(side, REEFS.get(side, "")) for side in calm],
+        "calm_surf": dict(surf_now["surf"]).get(calm[0]) if calm else None,
+        "lows": lows,
+        "range": round(max(highs) - min(t["ft"] for t in lows), 1) if highs and lows else None,
+        "cycle": "spring"
+        if moon in SPRING_TIDE_MOONS
+        else "neap"
+        if moon in NEAP_TIDE_MOONS
+        else None,
+    }
+
+
+def climate(today: date) -> dict:
+    """Guam's climate by month (CLIMATE), this month marked."""
+    months = [
+        {
+            "month": number,
+            "high": high,
+            "low": low,
+            "rain": rain,
+            "rain_days": round(days),
+            "now": number == today.month,
+        }
+        for number, (high, low, rain, days) in enumerate(CLIMATE, start=1)
+    ]
+    return {
+        "months": months,
+        "highs": (round(min(m["high"] for m in months)), round(max(m["high"] for m in months))),
+        "lows": (round(min(m["low"] for m in months)), round(max(m["low"] for m in months))),
+        "wettest": max(months, key=lambda m: m["rain"]),
+        "rain_year": round(sum(m["rain"] for m in months)),
+    }
+
+
 def weather_page(reports: dict[str, tuple], now: datetime, tide_station: str) -> dict:
     """What the Weather page shows: what the box shows, every forecast
-    period, sunrise, sunset and the moon, and the tides by day for the Day,
-    Week and Month views, with today's tide chart."""
+    period, sunrise, sunset and the moon, the tides by day for the Day,
+    Week and Month views, with today's tide chart, the Dive and snorkel card
+    and Guam's climate by month."""
     shown = for_page(reports, now, tide_station)
     today = now.astimezone(GUAM_TZ).date()
 
@@ -723,6 +817,10 @@ def weather_page(reports: dict[str, tuple], now: datetime, tide_station: str) ->
     shown["week"] = forecast_days(shown["forecast"] or [])
     shown["sky"] = sky.for_day(today)
     shown["tide_views"] = {view: days[:count] for view, count in TIDE_VIEWS.items()}
+    surf_now = shown["surf"]["periods"][0] if shown["surf"] else None
+    today_tides = days[0]["tides"] if days and days[0]["day"] == today else []
+    shown["dive"] = dive_conditions(surf_now, today_tides, shown["sky"]["moon"])
+    shown["climate"] = climate(today)
     shown["tide_chart"] = tide_chart(saved, today, now) if days else None
     shown["tide_station"] = (
         {
