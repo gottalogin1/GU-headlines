@@ -951,6 +951,7 @@ a.btn:hover { filter: brightness(1.08); text-decoration: none; }
 .featured-jobs { margin-bottom: 8px; }
 .listing-status h2 { margin: 0 0 6px; font-size: 1.15rem; letter-spacing: -.01em; }
 .listing-status p { margin: 8px 0 0; color: var(--text-soft); }
+.listing-status .listing-renew { margin-top: 20px; }
 .listing-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
 .listing-form .wide { grid-column: 1 / -1; }
 .field textarea {

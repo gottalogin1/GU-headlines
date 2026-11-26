@@ -6,6 +6,18 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Renewal reminders for paid listings and booked ads.** Classified ads,
+  featured job posts, business upgrades and booked ads already left the site
+  on their last day; now the buyer gets one email a few days before
+  (`RENEWAL_REMINDER_DAYS`, default 3, `0` turns it off). A listing's own page
+  has a **Renew** button: PayPal takes the price again and the listing gets as
+  many days more, with no new review (Discord tells you; `/admin/listings`
+  counts renewals). A booked ad's page has **Run this ad again**, which books
+  the same picture or words for the next free weeks, paid and approved as
+  usual. The email goes to the address the poster paid with on PayPal, or the
+  address in the booking. Needs email (`SMTP_HOST`, `MAIL_FROM`) and
+  `SITE_DOMAIN` or `SITE_URL`. Database change: migration `0015_renewals`
+  (runs by itself when the site starts).
 - **Your own email server, with webmail.** Turn it on with
   `COMPOSE_PROFILES=mail` and `MAIL_HOSTNAME=mail.guamheadlines.com` in
   `.env`, and you get email addresses at your domain, webmail at

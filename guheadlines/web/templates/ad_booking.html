@@ -69,6 +69,31 @@
   {% endif %}
 </section>
 
+{% if again %}
+{% set o = again.offer %}
+<section class="site-note ad-booking" id="again" aria-labelledby="again-title">
+  <h2 id="again-title">Run this ad again</h2>
+  <p>Book the same {{ "picture" if booking.kind == "site" else "sponsor line" }} and website for more
+    {{ o.unit }}s: {{ money(o.price_cents) }} {{ "a week" if o.unit == "week" else "an edition" }}. You pay with PayPal
+    on the next page, and the ad shows after the same quick check.</p>
+  <form class="ad-form" action="/advertise/booking/{{ booking.code }}/again" method="post">
+    <fieldset class="ad-days">
+      <legend>{{ "Weeks, Monday to Sunday" if o.unit == "week" else "Editions" }}</legend>
+      <div class="ad-day-list">
+      {% for day, last, taken, ticked in again.days %}
+      <label class="ad-day{{ ' is-taken' if taken }}">
+        <input type="checkbox" name="day" value="{{ day.isoformat() }}"{{ ' disabled' if taken }}{{ ' checked' if ticked }}>
+        <span>{% if last %}{{ day.strftime("%b") }}&nbsp;{{ day.day }} – {{ last.strftime("%b") }}&nbsp;{{ last.day }}{% else %}{{ day.strftime("%a, %b") }}&nbsp;{{ day.day }}{% endif %}
+          {%- if taken %}<span class="ad-day-taken">Booked</span>{% endif %}</span>
+      </label>
+      {% endfor %}
+      </div>
+    </fieldset>
+    <p class="ad-actions"><button type="submit" class="btn">Book again</button></p>
+  </form>
+</section>
+{% endif %}
+
 {% if results %}
 <h2 class="section-title">How your ad is doing</h2>
 <p class="muted section-note">Counted on this site's own server; robots are left out.

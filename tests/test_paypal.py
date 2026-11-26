@@ -47,6 +47,7 @@ class FakePayPal:
                 "amount": {"currency_code": "USD", "value": self.value},
             }
             body["purchase_units"] = [{"payments": {"captures": [capture]}}]
+            body["payer"] = {"email_address": "buyer@example.com", "payer_id": "P1"}
         return body
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -173,7 +174,7 @@ def test_amount_text(cents, text):
 def test_capture_takes_the_money_once():
     fake = FakePayPal(order_status="APPROVED", value="25.50")
     capture = paypal.capture_order(_settings(), "ORDER-1", transport=fake.transport)
-    assert capture == paypal.Capture("COMPLETED", "CAP-1", 2550, "USD")
+    assert capture == paypal.Capture("COMPLETED", "CAP-1", 2550, "USD", "buyer@example.com")
     assert capture.paid
     capture_call = fake.requests[-1]
     assert capture_call.url.path == "/v2/checkout/orders/ORDER-1/capture"

@@ -73,6 +73,8 @@ class Capture:
     capture_id: str | None = None
     amount_cents: int | None = None
     currency: str | None = None
+    # The buyer's email address at PayPal, for an email about the purchase.
+    payer_email: str | None = None
 
     @property
     def paid(self) -> bool:
@@ -285,6 +287,12 @@ def create_order(
     return Order(id=order_id, approve_url=approve)
 
 
+def _payer_email(order: dict) -> str | None:
+    payer = order.get("payer") if isinstance(order.get("payer"), dict) else {}
+    email = payer.get("email_address")
+    return email if isinstance(email, str) and "@" in email else None
+
+
 def _capture(order: dict) -> Capture:
     """The payment of an order as PayPal describes it."""
     units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
@@ -299,6 +307,7 @@ def _capture(order: dict) -> Capture:
                 capture_id=capture.get("id") if isinstance(capture.get("id"), str) else None,
                 amount_cents=_cents(amount.get("value")) if "value" in amount else None,
                 currency=amount.get("currency_code"),
+                payer_email=_payer_email(order),
             )
     return Capture(status=str(order.get("status") or "UNKNOWN"))
 

@@ -483,6 +483,32 @@ class Listing(Base):
     )
     # Why it was not accepted, for the poster's own page.
     note: Mapped[str | None] = mapped_column(Text)
+    # The email address that the poster paid with on PayPal, and when the
+    # email that says the listing ends soon was sent (see renewals.py).
+    email: Mapped[str | None] = mapped_column(Text)
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ListingRenewal(Base):
+    """A payment that keeps a live listing on the site for more days (see
+    renewals.py): a classified ad, a job post or a business's upgrade."""
+
+    __tablename__ = "listing_renewals"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # The PayPal order, and its payment once it is paid.
+    order_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    capture_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The days that the payment adds.
+    days: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # Clicks on a booked ad (ads.py) are kept in page_views too, under this name
@@ -532,6 +558,8 @@ class AdBooking(Base):
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the email that says the ad ends soon was sent (see renewals.py).
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AdSlot(Base):
