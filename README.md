@@ -117,6 +117,9 @@ that is always on can do this by itself after each change; see
   the Power Authority, GHURA, the hospital, Waterworks and the Port: what
   each is for, the agency, the due date and time, and links to the notice.
   Closed bids leave by themselves. See [Bids and RFPs](docs/bids.md).
+- **Visitor guides** (`/guides`) that you write and keep up to date in your
+  browser, with photos, ads and a sponsor for each guide. Eight starter guides
+  come with the site. See [docs/guides.md](docs/guides.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Private visitor stats** (optional): page views, story clicks, the top

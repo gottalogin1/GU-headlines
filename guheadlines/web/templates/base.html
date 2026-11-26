@@ -39,6 +39,9 @@
           {% if settings.outages_interval_minutes %}
           <a href="/outages" {% if active_nav == 'outages' %}aria-current="page"{% endif %}>Outages</a>
           {% endif %}
+          {% if guides_menu %}
+          <a href="/guides" {% if active_nav == 'guides' %}aria-current="page"{% endif %}>Guides</a>
+          {% endif %}
         </nav>
         <form class="search" action="/search" method="get" role="search">
           <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>

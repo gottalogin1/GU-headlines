@@ -6,6 +6,20 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Visitor guides.** A new section, `/guides`, with practical guides for
+  visiting Guam that you write and keep up to date yourself, in your browser,
+  on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a
+  cover photo and photos in the text, sort the guides into sections, keep them
+  as drafts until they are ready, and preview them as readers will see them.
+  Eight starter guides come with the site, added as drafts with one button.
+  Guides show the AdSense ad in the right-hand column, a second one in the
+  text (`ADSENSE_STORIES_SLOT`), the sponsor spot and the Plan a trip box, and
+  each guide can carry its own sponsor ("Sponsored by", with an end date and
+  click counts). The guides are kept in the database (backed up nightly), so
+  their text stays yours; each has a free/paid setting, ready for selling
+  guides later. The top bar shows **Guides** once one is published. New
+  database table (run the update as usual), no new settings. How-to:
+  `docs/guides.md`.
 - **Dive and snorkel, and Guam's climate, on the Weather page.** "Dive and
   snorkel" shows the sea today: the rip current risk, the reefs with the
   smallest surf, the water temperature, today's low tides and tide range,

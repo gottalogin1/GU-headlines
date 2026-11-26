@@ -20,6 +20,7 @@ dependencies = [
     "feedparser>=6.0",
     "beautifulsoup4>=4.12",
     "lxml>=5.0",
+    "markdown-it-py>=3.0",
     "trafilatura>=1.8",
     "pillow>=10.0",
     "pyyaml>=6.0",
@@ -44,6 +45,7 @@ guheadlines = [
     "web/templates/*.html",
     "web/templates/*.xml",
     "web/static/*",
+    "guide_starters/*.md",
 ]
 
 [tool.pytest.ini_options]

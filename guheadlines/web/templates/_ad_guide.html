@@ -1,0 +1,12 @@
+{# The ad unit inside a visitor guide's text, after its first part
+   (ADSENSE_STORIES_SLOT, the same unit as between the stories,
+   docs/settings.md#advertising). Like that one, its script only puts the
+   unit in the queue: the block in the right-hand column (_ad.html) loads the
+   AdSense code on the visitor's first scroll, tap, key press or mouse move,
+   and takes every .ad-slot away when an ad blocker stops it. #}
+<div class="ad-slot ad-in-guide">
+  <p class="ad-label">Advertisement</p>
+  <ins class="adsbygoogle" data-ad-client="{{ settings.adsense_client }}" data-ad-slot="{{ settings.adsense_stories_slot }}"
+       data-ad-format="auto" data-full-width-responsive="false"></ins>
+  <script nonce="{{ csp_nonce }}">(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>

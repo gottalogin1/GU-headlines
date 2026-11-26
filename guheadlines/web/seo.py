@@ -87,6 +87,30 @@ def breadcrumb_data(request: Request, trail: Iterable[tuple[str, str | None]]) -
     return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": items}
 
 
+def guide_data(request: Request, guide) -> dict:
+    """A visitor guide (guides.py) as an article: its title, summary, cover
+    photo and dates, which search engines can show with it."""
+    url = absolute_url(request, f"/guides/{guide.slug}")
+    site = {"@type": "Organization", "name": settings.site_name, "url": absolute_url(request, "/")}
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": guide.title[:110],
+        "description": guide.summary,
+        "url": url,
+        "mainEntityOfPage": url,
+        "dateModified": guide.updated_at.isoformat(timespec="seconds"),
+        "inLanguage": "en",
+        "author": site,
+        "publisher": site,
+    }
+    if guide.published_at:
+        data["datePublished"] = guide.published_at.isoformat(timespec="seconds")
+    if guide.photo:
+        data["image"] = absolute_url(request, guide.photo)
+    return data
+
+
 # A place that is only online. Google lists events at a physical place only.
 _ONLINE_RE = re.compile(r"\b(zoom|webex|teams|online|virtual|teleconference|live ?stream)\b", re.I)
 
@@ -227,6 +251,7 @@ def sitemap_entries(
     bid_alerts: bool = False,
     listings: Iterable[str] = (),
     advertise: bool = False,
+    guides: Iterable[tuple[str, datetime]] = (),
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events
     and each upcoming event's page (`events`: their IDs), bids (and the bid alerts
@@ -234,8 +259,9 @@ def sitemap_entries(
     Outages page (when `outages` is on), the Advertise page (when `advertise` is
     on), the Sources page, and
     the archive down to each day that has stories, and the pages of paid
-    listings that are on (`listings`: their paths). `data` comes from
-    queries.sitemap_data; `sources` are the slugs of news sources to list."""
+    listings that are on (`listings`: their paths), and the visitor guides
+    page with each published guide (`guides`: (slug, last changed)). `data`
+    comes from queries.sitemap_data; `sources` are the slugs of news sources to list."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
     latest = data["latest"]
     entries: list[tuple[str, datetime | None]] = [(url("/"), latest)]
@@ -258,6 +284,10 @@ def sitemap_entries(
         entries.append((url("/outages"), None))
     if advertise:
         entries.append((url("/advertise"), None))
+    guides = list(guides)
+    if guides:
+        entries.append((url("/guides"), max(changed for _, changed in guides)))
+        entries.extend((url(f"/guides/{slug}"), changed) for slug, changed in guides)
     entries.append((url("/status"), None))
     if data["days"]:
         entries.append((url("/archive"), latest))
