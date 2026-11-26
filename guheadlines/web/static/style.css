@@ -849,6 +849,7 @@ a.cal-day:focus-visible { outline-offset: -3px; border-radius: 0; }
 .bid-alert-cta { margin-top: 8px; font-weight: 650; }
 .bid-alert-points { margin: 10px 0 0; padding-left: 20px; color: var(--text-soft); max-width: 75ch; }
 .bid-alert-points li { margin: 6px 0; }
+.bid-alert-points a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 .bid-alert-form h2 { margin: 0; font-size: 1.15rem; letter-spacing: -.02em; }
 .bid-alert-email, .bid-alert-words { grid-column: 1 / -1; max-width: 520px; }
 .bid-alert-words p { margin: 2px 0 0; }
