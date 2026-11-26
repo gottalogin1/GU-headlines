@@ -3,8 +3,8 @@ week (REPORT_TIME, DAILY_REPORT and WEEKLY_REPORT_DAY in .env).
 
 The morning summary covers yesterday (a Guam day) and comes only while
 PayPal is set up (PAYPAL_CLIENT_ID). It lists:
-  - paid listings (listings.py) and booked ads (ads.py), from the site's own
-    records,
+  - paid listings (listings.py), their renewals (renewals.py) and booked
+    ads (ads.py), from the site's own records,
   - bid alert payments (bids/alerts.py), from PayPal's list of each
     subscription's payments,
   - donations ("Buy me a coffee") and any other payment to the PayPal
@@ -52,6 +52,7 @@ from .models import (
     Article,
     BidAlertSubscriber,
     Listing,
+    ListingRenewal,
     PageViews,
     Referrers,
     Source,
@@ -167,10 +168,20 @@ def _site_sales(session, start: datetime, end: datetime) -> tuple[list[Line], se
         .where(Listing.paid_at >= start, Listing.paid_at < end, Listing.amount_cents > 0)
         .group_by(Listing.kind)
     ).all()
-    found = {kind: (n, cents) for kind, n, cents in rows}
+    found = {kind: (n, int(cents)) for kind, n, cents in rows}
+    # A renewal (renewals.py) is a payment of its own, counted with its kind.
+    rows = session.execute(
+        select(Listing.kind, func.count(), func.sum(ListingRenewal.amount_cents))
+        .join(Listing, Listing.id == ListingRenewal.listing_id)
+        .where(ListingRenewal.paid_at >= start, ListingRenewal.paid_at < end)
+        .group_by(Listing.kind)
+    ).all()
+    for kind, n, cents in rows:
+        before = found.get(kind, (0, 0))
+        found[kind] = (before[0] + n, before[1] + int(cents))
     for kind, label in LISTING_LABELS.items():
         if kind in found:
-            lines.append(Line(label, found[kind][0], int(found[kind][1])))
+            lines.append(Line(label, *found[kind]))
     rows = session.execute(
         select(AdBooking.kind, func.count(), func.sum(AdBooking.amount_cents))
         .where(AdBooking.paid_at >= start, AdBooking.paid_at < end)
@@ -180,20 +191,14 @@ def _site_sales(session, start: datetime, end: datetime) -> tuple[list[Line], se
     for kind, label in AD_LABELS.items():
         if kind in found:
             lines.append(Line(label, found[kind][0], int(found[kind][1])))
-    ids = set(
-        session.scalars(
-            select(Listing.capture_id).where(
-                Listing.paid_at >= start - timedelta(days=1), Listing.capture_id.is_not(None)
-            )
-        )
-    ) | set(
-        session.scalars(
-            select(AdBooking.paypal_capture_id).where(
-                AdBooking.paid_at >= start - timedelta(days=1),
-                AdBooking.paypal_capture_id.is_not(None),
-            )
-        )
-    )
+    since = start - timedelta(days=1)
+    ids: set[str] = set()
+    for column, paid_at in (
+        (Listing.capture_id, Listing.paid_at),
+        (ListingRenewal.capture_id, ListingRenewal.paid_at),
+        (AdBooking.paypal_capture_id, AdBooking.paid_at),
+    ):
+        ids.update(session.scalars(select(column).where(paid_at >= since, column.is_not(None))))
     return lines, ids
 
 

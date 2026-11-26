@@ -24,6 +24,7 @@ from guheadlines.models import (
     Article,
     BidAlertSubscriber,
     Listing,
+    ListingRenewal,
     PageViews,
     Referrers,
     Source,
@@ -264,6 +265,34 @@ def test_money_of_a_day(clean_db):
     # Guam midnight to midnight, in UTC.
     assert fake.searched[0]["start_date"] == "2026-11-24T14:00:00Z"
     assert fake.searched[0]["end_date"] == "2026-11-25T14:00:00Z"
+
+
+def test_renewals_count_with_their_kind(clean_db):
+    with session_scope() as session:
+        event = _listing(session, "event", 1500, paid_at=YESTERDAY - timedelta(days=9))
+        job = _listing(session, "job", 2500, capture="CAP-C")
+        for order, listing, paid_at, capture in (
+            ("O-1", event, YESTERDAY, "CAP-R1"),
+            ("O-2", job, YESTERDAY, "CAP-R2"),
+            ("O-3", job, None, None),  # not paid
+            ("O-4", event, YESTERDAY - timedelta(days=1), "CAP-R4"),  # the day before
+        ):
+            session.add(
+                ListingRenewal(
+                    listing_id=listing.id,
+                    order_id=order,
+                    capture_id=capture,
+                    amount_cents=listing.amount_cents,
+                    days=30,
+                    paid_at=paid_at,
+                )
+            )
+    # PayPal lists the renewals too, with no custom_id: known by their IDs.
+    fake = Fake(search=[_found("CAP-R1", "15.00", "T0006"), _found("CAP-R2", "25.00", "T0006")])
+    start = datetime(2026, 11, 25, tzinfo=GUAM_TZ)
+    found = reports.money(_settings(), start, start + timedelta(days=1), fake.transport())
+    assert found.text() == ["• Featured job posts: 2, $50", "• Featured events: 1, $15"]
+    assert found.total_cents == 6500
 
 
 def test_money_without_transaction_search(clean_db):

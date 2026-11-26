@@ -939,9 +939,11 @@ def test_over_plain_http_browsers_are_counted_without_sec_fetch(counting):
     assert _counted()[0] == {"/": 1}
 
 
-def test_nothing_is_counted_while_stats_are_off(client):
+def test_nothing_is_counted_while_stats_are_off(client, monkeypatch):
     from guheadlines.web import stats
 
+    # Newsletter sign-ups are counted always (other tests make some).
+    monkeypatch.setattr(stats, "counts", stats.Counts())
     story_id = _article_id("article_1")
     client.get("/", headers=BROWSER)
     client.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
