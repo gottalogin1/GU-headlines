@@ -47,11 +47,11 @@ def test_bid_alert_and_mail_settings(monkeypatch):
     for typed in ("", "free", "-5", "15 dollars", "1.234"):
         monkeypatch.setenv("BID_ALERTS_PRICE", typed)
         assert load_settings().bid_alerts_price_cents == 0
-    monkeypatch.setenv("SMTP_HOST", " smtp.resend.com ")
+    monkeypatch.setenv("SMTP_HOST", " mail.example.com ")
     monkeypatch.setenv("SMTP_PORT", "465")
     monkeypatch.setenv("MAIL_FROM", "GU  Headlines   <alerts@guamheadlines.com>")
     site = load_settings()
-    assert site.smtp_host == "smtp.resend.com" and site.smtp_port == 465
+    assert site.smtp_host == "mail.example.com" and site.smtp_port == 465
     assert site.mail_from == "GU Headlines <alerts@guamheadlines.com>"
     assert mail.sender_address(site) == "alerts@guamheadlines.com" and mail.enabled(site)
     assert not mail.enabled(dataclasses.replace(site, mail_from="GU Headlines"))
@@ -148,12 +148,12 @@ def smtp(monkeypatch):
 
 
 def test_mail_is_sent_encrypted_with_a_text_and_an_html_part(smtp):
-    site = _settings(smtp_user="resend", smtp_password="re_123")
+    site = _settings(smtp_user="alerts", smtp_password="secret-123")
     mail.send(site, "buyer@example.com", "Hello", "Plain words\n", "<p>HTML words</p>")
     assert smtp.calls == [
         ("connect", "smtp.example.com", 587, "FakeSMTP"),
         ("starttls",),
-        ("login", "resend", "re_123"),
+        ("login", "alerts", "secret-123"),
     ]
     msg = smtp.sent[0]
     assert msg["From"] == "GU Headlines <alerts@example.com>"

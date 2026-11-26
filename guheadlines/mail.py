@@ -1,5 +1,5 @@
-"""Sending email through an SMTP server (the standard way that programs hand
-email to an email service), such as Resend's (smtp.resend.com).
+"""Sending email through an SMTP server (SMTP is the standard way that
+programs hand email to a mail server, which delivers it).
 
 SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD come from the email
 service. MAIL_FROM is the sender, such as "GU Headlines <alerts@example.com>":
@@ -85,9 +85,9 @@ def send(
             server.send_message(msg)
     except smtplib.SMTPAuthenticationError as exc:
         raise MailError(
-            "the email service refused SMTP_USER and SMTP_PASSWORD"
-            f" ({exc.smtp_code}). For Resend, SMTP_USER is resend and SMTP_PASSWORD is"
-            " an API key"
+            "the mail server refused SMTP_USER and SMTP_PASSWORD"
+            f" ({exc.smtp_code}). Check them against the mail server's user name and"
+            " password"
         ) from exc
     except smtplib.SMTPNotSupportedError as exc:
         raise MailError(

@@ -71,8 +71,8 @@ release, see [Updating](docs/maintenance.md#updating).
   The worker sends one email per subscriber after each bids check, asks
   PayPal about the subscriptions twice a day, pauses the alerts after failed
   payments, and keeps them going after a cancel until the paid month ends.
-  The emails go out through an email service over SMTP (Resend is
-  recommended; its free plan sends 100 a day). New settings:
+  The emails go out through a mail server over SMTP (on your own server,
+  or an email company's). New settings:
   `BID_ALERTS_PRICE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
   and `MAIL_FROM`, with step-by-step notes in `.env.example`. New commands:
   `guheadlines bid-alerts` and `guheadlines mail-test`. See

@@ -34,7 +34,7 @@ needed; you will copy and paste a few commands.
 | [Newsletter feed](docs/newsletter.md) | The feed of top stories for an email newsletter, and connecting SendFox step by step |
 | [Events](docs/events.md) | The Events page: the month calendar, which calendars are read, and adding a free Google key for the Legislature's calendar |
 | [Bids and RFPs](docs/bids.md) | The Bids page: open Government of Guam bids and requests for proposals, which lists are read, and which bids are shown |
-| [Bid alerts](docs/bid-alerts.md) | Paid email alerts for new bids through PayPal: setting up email with Resend, testing, and what happens after a business subscribes |
+| [Bid alerts](docs/bid-alerts.md) | Paid email alerts for new bids through PayPal: setting up email, testing, and what happens after a business subscribes |
 
 ---
 

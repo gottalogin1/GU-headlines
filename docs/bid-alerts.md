@@ -34,7 +34,7 @@ on the bid alerts page, and the link is sent to that address again.
 ## What you need
 
 - PayPal, set up as in the PayPal part of `.env.example`.
-- An email service, to send the emails. This guide uses Resend.
+- A mail server, to send the emails (see step 1).
 - The site's address: `SITE_DOMAIN` (you have it set already for https) or
   `SITE_URL`.
 - A price in `BID_ALERTS_PRICE`.
@@ -46,48 +46,43 @@ This command says what is still missing:
 docker compose exec web guheadlines bid-alerts
 ```
 
-## 1. Set up email with Resend
+## 1. Set up sending email
 
-The site sends each email through an email service. SendFox cannot do this:
+The site hands each email to a mail server through SMTP (the standard way that
+programs send email), and the mail server delivers it. SendFox cannot do this:
 it sends one newsletter to a whole list, not one email to one person.
 
-[Resend](https://resend.com) is simple to set up. Its free plan sends up to
-3,000 emails a month, and at most 100 a day. Each subscriber gets at most one
-alert email per bids check (4 a day with the default of 6 hours), so the free
-plan is enough for about 25 subscribers. Resend's paid plans have no daily
-limit. Any other service that gives SMTP settings works too (for example
-Brevo, Mailgun or Amazon SES).
+The mail server can run on your own server, or belong to an email company. Any
+mail server that takes SMTP works. Its own setup steps give you the values
+below, and the DNS records (often named SPF, DKIM and DMARC) that prove the
+emails come from your domain and keep them out of spam folders.
+
+How many emails: each subscriber gets at most one alert email per bids check
+(4 a day with the default `BIDS_INTERVAL_HOURS=6`), plus a welcome email and,
+when asked for, the link to their page.
 
 The steps (they are in `.env.example` too):
 
-1. Make a free account at https://resend.com.
-2. In Resend, click **Domains**, then **Add Domain**. Type your domain, for
-   example `guamheadlines.com`. Resend shows a few DNS records.
-3. Add each record where you manage the DNS of your domain (where you pointed
-   the domain at your server). Copy the type, name and value exactly.
-4. In Resend, click **Verify DNS Records**, and wait until the domain says
-   **Verified**. This can take from minutes to some hours.
-5. Click **API Keys**, then **Create API Key**. Name it `GU Headlines`, pick
-   **Sending access** and your domain. Copy the key (it starts with `re_`):
-   Resend shows it only once.
-6. Put these lines in `.env`:
+1. Put the mail server's values in `.env`, for example:
 
    ```
-   SMTP_HOST=smtp.resend.com
+   SMTP_HOST=mail.guamheadlines.com
    SMTP_PORT=587
-   SMTP_USER=resend
-   SMTP_PASSWORD=re_your_key
+   SMTP_USER=alerts
+   SMTP_PASSWORD=the_password
    MAIL_FROM=GU Headlines <alerts@guamheadlines.com>
    ```
 
-7. Run `docker compose up -d`, then send yourself a test email:
+2. Run `docker compose up -d`, then send yourself a test email:
 
    ```
    docker compose exec web guheadlines mail-test you@example.com
    ```
 
-If the test waits a long time and then fails, your server company may block
-port 587. Put `SMTP_PORT=2587` (or `465`) and try again.
+If the test waits a long time and then fails, the site cannot reach the mail
+server: check `SMTP_HOST` and `SMTP_PORT`. The site always encrypts the
+connection (STARTTLS on port 587, or port 465), so the mail server needs a
+certificate for the name in `SMTP_HOST`.
 
 The sender address shows only in the emails, never on the site. It does not
 need a mailbox: the emails tell subscribers to use the link to their own page.
