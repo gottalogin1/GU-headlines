@@ -20,6 +20,15 @@ release, see [Updating](docs/maintenance.md#updating).
   guides later. The top bar shows **Guides** once one is published. New
   database table (run the update as usual), no new settings. How-to:
   `docs/guides.md`.
+- **Dive and snorkel, and Guam's climate, on the Weather page.** "Dive and
+  snorkel" shows the sea today: the rip current risk, the reefs with the
+  smallest surf, the water temperature, today's low tides and tide range,
+  the moon (spring or neap tides) and a few safety tips, with a link to Guam
+  EPA's beach report. "Guam's climate through the year" is a table of each
+  month's average high, low and rain (NOAA's 1991 to 2020 averages), with
+  this month in bold. "Be ready" gains a link to the airport's flight
+  schedule (its site turns away automated readers, so the site links to it
+  rather than showing the flights). No new settings and no migration.
 - **Reports and server checks in Discord.** Every morning at 8:00 (Guam
   time), a money summary: yesterday's paid listings, booked ads, bid alert
   payments and donations, money given back, and the listings and ads that

@@ -669,6 +669,16 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
 .tide-table td { padding: 7px 0; }
 .tide-table tr + tr > * { border-top: 1px solid var(--line); }
 .tide-table .weather-tide { display: inline-block; margin-right: 18px; white-space: nowrap; }
+/* The Dive and snorkel tips, and Guam's climate by month (this month in bold). */
+.wx-tips { margin: 14px 0 0; padding-left: 1.2em; max-width: 75ch; color: var(--text-soft); }
+.wx-tips li + li { margin-top: 6px; }
+.climate-table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.climate-table th, .climate-table td { padding: 6px 12px 6px 0; text-align: right; white-space: nowrap; }
+.climate-table th:first-child { text-align: left; }
+.climate-table thead th { font-size: .75rem; font-weight: 700; color: var(--muted); }
+.climate-table tbody th { font-weight: 650; }
+.climate-table tr + tr > * { border-top: 1px solid var(--line); }
+.climate-table tr.is-now > * { font-weight: 800; }
 /* ---------- the Outages page (outages.html) ---------- */
 /* One block per notice: where, what kind, when, the streets, a link to the
    agency's own notice. Uses the Weather page's cards (.wx, .wx-card). */

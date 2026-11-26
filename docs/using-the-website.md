@@ -60,12 +60,21 @@ comes from, with a link to that service.
 - **On the water**: the rip current risk and the surf height on each side of
   the island, from the surf forecast, and the wind and seas for boating, from
   the coastal waters forecast.
+- **Dive and snorkel**: the sea today for a swim, a snorkel or a dive: the
+  rip current risk, which reefs have the smallest surf (north, east, south
+  or west, with the best-known spots on each side), the water temperature,
+  today's low tides and tide range, and the moon (around a new or full moon
+  the tides are bigger). A few tips follow, such as planning a reef entry
+  near high tide, and a link to Guam EPA's weekly beach report (beaches with
+  too much bacteria).
 - **Typhoons and tropical storms**: the storms that the Joint Typhoon Warning
   Center has warnings for in the western North Pacific.
+- **Guam's climate through the year**: the average high, low, rain and rainy
+  days of each month (NOAA's 1991 to 2020 averages at the airport), with
+  this month in bold, for visitors planning a trip.
 - **Be ready**: links to Guam Homeland Security (typhoon readiness levels),
-  the weather radar, the satellite view, and more.
-
-See [Weather](settings.md#weather) for where the weather comes from.
+  the weather radar, the satellite view, the airport's flight schedule
+  (arrivals and departures), and more.
 
 See [Weather](settings.md#weather) for where the weather comes from.
 

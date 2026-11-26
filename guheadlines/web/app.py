@@ -66,6 +66,9 @@ from ..scraper.text import GUAM_TZ, truncate
 from ..settings import DAY_NAMES, get_settings
 from ..settings import _web_address as web_address
 from ..weather import (
+    AIRPORT_SCHEDULE_URL,
+    BEACH_REPORT_URL,
+    CLIMATE_URL,
     GUAM_RADAR_URL,
     JTWC_URL,
     MARINE_PAGE,
@@ -629,6 +632,9 @@ templates.env.globals.update(
     guam_radar_url=GUAM_RADAR_URL,
     surf_page_url=SURF_PAGE,
     marine_page_url=MARINE_PAGE,
+    beach_report_url=BEACH_REPORT_URL,
+    airport_schedule_url=AIRPORT_SCHEDULE_URL,
+    climate_url=CLIMATE_URL,
     upgraded=listings.upgraded,
     listing_kinds=listings.KINDS,
     featured_calendar=FEATURED_CALENDAR,
