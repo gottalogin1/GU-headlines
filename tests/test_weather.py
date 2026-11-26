@@ -19,6 +19,7 @@ from conftest import fixture_bytes
 
 from guheadlines import weather
 from guheadlines.scraper.http import HttpClient
+from guheadlines.scraper.text import GUAM_TZ
 
 # The fixtures' alerts end on 2026-11-25 and 2026-11-26, so tests that show
 # them use a fixed "now".
@@ -628,8 +629,39 @@ def test_weather_page_parts():
     assert page["tide_station"]["name"] == "Apra Harbor"
     assert page["tide_chart"]["now"] == 360.0
     assert page["sky"]["moon"] == "Full moon"
+    # Dive and snorkel: the south and west reefs have the smallest surf
+    # (2 to 4 ft), today's two low tides, a range of 2.4 - -1.0 ft, and spring
+    # tides near the full moon.
+    dive = page["dive"]
+    assert dive["calm"] == [("South", "Merizo, Cocos Lagoon"), ("West", "Tumon, Piti, Agat")]
+    assert dive["calm_surf"] == "2 to 4 ft"
+    lows = [(t["time"].astimezone(GUAM_TZ).hour, t["ft"]) for t in dive["lows"]]
+    assert lows == [(1, -1.0), (13, 1.4)]
+    assert dive["range"] == 3.4
+    assert dive["cycle"] == "spring"
+    # Guam's climate, this month (November) marked.
+    climate = page["climate"]
+    assert [m["month"] for m in climate["months"] if m["now"]] == [11]
+    assert climate["wettest"]["month"] == 8 and climate["rain_year"] == 98
+    assert climate["highs"] == (86, 89) and climate["lows"] == (75, 78)
     # No tides for the station: no tide parts.
-    assert weather.weather_page(reports, TIDES_NOW, "")["tide_station"] is None
+    no_tides = weather.weather_page(reports, TIDES_NOW, "")
+    assert no_tides["tide_station"] is None
+    assert no_tides["dive"]["lows"] == [] and no_tides["dive"]["range"] is None
+
+
+def test_calmest_reefs():
+    assert weather.calm_reefs([["East", "7 to 9 ft"], ["West", "2 to 4 ft"]]) == ["West"]
+    assert weather.calm_reefs([["North", "3 ft or less"], ["South", "2 to 4 ft"]]) == ["North"]
+    # The same surf all round: no side is calmer.
+    assert weather.calm_reefs([["East", "2 to 4 ft"], ["West", "2 to 4 ft"]]) == []
+    assert weather.calm_reefs([]) == []
+
+
+def test_spring_and_neap_tides():
+    assert weather.dive_conditions(None, [], "New moon")["cycle"] == "spring"
+    assert weather.dive_conditions(None, [], "Last quarter")["cycle"] == "neap"
+    assert weather.dive_conditions(None, [], "Waxing gibbous")["cycle"] is None
 
 
 def test_weather_page(client):
@@ -645,10 +677,19 @@ def test_weather_page(client):
         "Tides at Apra Harbor",
         "This week",
         "On the water",
+        "Dive and snorkel",
         "Typhoons and tropical storms",
+        "Guam's climate through the year",
         "Be ready",
     ):
         assert f">{title}</h2>" in html, title
+    # Dive and snorkel, and the climate table with this month in bold.
+    assert "<dt>Calmest reefs</dt><dd>South and west, 2 to 4 ft</dd>" in html
+    assert "surf is smallest on the south and west reefs (Merizo, Cocos Lagoon;" in html
+    month = datetime.now(timezone.utc).astimezone(GUAM_TZ).strftime("%B")
+    assert f'<tr class="is-now">\n        <th scope="row">{month}<span' in html
+    assert html.count('<tr class="is-now">') == 1
+    assert "<td>17.7 in</td>" in html
     # The tide views switch with radio buttons: Day is the one shown first.
     assert 'id="tide-day" checked' in html and 'id="tide-month">' in html
     assert html.count('<tr class="is-today">') == 2  # the week and the month tables
@@ -663,6 +704,11 @@ def test_weather_page(client):
         "https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=1630000",
         "https://forecast.weather.gov/product.php?site=GUM&amp;issuedby=GUM&amp;product=SRF",
         "https://forecast.weather.gov/product.php?site=GUM&amp;issuedby=GUM&amp;product=CWF",
+        "https://epa.guam.gov/current-beach-report/",
+        "https://www.ncei.noaa.gov/access/us-climate-normals/"
+        "#dataset=normals-monthly&amp;timeframe=30&amp;station=GQW00041415",
+        # Flights: only a link, the airport's site turns away automated readers.
+        "https://www.guamairport.com/passenger/flights/flight-schedule",
     ):
         assert f'href="{url}"' in html, url
     # Drawn on the server: the same policy as every page, no inline style.
