@@ -247,7 +247,10 @@ def test_a_classified_ad_from_form_to_page(client, fake_paypal):
     assert "2015 Toyota Corolla" in shown.text and f"/media/{live.photo}" in shown.text
     # The section choices must not replace the topic links in the menu.
     assert 'href="/category/military"' in shown.text
-    assert 'href="/category/military"' in client.get("/directory").text
+    directory = client.get("/directory").text
+    assert 'href="/category/military"' in directory
+    # The directory is not the Business news topic.
+    assert 'href="/category/business" aria-current' not in directory
     assert "671-555-0100" in shown.text
     assert "Corolla" not in client.get("/classifieds?category=Housing").text
     assert "Corolla" in client.get("/classifieds?q=corolla").text

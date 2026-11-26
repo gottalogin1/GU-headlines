@@ -1970,7 +1970,7 @@ def _listing_page(
         now=datetime.now(timezone.utc),
         title=title,
         description=description,
-        active_nav=kind,
+        active_nav="listings",  # not a topic slug: "business" is one
         canonical={"category": category or None, "page": page},
         robots="noindex, follow" if q else None,
         breadcrumbs=[(title, None)],
