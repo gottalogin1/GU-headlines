@@ -429,6 +429,82 @@ sends the buyer back to your site, and the server takes the money (it
 buyer nothing. Each step can be done again safely: the server asks PayPal to
 do the same request only once. A refund gives all of a payment back.
 
+## Advertise page
+
+The Advertise page (`/advertise`) lets a local business book and pay for an
+ad by itself, without writing to you first. It shows your real numbers from
+the [visitor stats](#visitor-stats), what is for sale, and a booking form for
+each thing that has a price:
+
+- **The [sponsor spot](#sponsor-spot), by the week** (Monday to Sunday, Guam
+  time). In a booked week, the business's picture takes the place of
+  `SPONSOR_IMAGE`. In the other weeks, `SPONSOR_IMAGE` shows as before; with
+  no `SPONSOR_IMAGE`, the spot shows a small "Your business here" box that
+  links to the Advertise page.
+- **A sponsor line in the [newsletter](newsletter.md), by the edition**: one or
+  two sentences and a link, as the first item of the edition, titled
+  "Sponsor:" and the business's name.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `SPONSOR_WEEK_PRICE` | *(empty)* | The price of the sponsor spot for one week, in US dollars, such as `25` or `25.50` (no `$` sign). Empty: not sold online. |
+| `NEWSLETTER_SPONSOR_PRICE` | *(empty)* | The price of the sponsor line in one newsletter edition, in US dollars. Empty: not sold. Needs the newsletter feed (`NEWSLETTER_DAYS`). |
+
+The page is on only when a price is set, [PayPal](#paypal) is set up
+(`PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`), and `STATS_PASSWORD` is set:
+it opens your review page. Then every page has an **Advertise** link at the
+bottom, and the page is in the sitemap. The step-by-step setup, with a test
+booking, is in `.env.example`, in the "Advertise page" part.
+
+**How a booking goes**
+
+1. The business picks its weeks (the next 12 weeks, from next Monday) or its
+   editions (the next 8 that are more than a day away), and fills in its name,
+   its email address, its website, and its picture (sponsor spot) or its words
+   (newsletter). A week or an edition can be booked by one business only. Its
+   dates are held for it for an hour.
+2. The site makes the booking's own page, with a secret address, and the
+   business pays from there on PayPal's page (a PayPal account or a card).
+   The money goes into your PayPal account at once.
+3. You get a [Discord alert](#alerts) (with `DISCORD_WEBHOOK_URL` set). The ad
+   does **not** show yet.
+4. Open `/advertise/review` (any user name and your `STATS_PASSWORD`; the same
+   login as the stats page). It lists the bookings, the ones waiting for you
+   first, with the business's email address, its link, and its picture or
+   words. Press **Approve**, and the ad shows in its weeks. Or write why in
+   the box and press **Turn down and refund**: PayPal gives all of the money
+   back, the business sees your reason on its page, and its dates are free
+   again. If PayPal cannot make the refund, the page says so: refund it in
+   PayPal (Activity, the payment, Issue a refund), then press **Turn down,
+   refunded in PayPal**.
+5. The business's page shows where its booking stands, and, once the ad has
+   started, its page views and clicks.
+
+Approve a paid ad before its first day, or it starts late. A booking that is
+not paid within the hour is cancelled, and its dates are free again; if the
+business pays on PayPal after that and its dates are still free, it keeps
+them.
+
+**What it does**
+- No logins: the business's way back is the secret address of its booking's
+  page. That page and the review page are never counted in the stats, never
+  kept by browsers or search engines, and are left out of `robots.txt`.
+- Plain forms, sent to your own site. The payment happens on PayPal's own page,
+  opened with a link, so the pages load nothing from PayPal and the security
+  rules and PageSpeed scores stay the same.
+- The booked picture is checked (a JPG, PNG, WebP or GIF of up to 5 MB, at
+  least 300 pixels wide, not a long strip) and stored as a small WebP copy, at
+  most 600 pixels wide, in the database. It is served from `/sponsor.webp`,
+  like `SPONSOR_IMAGE`.
+- Clicks on a booked ad go through `/go/ad/<number>` and are counted for that
+  booking (and, for the sponsor spot, in the stats page's Sponsor spot part).
+  The links of the stories in the newsletter end in `?from=newsletter`, so the
+  Advertise page can show how many story clicks the newsletter brings.
+- An ad that names something in the `muted:` list of `config/sources.yaml` (as
+  stories that are never shown do) cannot be booked.
+- The Sources page's disclaimer gets a paragraph about the details a business
+  gives when it books.
+
 ## Checking for news
 
 | Setting | Default | What it does |

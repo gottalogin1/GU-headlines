@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **An Advertise page, where businesses book and pay for ads themselves.** A
+  new page (`/advertise`, linked at the bottom of every page) shows your real
+  numbers from the visitor stats (page views in the last 30 days, with a
+  chart, and the clicks on the sponsor spot and on the newsletter's stories),
+  and a booking form for each thing that has a price: the sponsor spot by the
+  week (`SPONSOR_WEEK_PRICE`) and a sponsor line at the top of a newsletter
+  edition (`NEWSLETTER_SPONSOR_PRICE`). A business picks its weeks or
+  editions, gives its picture or words, and pays through PayPal. You get a
+  Discord alert, and the ad shows only after you approve it on the new
+  `/advertise/review` page (the stats password opens it); turning it down
+  refunds it through PayPal. Each booking has its own page with a secret
+  address, where the business sees where it stands and, later, its ad's page
+  views and clicks. No logins, and no PayPal script on the site, so the
+  PageSpeed scores stay the same. It needs PayPal (`PAYPAL_CLIENT_ID` and
+  `PAYPAL_CLIENT_SECRET`), `STATS_PASSWORD` and a price; without them the site
+  is as before. When you update, the database gets two new tables, by itself.
+  See [Advertise page](docs/settings.md#advertise-page).
 - **A Bids page.** A new **Bids** link lists the Government of Guam's open
   bids and requests for proposals, soonest due first: what each is for, its
   number, the agency, when offers are due (Guam time, with the days left),
