@@ -11,7 +11,8 @@ release, see [Updating](docs/maintenance.md#updating).
   on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a
   cover photo and photos in the text, sort the guides into sections, keep them
   as drafts until they are ready, and preview them as readers will see them.
-  Eight starter guides come with the site, added as drafts with one button.
+  Twenty starter guides come with the site: tick the ones you want and they
+  are added as drafts.
   Guides show the AdSense ad in the right-hand column, a second one in the
   text (`ADSENSE_STORIES_SLOT`), the sponsor spot and the Plan a trip box, and
   each guide can carry its own sponsor ("Sponsored by", with an end date and
@@ -20,6 +21,14 @@ release, see [Updating](docs/maintenance.md#updating).
   guides later. The top bar shows **Guides** once one is published. New
   database table (run the update as usual), no new settings. How-to:
   `docs/guides.md`.
+- **Twelve more starter guides,** most of them about things to do: Things to
+  do on Guam (a list linking to every guide), Tumon and Two Lovers Point,
+  Snorkeling and diving, Hiking and waterfalls, Boats, dolphins and island
+  trips, World War II sites, Latte stones and ancient CHamoru sites, A day in
+  northern Guam, Markets and shopping, Guam with kids, What to do on a rainy
+  day, and Fiestas and festivals through the year. On `/admin/guides`, tick
+  the ones you want and press **Add the ticked guides as drafts**; a starter
+  guide you deleted is listed again but no longer added unless you tick it.
 - **Dive and snorkel, and Guam's climate, on the Weather page.** "Dive and
   snorkel" shows the sea today: the rip current risk, the reefs with the
   smallest surf, the water temperature, today's low tides and tide range,

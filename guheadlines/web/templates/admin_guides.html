@@ -18,11 +18,17 @@
 {% if starters %}
 <section class="panel listing-status">
   <h2>Starter guides</h2>
-  <p>The site comes with {{ starters|length }} starter {{ "guide" if starters|length == 1 else "guides" }} you don't have yet:
-    {% for s in starters %}{{ s.title }}{{ ", " if not loop.last else "." }}{% endfor %}
-    They are added as drafts: read each one, change what you like, and publish it.</p>
+  <p>The site comes with {{ starters|length }} starter {{ "guide" if starters|length == 1 else "guides" }} you don't have yet.
+    Tick the ones you want: they are added as drafts, so you can read each one, change what you like, and publish it.
+    A starter guide you deleted shows here again; leave it unticked.</p>
   <form action="/admin/guides/starters" method="post">
-    <button class="btn btn-quiet" type="submit">Add the starter {{ "guide" if starters|length == 1 else "guides" }} as drafts</button>
+    <fieldset class="bid-trades guide-starters">
+      <legend>Guides to add</legend>
+      {% for s in starters %}
+      <label><input type="checkbox" name="slug" value="{{ s.slug }}" checked> <span>{{ s.title }}{% if s.section %} <span class="muted">· {{ s.section }}</span>{% endif %}</span></label>
+      {% endfor %}
+    </fieldset>
+    <button class="btn btn-quiet" type="submit">Add the ticked {{ "guide" if starters|length == 1 else "guides" }} as drafts</button>
   </form>
 </section>
 {% endif %}

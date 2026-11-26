@@ -25,6 +25,7 @@ import math
 import re
 import secrets
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import lru_cache
@@ -224,6 +225,22 @@ def _prepare(tokens: list[Token]) -> list[tuple[str, str]]:
                         child.attrSet("target", "_blank")
                         child.attrSet("rel", "nofollow noopener")
     return contents
+
+
+# A link to another guide, as render() writes it.
+_GUIDE_LINK = re.compile(r'<a href="/guides/([a-z0-9-]+)(?:#[^"]*)?"[^>]*>(.*?)</a>', re.S)
+
+
+def unlink_unpublished(text: Rendered, published_slugs: set[str]) -> Rendered:
+    """`text` with each link to a guide that is not published (a draft, or
+    no guide at all) turned into its plain words, so readers never land on a
+    missing page. The link comes back once that guide is published."""
+
+    def keep_or_unlink(found: re.Match) -> str:
+        return found[0] if found[1] in published_slugs else found[2]
+
+    parts = [Markup(_GUIDE_LINK.sub(keep_or_unlink, str(part))) for part in text.parts]
+    return Rendered(parts, text.contents)
 
 
 @lru_cache(maxsize=128)
@@ -490,8 +507,9 @@ class Starter:
 
 
 def starters() -> list[Starter]:
-    """The starter guides that come with the site (guide_starters/*.md):
-    each file is a block of settings between --- lines, then the text."""
+    """The starter guides that come with the site (guide_starters/*.md), in
+    their order: each file is a block of settings between --- lines, then
+    the text."""
     found = []
     for path in sorted(STARTER_DIR.glob("*.md")):
         _, head, body = path.read_text(encoding="utf-8").split("---\n", 2)
@@ -506,7 +524,7 @@ def starters() -> list[Starter]:
                 body=body.strip(),
             )
         )
-    return found
+    return sorted(found, key=lambda s: (s.position, s.title))
 
 
 def missing_starters(session: Session) -> list[Starter]:
@@ -515,9 +533,11 @@ def missing_starters(session: Session) -> list[Starter]:
     return [s for s in starters() if s.slug not in taken]
 
 
-def add_starters(session: Session, now: datetime) -> int:
-    """Add the missing starter guides, as drafts. Returns how many."""
-    added = missing_starters(session)
+def add_starters(session: Session, now: datetime, slugs: Iterable[str]) -> int:
+    """Add the missing starter guides whose address is in `slugs` (the ones
+    the owner ticked), as drafts. Returns how many."""
+    wanted = set(slugs)
+    added = [s for s in missing_starters(session) if s.slug in wanted]
     for s in added:
         session.add(
             Guide(

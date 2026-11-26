@@ -94,6 +94,20 @@ def test_the_text_is_cut_at_main_headings():
     assert str(guides.render("## Only\n\nText.").parts[0]).startswith('<h2 id="only">')
 
 
+def test_links_to_unpublished_guides_become_plain_words():
+    text = guides.render(
+        "See [Tumon](/guides/tumon), [**food**](/guides/local-food#red-rice),"
+        " [all guides](/guides) and [weather](/weather).\n\n## Next\n\n[Tumon](/guides/tumon)"
+    )
+    shown = guides.unlink_unpublished(text, {"local-food"})
+    html = "".join(map(str, shown.parts))
+    assert 'href="/guides/tumon"' not in html and "See Tumon," in html
+    assert '<a href="/guides/local-food#red-rice"><strong>food</strong></a>' in html
+    assert '<a href="/guides">all guides</a>' in html and '<a href="/weather">' in html
+    assert shown.contents == text.contents and len(shown.parts) == len(text.parts)
+    assert 'href="/guides/tumon"' in str(text.parts[0])  # the kept copy is unchanged
+
+
 def test_slugify():
     assert guides.slugify("Håfa Adai: Two Lovers' Point!") == "hafa-adai-two-lovers-point"
     assert guides.slugify("  A morning in Hagåtña  ") == "a-morning-in-hagatna"
@@ -134,6 +148,8 @@ def test_the_starter_guides():
         assert errors == {}, (s.slug, errors)
         text = s.body.lower()
         assert "github" not in text and "chamber of commerce" not in text
+        # Event sources the site can't collect are not named on the site.
+        assert "visitors bureau" not in text and "guampedia" not in text
         # Every link inside the site goes to a page that exists.
         for link in re.findall(r"\]\((/[^)\s]*)\)", s.body):
             assert link in pages, (s.slug, link)
@@ -267,6 +283,16 @@ def test_a_guide_from_draft_to_the_site(client):
     assert "Getting around Guam" in listing and "Published" in listing
 
 
+def test_a_link_to_a_draft_guide_shows_once_it_is_published(client):
+    body = TEXT + "\nSee [getting around](/guides/getting-around) first.\n"
+    _new(client, title="Beaches", slug="beaches", body=body, status="published")
+    page = client.get("/guides/beaches").text
+    assert "See getting around first." in page and 'href="/guides/getting-around"' not in page
+    _new(client, slug="getting-around", status="published")
+    page = client.get("/guides/beaches").text
+    assert '<a href="/guides/getting-around">getting around</a>' in page
+
+
 def test_form_problems_come_back_with_the_text(client):
     _new(client, slug="taken")
     response = _save(client, title="", slug="taken", body="My **draft** text.")
@@ -340,19 +366,33 @@ def test_a_bad_photo_is_refused(client):
 
 
 def test_the_starter_guides_are_added_as_drafts(client):
+    slugs = [s.slug for s in guides.starters()]
     listing = client.get("/admin/guides", headers=ADMIN).text
-    assert "Add the starter guides as drafts" in listing
+    assert "Add the ticked guides as drafts" in listing
+    assert all(f'name="slug" value="{slug}" checked' in listing for slug in slugs)
+    # Nothing ticked: nothing added.
     response = client.post("/admin/guides/starters", headers=OWNER, follow_redirects=False)
+    assert response.headers["location"] == "/admin/guides?done=none"
+    # Only the ticked ones.
+    response = client.post(
+        "/admin/guides/starters", headers=OWNER, data={"slug": slugs[:2]}, follow_redirects=False
+    )
     assert response.headers["location"] == "/admin/guides?done=starters"
     with session_scope() as session:
+        assert sorted(session.scalars(select(Guide.slug))) == sorted(slugs[:2])
+    listing = client.get("/admin/guides", headers=ADMIN).text
+    assert f'value="{slugs[0]}"' not in listing and f'value="{slugs[2]}"' in listing
+    # The rest, and an address that is no starter guide is ignored.
+    client.post("/admin/guides/starters", headers=OWNER, data={"slug": [*slugs, "nope"]})
+    with session_scope() as session:
         added = session.scalars(select(Guide)).all()
-    assert len(added) == len(guides.starters())
+    assert sorted(g.slug for g in added) == sorted(slugs)
     assert all(g.status == "draft" and g.access == "free" for g in added)
     assert client.get("/guides").status_code == 404  # drafts until the owner publishes them
     listing = client.get("/admin/guides", headers=ADMIN).text
-    assert "Add the starter" not in listing and "Your first day on Guam" in listing
+    assert "Add the ticked" not in listing and "Your first day on Guam" in listing
     # Pressed twice: nothing more.
-    client.post("/admin/guides/starters", headers=OWNER)
+    client.post("/admin/guides/starters", headers=OWNER, data={"slug": slugs})
     with session_scope() as session:
         assert len(session.scalars(select(Guide)).all()) == len(added)
 
