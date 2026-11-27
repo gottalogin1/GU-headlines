@@ -538,8 +538,9 @@ connecting SendFox step by step.
 
 ## PayPal
 
-The parts of the site that sell something take the money through PayPal. The
-buyer pays on PayPal's own page (with a PayPal account, or with a card as a
+The parts of the site that sell something (paid listings, ads, bid alerts and
+the [guide packs](guides.md#selling-guides) of the visitor guides) take the
+money through PayPal. The buyer pays on PayPal's own page (with a PayPal account, or with a card as a
 guest), and PayPal then sends the buyer back to your site. The site shows no
 PayPal button and loads no PayPal script: a plain link opens PayPal's page, so
 the pages stay as fast and as strict as before.
@@ -634,6 +635,13 @@ each thing that has a price:
   `SPONSOR_IMAGE`. In the other weeks, `SPONSOR_IMAGE` shows as before; with
   no `SPONSOR_IMAGE`, the spot shows a small "Your business here" box that
   links to the Advertise page.
+- **A section sponsor, by the week**: a line such as "Weather brought to you
+  by Island Bakery", with the business's short line and a link, at the top of
+  every page of one section. The sections are the news topics in the top bar
+  (from `config/categories.yaml`), Jobs, Events, Bids, and Weather and Outages
+  while those pages are on. One business a section a week; the business picks
+  the section on the Advertise page, which shows each section's page views in
+  the last 30 days. Words only, so the pages stay as fast as before.
 - **A sponsor line in the [newsletter](newsletter.md), by the edition**: one or
   two sentences and a link, as the first item of the edition, titled
   "Sponsor:" and the business's name.
@@ -641,6 +649,7 @@ each thing that has a price:
 | Setting | Default | What it does |
 |---|---|---|
 | `SPONSOR_WEEK_PRICE` | *(empty)* | The price of the sponsor spot for one week, in US dollars, such as `25` or `25.50` (no `$` sign). Empty: not sold online. |
+| `SECTION_SPONSOR_PRICE` | *(empty)* | The price of one section for one week, in US dollars. Every section has the same price. Empty: sections are not sold. |
 | `NEWSLETTER_SPONSOR_PRICE` | *(empty)* | The price of the sponsor line in one newsletter edition, in US dollars. Empty: not sold. Needs the newsletter feed (`NEWSLETTER_DAYS`). |
 
 The page is on only when a price is set, [PayPal](#paypal) is set up
@@ -700,6 +709,20 @@ them.
 - A few days before an approved ad ends, the business gets an email, and its
   booking's page has a **Run this ad again** form: see
   [Renewal reminders](#renewal-reminders).
+
+**The media kit**
+
+The Advertise page links to a media kit: one page, as a PDF, at
+`/advertise/media-kit.pdf`. It has your numbers from the last 30 days (page
+views, a day and a week on average, newsletter and sponsor clicks, a chart of
+each day, the most-read sections, and the websites that readers come from)
+and the prices of everything that is for sale on the site (the Advertise page
+and the [paid listings](#paid-listings)). Send it to businesses when you ask
+them to advertise. It is made again from the newest numbers at most every 10
+minutes, and it is there only while the Advertise page is on. Like the
+Advertise page, it gives no email address or phone number: it tells
+businesses to book and pay on the site. It is left out of search engines
+(`robots.txt` and `X-Robots-Tag`). The review page links to it too.
 
 ## Your own email server
 

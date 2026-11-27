@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {# The visitor guides (/guides): every published guide, under its section's
-   heading, in the owner's order (guides.py). #}
+   heading, in the owner's order (guides.py), and the guide packs for sale
+   (`packs`, guide_packs.py). #}
 
 {% block main %}
 <header class="page-head">
@@ -8,6 +9,21 @@
   <p class="muted">Short, practical guides for visiting Guam: getting around, the weather,
     beaches, food and what to see. Written and kept up to date by {{ settings.site_name }}.</p>
 </header>
+
+{% if packs %}
+<section class="pack-list" aria-labelledby="packs-title">
+  <h2 class="section-title" id="packs-title">Guide packs</h2>
+  <ul class="pack-grid">
+    {% for p in packs %}
+    <li class="pack-card">
+      <h3 class="headline"><a href="/guides/packs/{{ p.pack.slug }}">{{ p.pack.title }}</a></h3>
+      <p class="guide-card-summary">{{ p.pack.summary }}</p>
+      <p class="small"><strong>{{ guide_pack_money(p.pack.price_cents) }}</strong> <span class="muted">· {{ p.count }} {{ "guide" if p.count == 1 else "guides" }} · pay once through PayPal</span></p>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% for section, items in sections %}
 {% if section or sections|length > 1 %}<h2 class="section-title">{{ section or "More guides" }}</h2>{% endif %}
@@ -23,7 +39,7 @@
     <div class="guide-card-body">
       <h3 class="headline"><a href="/guides/{{ g.slug }}">{{ g.title }}</a></h3>
       <p class="guide-card-summary">{{ g.summary }}</p>
-      <p class="muted small">{{ guide_minutes(g) }} min read</p>
+      <p class="muted small">{{ guide_minutes(g) }} min read{% if g.access == "paid" %} · <span class="tag tag-featured">Guide pack</span>{% endif %}</p>
     </div>
   </li>
   {% endfor %}

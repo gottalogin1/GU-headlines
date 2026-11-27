@@ -22,7 +22,7 @@
 {% endif %}
 
 <section class="site-note ad-booking" aria-labelledby="booking-title">
-  <h2 id="booking-title">{{ ad_names[booking.kind] }} <span class="badge">{{ labels[booking.status] }}</span></h2>
+  <h2 id="booking-title">{{ ad_name(booking.kind) }} <span class="badge">{{ labels[booking.status] }}</span></h2>
   <dl class="job-facts">
     <div><dt>Business</dt><dd>{{ booking.business }}</dd></div>
     <div><dt>When</dt><dd>{{ ad_when(booking, True) }}</dd></div>
@@ -34,12 +34,17 @@
     <img src="/advertise/booking/{{ booking.code }}/picture.webp" width="{{ booking.picture_width }}" height="{{ booking.picture_height }}" alt="{{ booking.words }}">
     <figcaption class="muted small">As it shows in the side column. Words for people who can't see it: "{{ booking.words }}"</figcaption>
   </figure>
+  {% elif ad_section(booking.kind) %}
+  {% with section_sponsor = {"section": ad_section(booking.kind), "business": booking.business, "words": booking.words, "href": booking.link|safe_url} %}
+  <div class="ad-preview-line">{% include "_section_sponsor.html" %}</div>
+  {% endwith %}
+  <p class="muted small">As it shows at the top of every page of the section.</p>
   {% else %}
   <blockquote class="ad-line"><strong>Sponsor: {{ booking.business }}</strong><br>{{ booking.words }}</blockquote>
   {% endif %}
 
   {% if booking.status == "new" %}
-  <p>Your {{ "weeks are" if booking.kind == "site" else "editions are" }} held for you until
+  <p>Your {{ "weeks are" if ad_weekly(booking.kind) else "editions are" }} held for you until
     <strong>{{ expires_at|fmt_time }}</strong> (Guam time). Pay to keep them.</p>
   {% if can_pay %}
   <p class="ad-actions">
@@ -99,7 +104,7 @@
 <p class="muted section-note">Counted on this site's own server; robots are left out.
   {% if not results.done %}The numbers grow while your ad runs.{% endif %}</p>
 <dl class="job-facts stats-totals">
-  {% if booking.kind == "site" %}
+  {% if "views" in results %}
   <div><dt>Days shown</dt><dd>{{ results.days }}</dd></div>
   <div><dt>Page views</dt><dd>{{ "{:,}".format(results.views) }}</dd></div>
   <div><dt>Clicks</dt><dd>{{ "{:,}".format(results.clicks) }}</dd></div>

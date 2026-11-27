@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{# A guide pack's page (/guides/packs/<slug>, guide_packs.py): what is in it,
+   its price, and the PayPal link. `owned_token`: this browser has the pack
+   already. The "lost your link?" form shows while email is set up. #}
+
+{% block main %}
+{% if result %}<p class="signup-result{% if not result.ok %} error{% endif %}" role="status">{{ result.text }}</p>{% endif %}
+
+<header class="page-head guide-head">
+  <p class="crumbs"><a href="/guides">Visitor guides</a> · Guide pack</p>
+  <h1>{{ pack.title }}</h1>
+  <p class="guide-summary">{{ pack.summary }}</p>
+</header>
+
+<section class="pack-buy panel" aria-label="Price">
+  {% if owned_token %}
+  <p class="pack-price">You have this pack</p>
+  <p>The guides below open in full in this browser. <a href="/guides/pass/{{ owned_token }}">Your guides page</a> has the link for your other devices.</p>
+  {% else %}
+  <p class="pack-price">{{ price }} <span class="muted small">once, through PayPal</span></p>
+  <p class="pack-points">{{ inside|length }} {{ "guide" if inside|length == 1 else "guides" }} · read on all your devices · no account, no ads · every update included</p>
+  <p><a class="btn" href="/guides/buy/{{ pack.slug }}" rel="nofollow">Buy with PayPal</a></p>
+  <p class="muted small">Pay with your PayPal account or a card. After paying, you come back here to your guides, with a private link to keep{% if can_email %}, also sent to the email address you pay with{% endif %}.</p>
+  {% endif %}
+</section>
+
+{% if about %}
+<div class="prose pack-about">
+  {% for part in about.parts %}{{ part }}{% endfor %}
+</div>
+{% endif %}
+
+<h2 class="section-title">What's in the pack</h2>
+<ul class="guide-grid">
+  {% for g in inside %}
+  <li class="guide-card{% if not g.photo %} no-photo{% endif %}">
+    {% if g.photo %}
+    {% set size = guide_photo_size(g.photo) %}
+    {% set srcset = guide_srcset(g.photo) %}
+    <img src="{{ g.photo }}"{% if srcset %} srcset="{{ srcset }}" sizes="(max-width: 640px) calc(100vw - 32px), 340px"{% endif %}
+         width="{{ size[0] }}" height="{{ size[1] }}" alt="" loading="lazy" decoding="async">
+    {% endif %}
+    <div class="guide-card-body">
+      <h3 class="headline"><a href="/guides/{{ g.slug }}">{{ g.title }}</a></h3>
+      <p class="guide-card-summary">{{ g.summary }}</p>
+      <p class="muted small">{{ guide_minutes(g) }} min read{% if g.access == "paid" and not owned_token %} · read the opening free{% endif %}</p>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if can_email and not owned_token %}
+<section class="site-note" id="lost">
+  <h2>Bought this before?</h2>
+  <p>Open the link from your email once on this device and the guides open in full. Lost the email? Type the address you paid with, and the link is sent to it again.</p>
+  <form class="signup-form" action="/guides/pass/link" method="post">
+    <input type="hidden" name="pack" value="{{ pack.slug }}">
+    <label class="visually-hidden" for="lost-email">Email address</label>
+    <input id="lost-email" type="email" name="email" required maxlength="254" autocomplete="email" inputmode="email" placeholder="Your email address">
+    <div class="signup-trap" aria-hidden="true">
+      <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+    </div>
+    <button type="submit">Email me my link</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

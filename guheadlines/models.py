@@ -536,7 +536,8 @@ class AdBooking(Base):
     # The secret part of the booking's own page (/advertise/booking/<code>),
     # which only the business that booked it is given.
     code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    # "site" (the sponsor spot) or "newsletter" (a line in the newsletter).
+    # "site" (the sponsor spot), "newsletter" (a line in the newsletter), or
+    # "section:<slug>" (the sponsor of one section, such as "section:weather").
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     # new (not paid yet), paid (waiting for the owner), approved, rejected
     # (and refunded) or cancelled (not paid in time, or cancelled by the business).
@@ -553,8 +554,8 @@ class AdBooking(Base):
     picture: Mapped[bytes | None] = mapped_column(LargeBinary)
     picture_width: Mapped[int | None] = mapped_column(Integer)
     picture_height: Mapped[int | None] = mapped_column(Integer)
-    # The Monday of each week (the sponsor spot), or the day of each edition
-    # (the newsletter), in Guam time.
+    # The Monday of each week (the sponsor spot, a section), or the day of
+    # each edition (the newsletter), in Guam time.
     days: Mapped[list[date]] = mapped_column(ARRAY(Date), nullable=False)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     paypal_order_id: Mapped[str | None] = mapped_column(Text)
@@ -571,8 +572,8 @@ class AdBooking(Base):
 
 
 class AdSlot(Base):
-    """A week of the sponsor spot, or a newsletter edition, that a booking
-    holds. One booking per slot: a slot that is taken cannot be booked again,
+    """A week of the sponsor spot or of a section, or a newsletter edition,
+    that a booking holds. One booking per slot: a slot that is taken cannot be booked again,
     even by two businesses at the same moment."""
 
     __tablename__ = "ad_slots"
@@ -662,8 +663,8 @@ class Guide(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     # "draft" (only the owner sees it) or "published".
     status: Mapped[str] = mapped_column(Text, nullable=False, default="draft")
-    # "free", or "paid" for a guide that only paying readers may read in full
-    # (not built yet; see docs/guides.md#selling-guides).
+    # "free", or "paid": only readers who bought a guide pack with it read it
+    # in full; the others read its opening (guide_packs.py).
     access: Mapped[str] = mapped_column(Text, nullable=False, default="free")
     # The cover photo's address (/media/guides/...), and what it shows.
     photo: Mapped[str | None] = mapped_column(Text)
@@ -683,3 +684,81 @@ class Guide(Base):
     )
     # The first time it was published.
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GuidePack(Base):
+    """A guide pack: visitor guides sold together through PayPal, such as a
+    PCS move pack (guide_packs.py). The owner makes them on /admin/guides;
+    readers buy them on /guides/packs/<slug>."""
+
+    __tablename__ = "guide_packs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The pack's address: /guides/packs/<slug>.
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    # One or two sentences: the pack's card, and search results.
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # More about the pack, in Markdown, on its page (may be empty).
+    about: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # What it costs, in US cents.
+    price_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    # True: every paid guide, also the ones added later; the pack's own list
+    # of guides (guide_pack_guides) is then not used.
+    every_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # "draft" (not for sale) or "on_sale".
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="draft")
+    # Lower numbers are listed first.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class GuidePackGuide(Base):
+    """A guide in a guide pack."""
+
+    __tablename__ = "guide_pack_guides"
+
+    pack_id: Mapped[int] = mapped_column(
+        ForeignKey("guide_packs.id", ondelete="CASCADE"), primary_key=True
+    )
+    guide_id: Mapped[int] = mapped_column(
+        ForeignKey("guides.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class GuidePass(Base):
+    """One guide pack bought through PayPal. There are no accounts: the buyer
+    reads with a private link, /guides/pass/<token>, which the site also
+    keeps in the buyer's browser (guide_packs.py)."""
+
+    __tablename__ = "guide_passes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The secret in the buyer's link.
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # A pack that was bought can't be deleted (it can be taken off sale).
+    pack_id: Mapped[int] = mapped_column(
+        ForeignKey("guide_packs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    # PayPal's order and payment. One payment opens one pass.
+    order_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    capture_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The address the buyer paid with at PayPal, for the link by email.
+    email: Mapped[str | None] = mapped_column(Text)
+    # "paid"; "pending" (PayPal still checks the payment: readable too);
+    # "off" (turned off by the owner, such as a link shared in public);
+    # "refunded" (the money went back: not readable).
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="paid")
+    # How many times the link was opened: many opens can mean a shared link.
+    opened: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

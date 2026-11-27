@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {# The Advertise page (/advertise): the site's real numbers from the visitor
-   counts, what a business can book (the sponsor spot by the week, the
-   newsletter's sponsor line by the edition), and the booking forms. See
+   counts, what a business can book (the sponsor spot by the week, a section
+   by the week, the newsletter's sponsor line by the edition), and the
+   booking forms. See
    guheadlines/ads.py. Plain forms: the payment happens on PayPal's own page
    afterwards, so no PayPal script loads here. #}
 {% block main %}
@@ -38,6 +39,8 @@
   <p class="muted small section-note ad-numbers-note">Counted on this site's own server from real visits.
     Search engines, link previews and other robots are left out. The numbers are updated every
     10 minutes.</p>
+  <p class="ad-kit"><a href="/advertise/media-kit.pdf" download>Download the media kit</a>
+    <span class="muted small">(PDF, one page: these numbers and the prices)</span></p>
 </section>
 
 <h2 class="section-title">What you can book</h2>
@@ -53,6 +56,19 @@
     phones), with a link to your website. One business a week, Monday to Sunday, Guam time.
     {% if numbers.per_week %}In the last {{ numbers.days }} days, a week had about
     {{ "{:,}".format(numbers.per_week) }} page views.{% endif %}</p>
+  {% elif o.kind == "section" %}
+  <p>Your business named at the top of every page of one section of the site, such as
+    "{{ f.chosen.name }} brought to you by Island Bakery", with a short line and a link to your
+    website. One business a section a week, Monday to Sunday, Guam time.</p>
+  {# Each section has its own weeks: a link opens the form for that section. #}
+  <nav class="ad-sections" aria-label="Sections to sponsor">
+    <p class="muted small">Pick a section. Its page views in the last {{ numbers.days }} days:</p>
+    <ul>
+    {% for s in f.sections %}
+      <li><a href="/advertise?section={{ s.slug }}#book-section"{% if s.slug == f.chosen.slug %} aria-current="true"{% endif %}>{{ s.name }} <span class="ad-section-views">{{ "{:,}".format(f.views.get(s.slug, 0)) }}</span></a></li>
+    {% endfor %}
+    </ul>
+  </nav>
   {% else %}
   <p>A sponsor line with a link to your website, first in the newsletter email that goes out
     every {{ newsletter_schedule }}, Guam time. One sponsor an edition. The line is marked
@@ -61,10 +77,11 @@
 
   <form class="ad-form" action="/advertise#book-{{ o.kind }}" method="post" enctype="multipart/form-data">
     <input type="hidden" name="kind" value="{{ o.kind }}">
+    {% if o.kind == "section" %}<input type="hidden" name="section" value="{{ f.chosen.slug }}">{% endif %}
     {% if e.form %}<p class="ad-error" role="alert">{{ e.form }}</p>{% endif %}
 
     <fieldset class="ad-days">
-      <legend>{{ "Weeks, Monday to Sunday" if o.unit == "week" else "Editions" }}</legend>
+      <legend>{% if o.kind == "section" %}Weeks of {{ f.chosen.name }}, Monday to Sunday{% elif o.unit == "week" %}Weeks, Monday to Sunday{% else %}Editions{% endif %}</legend>
       <div class="ad-day-list">
       {% for day, last, taken in f.days %}
       {% set iso = day.isoformat() %}
@@ -110,6 +127,13 @@
         <p class="muted small" id="site-words-hint">For people who can't see pictures, such as "Island Bakery: fresh pandesal every morning in Tamuning".</p>
         {% if e.words %}<p class="ad-error" role="alert">{{ e.words }}</p>{% endif %}
       </div>
+      {% elif o.kind == "section" %}
+      <div class="field">
+        <label for="section-words">Short line (optional)</label>
+        <input id="section-words" name="words" maxlength="100" value="{{ v.words or '' }}" aria-describedby="section-words-hint">
+        <p class="muted small" id="section-words-hint">Shown after your business name, up to 100 letters, such as "Fresh pandesal every morning in Tamuning".</p>
+        {% if e.words %}<p class="ad-error" role="alert">{{ e.words }}</p>{% endif %}
+      </div>
       {% else %}
       <div class="field">
         <label for="newsletter-words">Your sponsor line</label>
@@ -132,7 +156,7 @@
 <section class="site-note" aria-labelledby="how-title">
   <h2 id="how-title">How it works</h2>
   <ol class="ad-steps">
-    <li>Pick your {{ "weeks or editions" if forms|length > 1 else (forms[0].offer.unit ~ "s") }} and fill in the form.</li>
+    <li>Pick your {{ "weeks or editions" if forms|map(attribute="offer.unit")|unique|list|length > 1 else (forms[0].offer.unit ~ "s") }} and fill in the form.</li>
     <li>Pay with PayPal. You can use a PayPal account, or a debit or credit card.</li>
     <li>Your ad is checked, usually within a day, and then shows on the dates you booked. If it
       isn't accepted, you get your money back in full.</li>

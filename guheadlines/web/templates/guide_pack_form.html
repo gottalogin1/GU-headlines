@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{# The owner's editor for one guide pack (/admin/guides/packs/new and
+   /admin/guides/packs/<id>, behind STATS_PASSWORD; guide_packs.py). #}
+
+{% macro describe(name, hint) -%}
+{%- if hint or errors.get(name) %} aria-describedby="{% if hint %}h-{{ name }}{% endif %}{% if errors.get(name) %} e-{{ name }}{% endif %}"{% endif %}
+{%- if errors.get(name) %} aria-invalid="true"{% endif %}
+{%- endmacro %}
+
+{% macro notes(name, hint) %}
+{% if hint %}<p class="hint" id="h-{{ name }}">{{ hint }}</p>{% endif %}
+{% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+{% endmacro %}
+
+{% macro field(name, label, required=false, maxlength=100, type="text", hint="", placeholder="", wide=false, attrs="") %}
+<div class="field{% if wide %} wide{% endif %}{% if errors.get(name) %} has-error{% endif %}">
+  <label for="f-{{ name }}">{{ label }}{% if not required %} <span class="optional">(optional)</span>{% endif %}</label>
+  <input id="f-{{ name }}" type="{{ type }}" name="{{ name }}" value="{{ values.get(name, '') }}"{% if required %} required{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{{ describe(name, hint) }} {{ attrs|safe }}>
+  {{ notes(name, hint) }}
+</div>
+{% endmacro %}
+
+{% block main %}
+<header class="page-head">
+  <p class="crumbs"><a href="/admin/guides">Visitor guides</a> · <a href="/admin/guides#packs">Guide packs</a></p>
+  <h1>{{ "Edit guide pack" if pack else "New guide pack" }}</h1>
+  {% if pack %}
+  <p class="muted">{{ "For sale" if pack.status == "on_sale" else "Not for sale" }} · {{ sold }} sold · last saved {{ pack.updated_at|fmt_datetime }}{% if pack.status == "on_sale" and sales_on %} · <a href="/guides/packs/{{ pack.slug }}">On the site</a>{% endif %}</p>
+  {% endif %}
+</header>
+
+{% if not sales_on %}<p class="signup-result error" role="status">Packs can't be sold yet: PayPal is not set up. Fill in PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in .env (see the steps above them in .env.example), then run docker compose up -d.</p>{% endif %}
+{% if message %}<p class="signup-result{% if message != 'Saved.' %} error{% endif %}" role="status">{{ message }}</p>{% endif %}
+{% if errors %}<p class="signup-result error" role="alert">Nothing was saved yet. Please check the fields marked below.</p>{% endif %}
+
+<form class="listing-form guide-form panel" action="/admin/guides/packs/{{ pack.id if pack else 'new' }}" method="post">
+  {{ field("title", "Name", required=true, maxlength=limits.MAX_TITLE, wide=true, placeholder="PCS move pack for military families") }}
+  {{ field("slug", "Address", maxlength=60, placeholder="pcs-move",
+           hint="The end of the pack's address: /guides/packs/pcs-move. Empty: made from the name.") }}
+  {{ field("price", "Price in US dollars", required=true, maxlength=10, placeholder="12",
+           hint="What readers pay once, through PayPal, such as 12 or 12.99. A change applies to new buyers only.", attrs='inputmode="decimal"') }}
+  {{ field("position", "Order", required=true, maxlength=0, type="number", hint="Lower numbers are listed first on /guides.", attrs='min="0" max="9999" inputmode="numeric"') }}
+  <fieldset class="field plan">
+    <legend>For sale?</legend>
+    <label class="plan-choice"><input type="radio" name="status" value="draft" {% if values.get('status') != 'on_sale' %}checked{% endif %}>
+      <span><strong>Not for sale</strong><br><span class="muted small">Hidden from readers. People who bought it keep their guides.</span></span></label>
+    <label class="plan-choice"><input type="radio" name="status" value="on_sale" {% if values.get('status') == 'on_sale' %}checked{% endif %}>
+      <span><strong>For sale</strong><br><span class="muted small">On /guides, on its own page, and on each of its paid guides.</span></span></label>
+  </fieldset>
+
+  <div class="field wide{% if errors.get('summary') %} has-error{% endif %}">
+    <label for="f-summary">Summary</label>
+    <textarea id="f-summary" name="summary" rows="2" maxlength="{{ limits.MAX_SUMMARY }}" required{{ describe('summary', 'x') }}>{{ values.get('summary', '') }}</textarea>
+    {{ notes("summary", "One or two sentences: on the pack's card on /guides, under its name, and in search results.") }}
+  </div>
+  <div class="field wide{% if errors.get('about') %} has-error{% endif %}">
+    <label for="f-about">About the pack <span class="optional">(optional)</span></label>
+    <textarea id="f-about" class="guide-text" name="about" rows="10" maxlength="{{ limits.MAX_ABOUT }}"{{ describe('about', 'x') }}>{{ values.get('about', '') }}</textarea>
+    {{ notes("about", "More about the pack on its page, in Markdown like the guides: who it is for, and what readers get.") }}
+  </div>
+
+  <fieldset class="field wide bid-trades guide-starters{% if errors.get('guides') %} has-error{% endif %}">
+    <legend>Guides in this pack</legend>
+    <label><input type="checkbox" name="every_paid" value="yes" {% if values.get('every_paid') %}checked{% endif %}> <span><strong>Every guide pack guide</strong>, also the ones you add later <span class="muted">· the ticks below are then not used</span></span></label>
+    {% for g in all_guides %}
+    <label><input type="checkbox" name="guide" value="{{ g.id }}" {% if g.id in values.get('guide_ids', ()) %}checked{% endif %}> <span>{{ g.title }} <span class="muted">· {{ "Guide pack" if g.access == "paid" else "Free" }}{% if g.status != "published" %} · draft{% endif %}</span></span></label>
+    {% else %}
+    <p class="muted">No guides yet.</p>
+    {% endfor %}
+    {% if errors.get('guides') %}<p class="field-error">{{ errors.guides }}</p>{% endif %}
+    <p class="hint">Readers see only the published guides. A free guide in a pack stays free for everyone. Buyers read what the pack holds now: guides you add later are theirs too, and a guide you take out is no longer theirs.</p>
+  </fieldset>
+
+  <div class="form-end wide">
+    <button class="btn" type="submit">Save</button>
+  </div>
+</form>
+
+{% if pack %}
+<form class="panel listing-status guide-delete" action="/admin/guides/packs/{{ pack.id }}/delete" method="post">
+  <h2>Delete this pack</h2>
+  {% if sold %}<p>This pack was bought {{ sold }} {{ "time" if sold == 1 else "times" }}, so it can't be deleted: the buyers' links would stop working. To stop selling it, choose Not for sale and save.</p>
+  {% else %}<p>The pack is deleted for good. Its guides stay as they are.</p>
+  <label class="plan-choice"><input type="checkbox" name="confirm" value="yes" required> <span>Yes, delete "{{ pack.title }}"</span></label>
+  <p><button class="btn btn-quiet" type="submit">Delete</button></p>{% endif %}
+</form>
+{% endif %}
+{% endblock %}

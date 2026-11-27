@@ -24,9 +24,25 @@ release, see [Updating](docs/maintenance.md#updating).
   check, the worker tells Bing (and Yandex, Naver and Seznam) which pages
   are new or changed: the home page, the topics and news sites with new
   stories, the archive day, new event pages, newly approved press releases,
-  and Jobs, Bids and the guides when they change. Bing's results also feed DuckDuckGo, Yahoo, Copilot and
-  the web searches of AI assistants. Nothing to sign up for; on by default
-  once the site has a public address (`INDEXNOW=false` turns it off).
+  and Jobs, Bids and the guides when they change. Bing's results also feed
+  DuckDuckGo, Yahoo, Copilot and the web searches of AI assistants. Nothing
+  to sign up for; on by default once the site has a public address
+  (`INDEXNOW=false` turns it off).
+- **Guide packs: sell visitor guides through PayPal.** Set a guide to "Guide
+  pack readers" and everyone else reads its opening (the text before its
+  first heading), then sees the packs that hold it. Readers pay once through
+  PayPal on the pack's page (`/guides/packs/<address>`) and read with a
+  private link, kept in their browser and emailed to the address they paid
+  with: no accounts. Make packs and set their prices on `/admin/guides`; the
+  same page lists the sales, with **Turn off** for a shared link and
+  **Refund**. Three starter packs come with ten new guides, as drafts for you
+  to check: a PCS move pack for military families (move checklist, housing,
+  pets, cars, schools, typhoon season), a First week on Guam pack (a
+  seven-day plan, three or four days, Guam on a budget, before you fly) and
+  an Every guide pack. Sales count in the daily money report. New database
+  tables (run the update as usual), no new settings: packs need PayPal and
+  `STATS_PASSWORD`, and email for the link by email. How-to:
+  [docs/guides.md](docs/guides.md#selling-guides).
 - **Paid press releases and deals.** Two more kinds of paid listings, sold
   through PayPal and checked by you on `/admin/listings` like the others.
   **Press releases** (`/press`): a business or group posts its own news,
@@ -41,6 +57,19 @@ release, see [Updating](docs/maintenance.md#updating).
   dollars) and `DEAL_WEEK_PRICE` (default 10 dollars a week); `0` turns
   either off. Links in the sidebar's "Buy, sell and find local" box and at
   the bottom of every page. No database change.
+- **Section sponsors.** Sell one section of the site by the week: a line
+  such as "Weather brought to you by Island Bakery", with a link, at the top
+  of every page of that section (a news topic, Jobs, Events, Bids, Weather or
+  Outages). One business a section a week. Businesses book and pay on the
+  Advertise page as for the sponsor spot, and you approve each one on
+  `/advertise/review`; renewal reminders, "Run this ad again", Discord
+  alerts and the money summary work the same way. New setting
+  `SECTION_SPONSOR_PRICE` (empty: not sold). No database change.
+- **Media kit.** The Advertise page has a "Download the media kit" link: a
+  one-page PDF with your real numbers from the last 30 days (page views, the
+  most-read sections, where readers come from) and your prices, to send to
+  local businesses. It is made again every 10 minutes. It needs a new
+  package (fpdf2), so rebuild as usual when you update.
 - **Visitor guides.** A new section, `/guides`, with practical guides for
   visiting Guam that you write and keep up to date yourself, in your browser,
   on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a
