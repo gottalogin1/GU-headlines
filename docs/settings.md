@@ -447,7 +447,14 @@ page of your site, `/stats`, behind a password. The page shows the totals for
 today, the last 7, 30 or 90 days or the last year, a chart for each day, the
 websites that readers come from, the stories readers opened most, the clicks
 for each news source, the views and clicks for each topic, and the most viewed
-pages. At the bottom, **Source health** shows how each news site, job board
+pages. **Month by month** shows the visits and page views of each month of the
+last year, with the change from the month before, and the page views of a week
+in each section that a business can sponsor, for the last six months. **Your
+prices per 1,000 page views** shows what the sponsor spot and each section
+sponsor cost a business for each 1,000 page views, at your prices
+(`SPONSOR_WEEK_PRICE`, `SECTION_SPONSOR_PRICE`) and the page views of the last
+30 days, the numbers of the media kit. Use these to set your prices and to
+show a business that the numbers are not one lucky month. At the bottom, **Source health** shows how each news site, job board
 and event calendar is doing (see [Source health](maintenance.md#source-health)),
 and **Backups** lists the nightly backups, to download (see
 [Backups](maintenance.md#backups)).

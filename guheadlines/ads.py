@@ -38,7 +38,15 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from .models import AD_CLICKS, NEWSLETTER_CLICKS, SPONSOR_CLICKS, AdBooking, AdSlot, PageViews
+from .models import (
+    AD_CLICKS,
+    NEWSLETTER_CLICKS,
+    SPONSOR_CLICKS,
+    AdBooking,
+    AdSlot,
+    PageViews,
+    Referrers,
+)
 from .newsletter import next_edition_time
 from .scraper.text import GUAM_TZ
 from .settings import Settings
@@ -425,6 +433,22 @@ def _in_section(path: str):
     return or_(PageViews.path == path, PageViews.path.startswith(path + "/", autoescape=True))
 
 
+def _under(path: str, section: Section) -> bool:
+    """True when the page at `path` is in `section` (the same rule as _in_section)."""
+    return path == section.path or path.startswith(section.path + "/")
+
+
+def change(new: int, old: int) -> int | None:
+    """How much `new` is up (or down, below 0) from `old`, in percent; None when
+    `old` is 0."""
+    return round((new - old) * 100 / old) if old else None
+
+
+def _first_counted(session: Session) -> date | None:
+    """The first Guam day with a counted page view: the day the counting began."""
+    return session.scalar(select(func.min(PageViews.day)).where(PageViews.path.startswith("/")))
+
+
 def results(session: Session, booking: AdBooking, today: date) -> dict | None:
     """How the ad has done so far: the page views while it showed (the
     sponsor spot is on every page, a section sponsor on its section's pages)
@@ -448,7 +472,9 @@ def results(session: Session, booking: AdBooking, today: date) -> dict | None:
 def audience(session: Session, today: date, days: int = 30) -> dict:
     """The site's readership in the last `days` Guam days, for the Advertise
     page: page views (a day each, for the chart), and the clicks on the
-    sponsor spot and on the stories in the newsletter emails."""
+    sponsor spot and on the stories in the newsletter emails. "growth" is how
+    much the page views changed from the `days` before, in percent: None when
+    the counting began after the first of those days, or they had no views."""
     since = today - timedelta(days=days - 1)
     by_day = dict(
         session.execute(
@@ -462,10 +488,21 @@ def audience(session: Session, today: date, days: int = 30) -> dict:
         for day in (since + timedelta(days=n) for n in range(days))
     ]
     views = sum(d["views"] for d in daily)
+    before_since = since - timedelta(days=days)
+    before = _sum_views(
+        session,
+        PageViews.day >= before_since,
+        PageViews.day < since,
+        PageViews.path.startswith("/"),
+    )
+    growth = None
+    if before and _first_counted(session) <= before_since:
+        growth = change(views, before)
     return {
         "days": days,
         "daily": daily,
         "views": views,
+        "growth": growth,
         "per_day": round(views / days),
         "per_week": round(views * 7 / days),
         "sponsor_clicks": _sum_views(
@@ -489,12 +526,80 @@ def section_views(
         .where(PageViews.day >= since, or_(*(_in_section(s.path) for s in found)))
         .group_by(PageViews.path)
     ).all()
-    return {
-        s.slug: sum(
-            int(views) for path, views in rows if path == s.path or path.startswith(s.path + "/")
+    return {s.slug: sum(int(views) for path, views in rows if _under(path, s)) for s in found}
+
+
+@dataclass(frozen=True)
+class Month:
+    """The page views of one Guam month, on its days that were counted."""
+
+    first: date  # the 1st, or the day the counting began
+    last: date  # the month's last day, or yesterday for this month
+    visits: int  # arrivals from other websites and from no website (Referrers)
+    views: int  # page views on every page: the sponsor spot's
+    sections: dict[str, int]  # page views of each section, by slug
+
+    @property
+    def days(self) -> int:
+        return (self.last - self.first).days + 1
+
+    @property
+    def whole(self) -> bool:
+        """True when every day of the month was counted."""
+        return self.first.day == 1 and (self.last + timedelta(days=1)).day == 1
+
+    def per_week(self, views: int) -> int:
+        """`views` of this month as page views a week, on average, so that a
+        month with fewer days counted compares fairly with a whole one."""
+        return round(views * 7 / self.days)
+
+
+def _next_month(day: date) -> date:
+    """The 1st of the month after the month of `day`."""
+    return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+
+def monthly(session: Session, found: list[Section], today: date, months: int = 12) -> list[Month]:
+    """The page views of the last `months` Guam months, oldest first, from the
+    month the counting began. Only finished days count: today is left out, so
+    that a month that has just begun is not judged by a part of a day."""
+    last = today - timedelta(days=1)
+    began = _first_counted(session)
+    if began is None or began > last:
+        return []
+    back = last.year * 12 + last.month - months  # the month before the first, from year 0
+    first = max(date(back // 12, back % 12 + 1, 1), began)
+    month = func.to_char(PageViews.day, "YYYY-MM")
+    by_month: dict[str, list[tuple[str, int]]] = {}
+    for key, path, views in session.execute(
+        select(month, PageViews.path, func.sum(PageViews.views))
+        .where(PageViews.day.between(first, last), PageViews.path.startswith("/"))
+        .group_by(month, PageViews.path)
+    ):
+        by_month.setdefault(key, []).append((path, int(views)))
+    visit_month = func.to_char(Referrers.day, "YYYY-MM")
+    visits = dict(
+        session.execute(
+            select(visit_month, func.sum(Referrers.visits))
+            .where(Referrers.day.between(first, last))
+            .group_by(visit_month)
+        ).all()
+    )
+    found_months = []
+    while first <= last:
+        end = min(_next_month(first) - timedelta(days=1), last)
+        rows = by_month.get(f"{first:%Y-%m}", [])
+        found_months.append(
+            Month(
+                first=first,
+                last=end,
+                visits=int(visits.get(f"{first:%Y-%m}", 0)),
+                views=sum(views for _, views in rows),
+                sections={s.slug: sum(n for path, n in rows if _under(path, s)) for s in found},
+            )
         )
-        for s in found
-    }
+        first = end + timedelta(days=1)
+    return found_months
 
 
 def for_review(session: Session) -> list[AdBooking]:
