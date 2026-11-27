@@ -398,6 +398,7 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
 }
 .btn-quiet:hover { border-color: var(--accent); }
 .ad-numbers-note { margin-top: 10px; }
+.ad-kit { margin: 10px 4px 0; }
 .ad-offer h2 { font-family: var(--serif); font-size: 1.3rem; }
 .ad-form { margin-top: 14px; }
 .ad-form .btn { margin-top: 16px; }
@@ -409,6 +410,14 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
 .ad-day:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ad-day.is-taken { cursor: default; color: var(--muted); background: transparent; }
 .ad-day-taken { display: block; font-size: .78rem; }
+/* The section sponsor's sections (advertise.html): a link for each, the open one marked. */
+.ad-sections ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 6px 10px; }
+.ad-sections a { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--input-bg); color: var(--text); text-decoration: none; font-size: .92rem; }
+.ad-sections a:hover { border-color: var(--line-strong); }
+.ad-sections a[aria-current] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); font-weight: 650; }
+.ad-section-views { color: var(--muted); font-size: .8rem; font-weight: 400; }
+.ad-preview-line { margin-top: 14px; max-width: 60ch; }
+.ad-preview-line .section-sponsor { margin: 0; }
 .ad-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px; margin-top: 16px; }
 .ad-fields .field p { margin: 0; }
 .field textarea {

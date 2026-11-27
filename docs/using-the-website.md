@@ -256,6 +256,11 @@ price again through PayPal for as many days more (see
 an ad on the Advertise page gets the same kind of email, and its booking's
 page has a **Run this ad again** form.
 
+The pages of a section (a news topic, Jobs, Events, Bids, Weather or Outages)
+can start with a line such as "Weather brought to you by" and a business's
+name, with a link: a section sponsor that the business booked for that week
+on the Advertise page.
+
 ## Visitor guides
 
 The **Guides** link in the top bar (shown once a guide is published) opens

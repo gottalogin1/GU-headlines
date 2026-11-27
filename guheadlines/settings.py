@@ -172,9 +172,11 @@ class Settings:
     business_upgrade_price_cents: int = 5000
     business_upgrade_days: int = 365
     # The Advertise page (/advertise, see ads.py): businesses book and pay for
-    # the sponsor spot by the week, and for a sponsor line in the newsletter
-    # by the edition, through PayPal. Prices in US cents; 0: not for sale.
+    # the sponsor spot by the week, for one section of the site by the week,
+    # and for a sponsor line in the newsletter by the edition, through
+    # PayPal. Prices in US cents; 0: not for sale.
     sponsor_week_price_cents: int = 0
+    section_sponsor_price_cents: int = 0
     newsletter_sponsor_price_cents: int = 0
     # Sending email (see mail.py): an SMTP server (a mail server) and the
     # sender address. No server or no sender: no email is sent.
@@ -498,6 +500,7 @@ def load_settings() -> Settings:
             1, min(3650, _int(env.get("BUSINESS_UPGRADE_DAYS"), defaults.business_upgrade_days))
         ),
         sponsor_week_price_cents=_price_cents(env.get("SPONSOR_WEEK_PRICE")),
+        section_sponsor_price_cents=_price_cents(env.get("SECTION_SPONSOR_PRICE")),
         newsletter_sponsor_price_cents=_price_cents(env.get("NEWSLETTER_SPONSOR_PRICE")),
         smtp_host=env.get("SMTP_HOST", "").strip(),
         smtp_port=_int(env.get("SMTP_PORT"), defaults.smtp_port),

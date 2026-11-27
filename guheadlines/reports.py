@@ -76,7 +76,11 @@ LISTING_LABELS = {
     "event": "Featured events",
     "business": "Business directory upgrades",
 }
-AD_LABELS = {ads.SITE: "Sponsor spot", ads.NEWSLETTER: "Newsletter sponsor line"}
+AD_LABELS = {
+    ads.SITE: "Sponsor spot",
+    ads.SECTION: "Section sponsors",
+    ads.NEWSLETTER: "Newsletter sponsor line",
+}
 # Our own names of the things paid for through the site (custom_id).
 SITE_ORDERS = ("listing-", "ad-booking-", "bid-alerts-")
 # PayPal's kinds of payment: T00.. money that someone paid to the account
@@ -187,7 +191,10 @@ def _site_sales(session, start: datetime, end: datetime) -> tuple[list[Line], se
         .where(AdBooking.paid_at >= start, AdBooking.paid_at < end)
         .group_by(AdBooking.kind)
     ).all()
-    found = {kind: (n, cents) for kind, n, cents in rows}
+    found = {}
+    for kind, n, cents in rows:  # each section has its own kind, "section:<slug>"
+        before = found.get(ads.offer_kind(kind), (0, 0))
+        found[ads.offer_kind(kind)] = (before[0] + n, before[1] + int(cents))
     for kind, label in AD_LABELS.items():
         if kind in found:
             lines.append(Line(label, found[kind][0], int(found[kind][1])))

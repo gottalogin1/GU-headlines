@@ -531,7 +531,8 @@ class AdBooking(Base):
     # The secret part of the booking's own page (/advertise/booking/<code>),
     # which only the business that booked it is given.
     code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    # "site" (the sponsor spot) or "newsletter" (a line in the newsletter).
+    # "site" (the sponsor spot), "newsletter" (a line in the newsletter), or
+    # "section:<slug>" (the sponsor of one section, such as "section:weather").
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     # new (not paid yet), paid (waiting for the owner), approved, rejected
     # (and refunded) or cancelled (not paid in time, or cancelled by the business).
@@ -548,8 +549,8 @@ class AdBooking(Base):
     picture: Mapped[bytes | None] = mapped_column(LargeBinary)
     picture_width: Mapped[int | None] = mapped_column(Integer)
     picture_height: Mapped[int | None] = mapped_column(Integer)
-    # The Monday of each week (the sponsor spot), or the day of each edition
-    # (the newsletter), in Guam time.
+    # The Monday of each week (the sponsor spot, a section), or the day of
+    # each edition (the newsletter), in Guam time.
     days: Mapped[list[date]] = mapped_column(ARRAY(Date), nullable=False)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     paypal_order_id: Mapped[str | None] = mapped_column(Text)
@@ -566,8 +567,8 @@ class AdBooking(Base):
 
 
 class AdSlot(Base):
-    """A week of the sponsor spot, or a newsletter edition, that a booking
-    holds. One booking per slot: a slot that is taken cannot be booked again,
+    """A week of the sponsor spot or of a section, or a newsletter edition,
+    that a booking holds. One booking per slot: a slot that is taken cannot be booked again,
     even by two businesses at the same moment."""
 
     __tablename__ = "ad_slots"
