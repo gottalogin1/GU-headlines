@@ -761,13 +761,27 @@ Before making the site public, read the [note on content](../README.md#a-note-on
 
 ### Search engines
 
-The site is ready for Google and Bing: every page has a title, a summary,
-one canonical address and a link preview card, and
-`https://news.example.com/sitemap.xml` lists every page worth finding (the
-home page, each topic and news site, the Jobs, Events and Sources pages, each
-upcoming event's own page, and the archive down to each day). The event pages
-describe their event in the form Google reads for its event results (see
-[Each event's page](events.md#each-events-page)). Search engines find it through `robots.txt`.
+The site is ready for Google, Bing and AI assistants:
+
+- Every page has a title and summary in the words people search for ("Guam
+  weather today", "Guam jobs", "Guam bids and RFPs"), one canonical address
+  and a link preview card. Each page's heading says Guam too.
+- `https://news.example.com/sitemap.xml` lists every page worth finding (the
+  home page, each topic and news site, Weather, Outages, Jobs, Events, Bids,
+  the guides, each upcoming event's own page, and the archive down to each
+  day), with the time each last changed.
+- Each page describes itself in the form search engines read (structured
+  data): the site's name, logo and other pages (`SOCIAL_PROFILES`), that the
+  pages are about Guam, the stories a page lists, breadcrumbs, and each
+  event (see [Each event's page](events.md#each-events-page)).
+- The footer of every page links the Guam pages, and the home page ends with
+  a short "About" that says what the site is.
+- After each news check, the site tells Bing which pages are new or changed
+  (`INDEXNOW`), so Bing, and the AI assistants that search with Bing, have
+  them within minutes.
+- `robots.txt` welcomes every search engine and AI crawler, and
+  `/llms.txt` is a plain-text summary of the site for AI assistants: its
+  pages, topics, newsrooms and newest headlines.
 
 To get listed sooner and see how people find the site:
 
@@ -777,14 +791,29 @@ To get listed sooner and see how people find the site:
    **URL prefix** option can instead use the **HTML tag** method: put its
    `content="..."` value in `.env` as `GOOGLE_SITE_VERIFICATION=...`, run
    `docker compose up -d`, then press **Verify**.
-3. In Search Console, open **Sitemaps** and submit `sitemap.xml`.
-4. Optionally do the same in [Bing Webmaster Tools](https://www.bing.com/webmasters),
-   which can import the site from Search Console, or use
-   `BING_SITE_VERIFICATION`. Bing also feeds DuckDuckGo and Yahoo.
+3. In Search Console, open **Sitemaps** and submit `sitemap.xml`. Then use
+   **URL inspection** on the home page and the main pages (Weather, Events,
+   Jobs, Bids, Outages, Obituaries) and press **Request indexing** for each.
+4. Add the site to [Bing Webmaster Tools](https://www.bing.com/webmasters):
+   choose **Import from Google Search Console** (or use
+   `BING_SITE_VERIFICATION`), then submit `sitemap.xml` there too. Bing feeds
+   DuckDuckGo, Yahoo, Microsoft Copilot and the web searches of AI
+   assistants such as ChatGPT. Its **IndexNow** page shows the pages the
+   site sent.
+5. Optionally, make a Facebook page (or Instagram account) named after the
+   site, link it to the site, and put its address in `SOCIAL_PROFILES`.
 
-New sites usually take a few days to a few weeks to appear in results.
-Search results pages are kept out of search engines on purpose, and so are the
-stored copies of the news sites' photos, so image searches lead to the
+New sites usually take a few days to a few weeks to appear in results, and
+months to climb for busy searches. Search Console's **Performance** page
+shows the searches people find the site with.
+
+Some pages are kept out of search engines on purpose (Search Console lists
+them as "Excluded by 'noindex' tag"): search results, word searches on the
+Jobs, Events and Bids pages, the Events page moved to another month or day,
+the Bids page narrowed to one agency, the calendar (`.ics`) and newsletter
+feeds, the forms for posting a listing, and archive days with no stories.
+They are copies or forms, not pages people search for. The stored copies of
+the news sites' photos are kept out too, so image searches lead to the
 publishers' own pages.
 
 ---

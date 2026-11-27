@@ -198,6 +198,7 @@ def cmd_worker(args, settings: Settings) -> None:
     every CATCH_UP_SECONDS until they are fully loaded, then returns to the
     regular schedule.
     """
+    from . import indexnow
     from .bids import alerts as bid_alerts
     from .schedule import next_wake
 
@@ -350,6 +351,43 @@ def cmd_worker(args, settings: Settings) -> None:
         if report.changed:
             log.info("saved photos: %s", report.summary(settings.image_storage_gb))
 
+    told_search_engines: datetime | None = None  # the last time IndexNow was sent pages
+
+    def tell_search_engines() -> None:
+        """Send Bing and the other IndexNow search engines the pages that changed
+        since the last time; at the start, the main pages too (indexnow.py)."""
+        nonlocal told_search_engines
+        from . import guides
+        from .scraper.text import GUAM_TZ
+        from .web import queries
+
+        if not indexnow.is_on(settings):
+            return
+        now = datetime.now(timezone.utc)
+        since = told_search_engines or now - timedelta(seconds=interval)
+        today = datetime.combine(datetime.now(GUAM_TZ).date(), datetime.min.time(), GUAM_TZ)
+        try:
+            with session_scope() as session:
+                paths = indexnow.changed_paths(
+                    session, since, queries.upcoming_event_ids(session, today)
+                )
+                if told_search_engines is None:
+                    paths = (
+                        indexnow.main_paths(
+                            settings,
+                            [c.slug for c in config.categories],
+                            bool(guides.published(session)),
+                        )
+                        + paths
+                    )
+            told_search_engines = now
+            sent = indexnow.submit(settings, paths)
+        except Exception:
+            log.exception("IndexNow failed")
+            return
+        if sent:
+            log.info("IndexNow: told search engines about %d new or changed pages", sent)
+
     def run_once(catch_up: bool = False) -> None:
         nonlocal config, pending
         try:
@@ -411,6 +449,8 @@ def cmd_worker(args, settings: Settings) -> None:
         threading.Thread(
             target=_reports_loop, args=(settings, stop), name="reports", daemon=True
         ).start()
+    if indexnow_on := indexnow.is_on(settings):
+        log.info("IndexNow on: Bing and others are told about new pages after each check")
     if settings.scrape_on_start:
         run_once()
         check_keywords()
@@ -421,6 +461,8 @@ def cmd_worker(args, settings: Settings) -> None:
         send_renewal_reminders()
         check_alerts()
         look_after_photos()
+    if indexnow_on:
+        tell_search_engines()
     while not stop.is_set():
         delay, kind = next_wake(time.time(), interval, pending, settings.catch_up_seconds)
         when = datetime.fromtimestamp(time.time() + delay, tz=timezone.utc)
@@ -440,6 +482,7 @@ def cmd_worker(args, settings: Settings) -> None:
             send_renewal_reminders()
             check_alerts()
             look_after_photos()
+            tell_search_engines()
     log.info("worker stopped")
 
 

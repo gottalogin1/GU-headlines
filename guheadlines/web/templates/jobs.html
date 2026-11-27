@@ -4,7 +4,7 @@
 {% block main %}
 {% set blank %}<span class="not-given" title="Not given in the posting">—</span>{% endset %}
 <header class="page-head">
-  <h1>Jobs</h1>
+  <h1>Jobs on Guam</h1>
   <p class="muted">Openings on Guam from {{ boards|length }} job boards, checked every {{ settings.jobs_interval_hours }} hours. Every posting links to the board that published it.</p>
   {% if offers.job %}<p class="post-offer"><a class="btn" href="/post/job">Post a job</a> <span class="muted small">Hiring? Your job at the top of this page for {{ offers.job.days }} days: {{ offers.job.price }}.</span></p>{% endif %}
 </header>
