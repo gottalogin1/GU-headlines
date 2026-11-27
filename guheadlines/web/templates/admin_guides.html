@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {# The owner's list of visitor guides (/admin/guides, behind STATS_PASSWORD;
    guides.py): drafts and published guides, with their page views and the
-   clicks on their sponsors in the last 30 days. #}
+   clicks on their sponsors in the last 30 days; the guide packs and their
+   sales (guide_packs.py). #}
 
 {% block main %}
 <header class="page-head">
@@ -14,6 +15,7 @@
 </header>
 
 {% if message %}<p class="signup-result" role="status">{{ message }}</p>{% endif %}
+{% if paid_guides and not sales_on %}<p class="signup-result error" role="status">{{ paid_guides }} {{ "guide is" if paid_guides == 1 else "guides are" }} for guide pack readers, but packs can't be sold until PayPal is set up (PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in .env). Until then, readers see only the opening of those guides.</p>{% endif %}
 
 {% if starters %}
 <section class="panel listing-status">
@@ -46,7 +48,7 @@
   {% set n = counts[g.id] %}
   <tr>
     <td><a href="/admin/guides/{{ g.id }}"><strong>{{ g.title }}</strong></a><br>
-      <span class="muted small">{{ "Published" if g.status == "published" else "Draft" }}{% if g.section %} · {{ g.section }}{% endif %}
+      <span class="muted small">{{ "Published" if g.status == "published" else "Draft" }}{% if g.access == "paid" %} · Guide pack{% endif %}{% if g.section %} · {{ g.section }}{% endif %}
         · <a href="{{ '/guides/' ~ g.slug if g.status == 'published' else '/admin/guides/' ~ g.id ~ '/view' }}">{{ "view" if g.status == "published" else "preview" }}</a></span></td>
     <td class="num">{{ g.position }}</td>
     <td class="num">{{ n.views }}</td>
@@ -60,5 +62,90 @@
 </table>
 </div>
 <p class="muted small section-note">Views and clicks are counted while the visitor stats are on, as on /stats. Sponsor clicks are what you can show a sponsor.</p>
+{% endif %}
+
+<h2 class="section-title" id="packs">Guide packs ({{ packs|length }})</h2>
+<p class="muted section-note">Guides sold together through PayPal. Readers pay once and read with a private link: no account. Guides marked "Guide pack readers" in the editor show only their opening to everyone else.
+  <a href="/admin/guides/packs/new">New guide pack</a></p>
+
+{% if starter_packs %}
+<section class="panel listing-status">
+  <h2>Starter guide packs</h2>
+  <p>Ready-made packs with guides written for them. Tick the ones you want: each is added not for sale, and its guides are added as drafts.
+    Read and change the guides, publish them, then open the pack, check the price and put it on sale.</p>
+  <form action="/admin/guides/packs/starters" method="post">
+    <fieldset class="bid-trades guide-starters">
+      <legend>Packs to add</legend>
+      {% for s in starter_packs %}
+      <label><input type="checkbox" name="pack" value="{{ s.slug }}" checked> <span>{{ s.title }} <span class="muted">· {{ money(s.price_cents) }}{% if s.guides %} · {{ s.guides|length }} guides{% else %} · every guide pack guide{% endif %}</span></span></label>
+      {% endfor %}
+    </fieldset>
+    <button class="btn btn-quiet" type="submit">Add the ticked packs</button>
+  </form>
+</section>
+{% endif %}
+
+{% if packs %}
+<div class="table-wrap">
+<table class="status-table guide-table">
+  <thead>
+    <tr><th scope="col">Pack</th><th scope="col" class="num">Price</th><th scope="col" class="num">Guides</th><th scope="col" class="num">Sold, 30 days</th><th scope="col" class="num">Sold, all</th></tr>
+  </thead>
+  <tbody>
+  {% for p in packs %}
+  {% set m = month.get(p.pack.id, (0, 0)) %}
+  <tr>
+    <td><a href="/admin/guides/packs/{{ p.pack.id }}"><strong>{{ p.pack.title }}</strong></a><br>
+      <span class="muted small">{{ "For sale" if p.pack.status == "on_sale" else "Not for sale" }}{% if p.pack.status == "on_sale" and sales_on and p.published %} · <a href="/guides/packs/{{ p.pack.slug }}">view</a>{% endif %}
+        {%- if p.pack.status == "on_sale" and not p.published %} · not shown: none of its guides is published{% endif %}</span></td>
+    <td class="num">{{ money(p.pack.price_cents) }}</td>
+    <td class="num">{% if p.pack.every_paid %}all paid ({{ p.published }}){% else %}{{ p.published }}{% if p.count != p.published %} <span class="muted small">+{{ p.count - p.published }} draft</span>{% endif %}{% endif %}</td>
+    <td class="num">{{ m[0] }}{% if m[1] %}<br><span class="muted small">{{ money(m[1]) }}</span>{% endif %}</td>
+    <td class="num">{{ p.sold }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2 class="section-title" id="sales">Guide pack sales</h2>
+{% if not passes %}<p class="muted section-note">No sales yet.</p>
+{% else %}
+<p class="muted section-note">The last {{ passes|length }} sales. Last 30 days: {{ money(month_total) }}, not counting money given back. "Opened" counts how often the buyer's link was opened; a link opened very many times may have been shared, and you can turn it off.</p>
+<div class="table-wrap">
+<table class="status-table guide-table">
+  <thead>
+    <tr><th scope="col">Bought</th><th scope="col">Pack</th><th scope="col" class="num">Paid</th><th scope="col">Buyer</th><th scope="col" class="num">Opened</th><th scope="col">State</th></tr>
+  </thead>
+  <tbody>
+  {% for gp, title in passes %}
+  <tr>
+    <td>{{ gp.created_at|fmt_day }}</td>
+    <td>{{ title }}</td>
+    <td class="num">{{ money(gp.amount_cents) }}</td>
+    <td class="small">{{ gp.email or "–" }}</td>
+    <td class="num">{{ gp.opened }}</td>
+    <td class="small">
+      {%- if gp.status == "paid" %}OK{% elif gp.status == "pending" %}PayPal still checking{% elif gp.status == "off" %}Turned off{% else %}Given back{% endif %}
+      {%- if gp.status != "refunded" %}
+      <details class="pass-actions"><summary>Change</summary>
+        <form action="/admin/guides/passes/{{ gp.id }}" method="post">
+          <input type="hidden" name="action" value="{{ 'on' if gp.status == 'off' else 'off' }}">
+          <button class="btn btn-quiet" type="submit">{{ "Turn on again" if gp.status == "off" else "Turn off" }}</button>
+        </form>
+        <form action="/admin/guides/passes/{{ gp.id }}" method="post">
+          <input type="hidden" name="action" value="refund">
+          <label class="plan-choice"><input type="checkbox" name="confirm" value="yes" required> <span>Give the {{ money(gp.amount_cents) }} back</span></label>
+          <button class="btn btn-quiet" type="submit">Refund</button>
+        </form>
+      </details>
+      {%- endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,70 @@
+# The starter guide packs that come with the site (guide_packs.py). On
+# /admin/guides, the owner adds the ones they want: each pack is added "not
+# for sale", with its starter guides as drafts (guide_starters/<slug>.md).
+# The owner reads and changes them, publishes the guides, and puts the pack
+# on sale. The prices here are only suggestions; the owner sets them.
+
+pcs-move:
+  title: PCS move pack for military families
+  position: 10
+  price: "12"
+  summary: >
+    Six guides for military families with orders to Guam: the move
+    checklist, finding a home, pets, cars, schools and typhoon season.
+  about: |
+    Moving to Guam on military orders? These guides answer the questions
+    families ask most, in the order you need them, from the first months
+    before the move to the first typhoon season on the island.
+
+    - A move checklist, from four months before to your first months on Guam
+    - Base housing and renting off base: the villages, and what to check in a home
+    - Bringing your dogs and cats to a rabies-free island
+    - Shipping or buying a car, registration and the rules of the road
+    - Schools and child care for military children
+    - Getting your home ready for typhoon season
+
+    Pay once through PayPal and read the guides on all your devices, with
+    every update for as long as they are on the site.
+  guides:
+    - pcs-move-checklist
+    - military-housing
+    - pets-to-guam
+    - cars-and-driving
+    - schools-and-childcare
+    - typhoon-ready-home
+
+first-week:
+  title: First week on Guam pack
+  position: 20
+  price: "5"
+  summary: >
+    Plan your trip: a day-by-day week on Guam, a plan for a long weekend,
+    Guam on a budget, and what to sort out before you fly.
+  about: |
+    Make the most of your first trip to Guam with four guides that plan it
+    for you.
+
+    - A seven-day plan that covers the whole island at an easy pace
+    - The best of Guam in three or four days
+    - Free beaches, cheap local food and other ways to save
+    - Entry papers, the customs form, money, phones and what to pack
+
+    Pay once through PayPal and read the guides on your phone during your
+    trip, with every update.
+  guides:
+    - first-week-plan
+    - long-weekend
+    - guam-on-a-budget
+    - before-you-fly
+
+every-guide:
+  title: Every guide pack
+  position: 30
+  price: "15"
+  every_paid: true
+  summary: >
+    Every guide for paying readers in one pack: the PCS move guides, the
+    first-week guides, and every new one added later.
+  about: |
+    One payment opens every guide on the site that is for paying readers,
+    now and in the future.

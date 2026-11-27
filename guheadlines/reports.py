@@ -51,6 +51,7 @@ from .models import (
     AlertState,
     Article,
     BidAlertSubscriber,
+    GuidePass,
     Listing,
     ListingRenewal,
     PageViews,
@@ -78,7 +79,7 @@ LISTING_LABELS = {
 }
 AD_LABELS = {ads.SITE: "Sponsor spot", ads.NEWSLETTER: "Newsletter sponsor line"}
 # Our own names of the things paid for through the site (custom_id).
-SITE_ORDERS = ("listing-", "ad-booking-", "bid-alerts-")
+SITE_ORDERS = ("listing-", "ad-booking-", "bid-alerts-", "guide-pack-")
 # PayPal's kinds of payment: T00.. money that someone paid to the account
 # (T0002: a subscription payment), T11.. money given back.
 PAID_IN = "T00"
@@ -191,24 +192,39 @@ def _site_sales(session, start: datetime, end: datetime) -> tuple[list[Line], se
     for kind, label in AD_LABELS.items():
         if kind in found:
             lines.append(Line(label, found[kind][0], int(found[kind][1])))
+    n, cents = session.execute(
+        select(func.count(), func.coalesce(func.sum(GuidePass.amount_cents), 0)).where(
+            GuidePass.created_at >= start, GuidePass.created_at < end
+        )
+    ).one()
+    if n:
+        lines.append(Line("Guide packs", n, int(cents)))
     since = start - timedelta(days=1)
     ids: set[str] = set()
     for column, paid_at in (
         (Listing.capture_id, Listing.paid_at),
         (ListingRenewal.capture_id, ListingRenewal.paid_at),
         (AdBooking.paypal_capture_id, AdBooking.paid_at),
+        (GuidePass.capture_id, GuidePass.created_at),
     ):
         ids.update(session.scalars(select(column).where(paid_at >= since, column.is_not(None))))
     return lines, ids
 
 
 def _listing_refunds(session, start: datetime, end: datetime) -> Line | None:
-    n, cents = session.execute(
-        select(func.count(), func.coalesce(func.sum(Listing.amount_cents), 0)).where(
-            Listing.refunded_at >= start, Listing.refunded_at < end
-        )
-    ).one()
-    return Line("Given back", n, int(cents)) if n else None
+    """Listings and guide packs given back (when PayPal's own list can't be read)."""
+    n = cents = 0
+    for amount, refunded_at in (
+        (Listing.amount_cents, Listing.refunded_at),
+        (GuidePass.amount_cents, GuidePass.refunded_at),
+    ):
+        count, total = session.execute(
+            select(func.count(), func.coalesce(func.sum(amount), 0)).where(
+                refunded_at >= start, refunded_at < end
+            )
+        ).one()
+        n, cents = n + count, cents + int(total)
+    return Line("Given back", n, cents) if n else None
 
 
 def _bid_alerts(
