@@ -275,6 +275,7 @@ def sitemap_entries(
     entries.append((url("/events"), None))
     entries.extend((url(f"/events/{event_id}"), None) for event_id in events)
     entries.append((url("/bids"), None))
+    entries.append((url("/bids/awards"), None))
     if bid_alerts:
         entries.append((url("/bids/alerts"), None))
     entries.extend((url(path), None) for path in listings)

@@ -930,6 +930,16 @@ a.btn { display: inline-block; text-decoration: none; }
 .bid-alert-review .job-facts { margin-top: 4px; }
 .bid-alert-fine { margin: 0 4px 22px; max-width: 75ch; }
 
+/* ---------- bid award history (/bids/awards) ---------- */
+.bid-awards-link { margin-top: 6px; font-weight: 650; }
+.award-access { margin-top: 8px; font-weight: 650; color: var(--text-soft); }
+.award .job-facts dd strong { font-variant-numeric: tabular-nums; }
+.award-winner { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.award-winners .facet-name { display: flex; flex-direction: column; gap: 1px; }
+.award-winners .count { font-variant-numeric: tabular-nums; }
+.award-more { margin-top: 18px; }
+.award-more h2 { margin: 0 0 6px; font-size: 1.1rem; }
+
 /* ---------- visitor stats (/stats) ---------- */
 .stats-totals { margin: 18px 0 0; }
 .stats-totals dd { font-size: 1.4rem; font-weight: 750; font-variant-numeric: tabular-nums; }

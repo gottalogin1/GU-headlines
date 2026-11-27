@@ -22,6 +22,14 @@
   {% endif %}
 </section>
 
+{% if awards %}
+<section class="site-note bid-alert-awards">
+  <h2>Award history</h2>
+  <p>Your subscription includes the full award history: who won past Government of Guam bids and for how much. This link opens all of it in this browser, which remembers it for 30 days.</p>
+  <p class="bid-alert-actions"><a class="btn" href="/bids/awards?t={{ sub.token }}" rel="nofollow">Open the award history</a></p>
+</section>
+{% endif %}
+
 {% if not state.ended %}
 <form class="search-form bid-alert-form" action="/bids/alerts/manage" method="post">
   <h2 class="grow">What you get alerts for</h2>

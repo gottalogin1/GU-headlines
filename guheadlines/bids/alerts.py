@@ -28,6 +28,8 @@ link is sent again to the address (send_links).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import re
 import secrets
@@ -192,6 +194,30 @@ def manage_url(settings: Settings, token: str) -> str:
 
 def review_url(settings: Settings, token: str) -> str:
     return f"{settings.site_url}/bids/alerts/review?t={token}"
+
+
+def awards_url(settings: Settings, token: str) -> str:
+    """The link that opens the whole award history in the subscriber's browser."""
+    return f"{settings.site_url}/bids/awards?t={token}"
+
+
+def awards_key(token: str) -> str:
+    """What the award history page's cookie holds for a subscriber: made from
+    the token, but not the token itself, so the cookie can't open the
+    subscriber's own page (where alerts are changed or cancelled)."""
+    return hashlib.sha256(f"bid-awards:{token}".encode()).hexdigest()
+
+
+def by_awards_key(key: str, now: datetime | None = None) -> BidAlertSubscriber | None:
+    """The subscriber getting alerts now whose awards_key is `key`."""
+    if not key or len(key) != 64:
+        return None
+    now = now or datetime.now(timezone.utc)
+    with session_scope() as session:
+        for sub in session.scalars(select(BidAlertSubscriber).where(_receiving(now))):
+            if hmac.compare_digest(awards_key(sub.token), key):
+                return sub
+    return None
 
 
 # ----------------------------------------------------------------- choices
@@ -644,14 +670,17 @@ def _footer(settings: Settings, sub: BidAlertSubscriber) -> tuple[list[str], lis
     """The end of every alert email: plain text lines, and HTML lines."""
     page = manage_url(settings, sub.token)
     bids = f"{settings.site_url}/bids"
+    awards = awards_url(settings, sub.token)
     text = [
         f"All open bids: {bids}",
+        f"Who won past bids, and for how much (your full award history): {awards}",
         f"Change your trades or words, or cancel: {page}",
         f"You get this email because you subscribed to bid alerts on {settings.site_name}."
         " Always check the details with the agency before you bid.",
     ]
     html = [
-        f'<a href="{escape(bids)}">All open bids</a> · <a href="{escape(page)}">Change your'
+        f'<a href="{escape(bids)}">All open bids</a> · <a href="{escape(awards)}">Who won past'
+        f' bids (your full award history)</a> · <a href="{escape(page)}">Change your'
         " trades or words, or cancel</a>",
         f"You get this email because you subscribed to bid alerts on"
         f" {escape(settings.site_name)}. Always check the details with the agency before you"
@@ -693,6 +722,11 @@ def welcome_email(
         f"Keep this email: its link opens your own page, where you can change your trades or"
         f" words, or cancel. PayPal takes {price} each month until you cancel."
     )
+    awards = awards_url(settings, sub.token)
+    history = (
+        "Your subscription also opens the full award history: who won past Government of Guam"
+        " bids, and for how much."
+    )
     shown = found[:WELCOME_BIDS]
     if shown:
         now_text = f"{len(found)} open {'bid matches' if len(found) == 1 else 'bids match'} now:"
@@ -701,13 +735,15 @@ def welcome_email(
     else:
         now_text = "No open bid matches right now. You'll hear from us when one does."
     text = "\n\n".join(
-        [title, about, keep, f"Your page: {page}", now_text]
+        [title, about, keep, f"Your page: {page}", f"{history} {awards}", now_text]
         + ["\n".join(_bid_lines(item)) for item in shown]
         + [f"All open bids: {settings.site_url}/bids"]
     )
     intro = (
         f'{escape(about)}</p><p style="margin:0 0 12px;font:15px Arial,sans-serif">'
         f'{escape(keep)} <a href="{escape(page)}">Open your page</a>.</p>'
+        f'<p style="margin:0 0 12px;font:15px Arial,sans-serif">{escape(history)}'
+        f' <a href="{escape(awards)}">Open the award history</a>.</p>'
         f'<p style="margin:0 0 12px;font:15px Arial,sans-serif"><strong>{escape(now_text)}'
         "</strong>"
     )

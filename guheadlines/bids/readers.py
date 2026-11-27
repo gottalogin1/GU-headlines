@@ -774,15 +774,22 @@ class FoundAward:
         return number_key(self.number, self.agency)
 
 
-_MONEY_RE = re.compile(r"\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)")
+# "$39,600.00", and "$19, 632.41" (a space typed after the comma).
+_MONEY_RE = re.compile(r"\$\s*((?:\d{1,3}(?:,\s?\d{3})+|\d+)(?:\.\d{1,2})?)")
 _AWARDED_TO_RE = re.compile(r"\bawarded\s+to\b\s*:?\s*", re.I)
 # What a winner's cell says when there is no winner (yet).
 _NO_WINNER_RE = re.compile(
-    r"^\W*$|^\W*(n/?a|none|tbd|tba|awarded|see\b.*)\W*$|"
+    r"^\W*$|^\W*(n/?a|none|tbd|tba|awarded|see\b.*|award (?:information|notice|letter)s?|"
+    r"notice of award)\W*$|"
     r"evaluat|pending|protest|review|negotiat|cancel|closed|\bopen\b|reject|no award|"
     r"not awarded|re-?bid|postpone|\bstay\b|withdraw|suspend|terminat|in progress|"
     r"intent to award",
     re.I,
+)
+# A status that says the bid was awarded, without naming the winner: "Awarded",
+# or the Memorial Hospital's link "Award Information" (a PDF).
+_SAID_AWARDED_RE = re.compile(
+    r"^\W*(awarded|award (?:information|notice|letter)s?|notice of award)\W*$", re.I
 )
 _AWARD_DOCUMENT_RES = [
     re.compile(r"abstract|tabulation|bid results?", re.I),
@@ -803,19 +810,33 @@ def split_award(text: str | None) -> tuple[str | None, int | None, str | None]:
         return None, None, None
     found = _AWARDED_TO_RE.search(text)
     if found:
-        money, winner = text[: found.start()], text[found.end() :]
+        money, winner = text[: found.start()], _tidy_winner(text[found.end() :])
     else:
-        money, winner = text, _MONEY_RE.sub(" ", text)
-    winner = re.sub(r"(?:[\s\-–—:,;/|]|\band\b)+$", "", re.sub(r"\s+", " ", winner)).strip()
-    winner = re.sub(r"^(?:[\s\-–—:,;/|]|\band\b)+", "", winner).strip()
+        # "A - $1.00. B - $2.00": the names are what is left between the amounts.
+        money = text
+        names = [_tidy_winner(part) for part in _MONEY_RE.split(text)[::2]]
+        winner = "; ".join(name for name in names if name)
     if _NO_WINNER_RE.search(winner):
         winner = ""
-    amounts = _MONEY_RE.findall(money)
-    cents = sum(round(float(a.replace(",", "")) * 100) for a in amounts) if amounts else None
+    amounts = [re.sub(r"[,\s]", "", a) for a in _MONEY_RE.findall(money)]
+    cents = sum(round(float(a) * 100) for a in amounts) if amounts else None
     if cents is not None and not 0 < cents < _MAX_AMOUNT_CENTS:
         cents = None
-    written = " and ".join(f"${a}" for a in amounts) if len(amounts) > 1 else None
+    written = " and ".join(_money_text(a) for a in amounts) if len(amounts) > 1 else None
     return truncate(winner, 300) or None, cents, written
+
+
+def _tidy_winner(text: str) -> str:
+    """A winner's name without the dashes, colons and "and" around it."""
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"(?:[\s\-–—:,;/|]|\band\b)+$", "", text)
+    return re.sub(r"^(?:[\s\-–—:,;/|.]|\band\b)+", "", text).strip()
+
+
+def _money_text(amount: str) -> str:
+    """'16078.65' -> '$16,078.65'."""
+    dollars, _, cents = amount.partition(".")
+    return f"${int(dollars):,}" + (f".{cents.ljust(2, '0')}" if cents else "")
 
 
 def _award_column(header: list[str]) -> int | None:
@@ -825,13 +846,23 @@ def _award_column(header: list[str]) -> int | None:
     return found[-1] if found else None
 
 
-def _award_document(cells: list[Tag], base: str) -> str | None:
-    links = [
-        (clean_text(a.get_text(" ")), _link(base, a["href"]))
-        for c in cells
-        for a in c.find_all("a", href=True)
-        if not a["href"].startswith(("mailto:", "/cdn-cgi/", "#", "javascript:"))
-    ]
+def _award_document(cells: list[Tag], base: str, column: int) -> str | None:
+    """The award's document: a file linked in the award column ("Award
+    Information"), else the row's bid abstract, award notice or contract."""
+
+    def links(where: list[Tag]) -> list[tuple[str, str]]:
+        return [
+            (clean_text(a.get_text(" ")), _link(base, a["href"]))
+            for c in where
+            for a in c.find_all("a", href=True)
+            if not a["href"].startswith(("mailto:", "/cdn-cgi/", "#", "javascript:"))
+        ]
+
+    if column < len(cells):
+        for _, href in links([cells[column]]):
+            if _FILE_LINK_RE.search(href.split("?")[0]):
+                return href
+    links = links(cells)
     for pattern in _AWARD_DOCUMENT_RES:
         for text, href in links:
             if pattern.search(text) and _FILE_LINK_RE.search(href.split("?")[0]):
@@ -851,7 +882,7 @@ def parse_awards(result: FetchResult, agency: str | None = None) -> list[FoundAw
     for cells, bid in rows:
         text = cells[column].get_text(" ") if column < len(cells) else ""
         winner, cents, written = split_award(text)
-        said_awarded = bool(bid.status and re.match(r"\W*awarded\b", bid.status, re.I))
+        said_awarded = bool(bid.status and _SAID_AWARDED_RE.match(bid.status))
         if not (winner or cents or said_awarded):
             continue
         if bid.status and not said_awarded and _NO_WINNER_RE.search(bid.status):
@@ -869,7 +900,7 @@ def parse_awards(result: FetchResult, agency: str | None = None) -> list[FoundAw
                 awarded_to=winner,
                 amount_cents=cents,
                 amounts=written,
-                document_url=_award_document(cells, result.url),
+                document_url=_award_document(cells, result.url, column),
                 posted_on=bid.posted_on,
                 closed_on=bid.due_at.astimezone(GUAM_TZ).date() if bid.due_at else None,
             )

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{# The award history page (/bids/awards): who won past Government of Guam
+   bids and for how much. Everyone sees the last BID_AWARDS_FREE_DAYS days;
+   bid alert subscribers (a cookie set by the link in their emails) see all
+   of it. With bid alerts off, everyone does (since is None). #}
+{% block main %}
+{% set arrow %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>{% endset %}
+{% set rows = listing.page.items %}
+<header class="page-head">
+  <h1>Bid award history</h1>
+  <p class="muted">Who won past Government of Guam bids and requests for proposals, and for how much, from the agencies that publish their awards. Every award links to the agency's own record.</p>
+  {% if subscriber %}
+  <p class="award-access">You're seeing the full history, back to {{ listing.oldest|fmt_day if listing.oldest else "the first award read" }}, included with your bid alerts.</p>
+  {% elif since and bid_alerts %}
+  <p class="bid-alert-cta">Showing the last {{ settings.bid_awards_free_days }} days. <a href="/bids/alerts">Bid alerts</a> include the full history <span class="muted">· {{ bid_alerts.price }} a month</span></p>
+  {% endif %}
+</header>
+
+{% if access_ended %}
+<p class="signup-result error" role="status">That link no longer opens the full history: the bid alerts it belongs to have ended. You can <a href="/bids/alerts">sign up again</a>.</p>
+{% endif %}
+
+<form class="search-form bid-filter" action="/bids/awards" method="get">
+  <div class="field bid-words">
+    <label for="aq">Words</label>
+    <input id="aq" type="search" name="q" value="{{ award_filters.q }}" placeholder="e.g. transformer, a company's name" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="aagency">Agency</label>
+    <select id="aagency" name="agency">
+      <option value="">All agencies</option>
+      {% for name, count in listing.agencies %}<option value="{{ name }}" {% if award_filters.agency == name %}selected{% endif %}>{{ name }} ({{ count }})</option>{% endfor %}
+    </select>
+  </div>
+  {% if award_filters.company %}<input type="hidden" name="company" value="{{ award_filters.company }}">{% endif %}
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if award_filters.q or award_filters.agency or award_filters.company %}<a class="reset" href="/bids/awards">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(listing.page.total) }} {{ "award" if listing.page.total == 1 else "awards" }}{% if award_filters.company %} won by {{ award_filters.company }}{% endif %}{% if award_filters.q %} matching “{{ award_filters.q }}”{% endif %}{% if award_filters.agency %} from {{ award_filters.agency }}{% endif %}{% if since %} in the last {{ settings.bid_awards_free_days }} days{% endif %}{% if listing.total_cents %} <span class="muted">· {{ money(listing.total_cents) }} in all</span>{% endif %}</h2>
+
+{% if not rows %}
+<div class="empty">
+  <h2>No awards here yet</h2>
+  <p>{% if award_filters.q or award_filters.agency or award_filters.company %}No award matches these filters{% if since %} in the last {{ settings.bid_awards_free_days }} days{% endif %}.{% else %}The agencies' award lists are read once a day, starting with the worker's first bids check.{% endif %}</p>
+</div>
+{% endif %}
+
+{% for item in rows %}
+{% set a = item.award %}
+<article class="story no-photo bid award">
+  <div class="story-body">
+  <p class="bid-kind">{% if a.kind %}{{ a.kind }}{% endif %}{% if a.kind and a.number %} · {% endif %}{% if a.number %}<span class="bid-number">{{ a.number }}</span>{% endif %}</p>
+  <h3 class="headline"><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener" title="Open on {{ a.url|domain }}">{{ a.title }}</a></h3>
+  <p class="job-employer">{% if a.agency and a.agency != item.source_name %}<strong>{{ a.agency }}</strong> · {% endif %}{% if item.source_homepage %}<a href="{{ item.source_homepage|safe_url }}" target="_blank" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
+  <dl class="job-facts">
+    <div><dt>Awarded to</dt><dd>{% if a.awarded_to %}{% for name in a.awarded_to.split("; ") %}{% if not loop.first %}; {% endif %}<a class="award-winner" href="/bids/awards?company={{ name|urlencode }}">{{ name }}</a>{% endfor %}{% else %}<span class="not-given">{{ "See the award document" if a.document_url else "Not given" }}</span>{% endif %}</dd></div>
+    <div><dt>Amount</dt><dd>{% if a.amount_cents %}<strong>{{ money(a.amount_cents) }}</strong>{% if a.amounts %} <span class="muted">({{ a.amounts }})</span>{% endif %}{% else %}<span class="not-given">Not given</span>{% endif %}</dd></div>
+    <div><dt>{{ "Bids due" if a.closed_on else ("Posted" if a.posted_on else "Seen") }}</dt><dd><time datetime="{{ item.day.isoformat() }}">{{ item.day|fmt_day }}</time></dd></div>
+  </dl>
+  <p class="job-links">
+    <a class="read-link" href="{{ a.url|safe_url }}" target="_blank" rel="noopener">
+      View the bid at <span class="read-domain">{{ a.url|domain }}</span>
+      {{ arrow }}
+    </a>
+    {% if a.document_url and a.document_url != a.url %}
+    <a class="read-link" href="{{ a.document_url|safe_url }}" target="_blank" rel="noopener">{{ award_document(a.document_url) }}
+      {{ arrow }}
+    </a>
+    {% endif %}
+  </p>
+  </div>
+</article>
+{% endfor %}
+
+{% from "_macros.html" import pagination %}
+{{ pagination(listing.page, page_url) }}
+
+{% if since and listing.older %}
+<section class="site-note award-more">
+  <h2>{{ "{:,}".format(listing.older) }} older {{ "award" if listing.older == 1 else "awards" }}{% if listing.older_cents %}, {{ money(listing.older_cents) }} in all{% endif %}</h2>
+  <p>The full history goes back to {{ listing.oldest|fmt_day if listing.oldest else "2021" }}{% if award_filters.q or award_filters.agency or award_filters.company %} (these are the older awards that match your filters){% endif %}. It comes with <a href="/bids/alerts">bid alerts</a>: an email when a new bid matches your trade, and every past award, for {{ bid_alerts.price if bid_alerts else "a small price" }} a month.</p>
+  <p class="muted small">Already subscribed? Open the award history link in any bid alert email, or on your bid alerts page.</p>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+{% if listing.winners %}
+<section class="panel">
+  <h2>Top winners</h2>
+  <ul class="facets award-winners">
+    {% for name, count, cents in listing.winners %}
+    <li>
+      <span class="facet-name"><a href="/bids/awards?company={{ name|urlencode }}">{{ name }}</a><span class="muted small">{{ count }} {{ "award" if count == 1 else "awards" }}</span></span>
+      <span class="count">{{ money_short(cents) if cents else "—" }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">By money awarded{% if since %} in the last {{ settings.bid_awards_free_days }} days{% endif %}{% if award_filters.q or award_filters.agency %}, among the awards matching your filters{% endif %}. An award shared by several companies counts for them together, and a company named in different ways by different agencies is counted apart.</p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Sources</h2>
+  {% if sources %}
+  <ul class="facets">
+    {% for s in sources %}
+    <li>
+      <span class="facet-name">
+        {{ s.name }}
+        {% if s.homepage %}<a class="site-link" href="{{ s.homepage|safe_url }}" target="_blank" rel="noopener">{{ s.homepage|domain }} ↗</a>{% endif %}
+        {% if s.awards_run_at %}<span class="muted small" title="{{ s.awards_run_at|fmt_datetime }}">checked {{ s.awards_run_at|rel_time }}</span>{% endif %}
+        {% if s.awards_error %}<span class="error small" title="{{ s.awards_error }}">⚠ {{ s.awards_error|truncate(140) }}</span>{% endif %}
+      </span>
+      <span class="count">{{ s.awards_count if s.awards_count is not none else "—" }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted small">Awards each agency lists now. Awards stay in this history after an agency stops listing them.</p>
+  {% else %}
+  <p class="muted">Waiting for the first check.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>About these awards</h2>
+  <p class="small">When an agency picks the company that gets a contract, the bid is <strong>awarded</strong>. These lists don't give the day of the award itself, so each award is dated by when its bids were due; the award usually follows within weeks.</p>
+  <p class="small">The amount is what the agency lists. For supplies bought as needed, it can be a yearly or not-to-exceed figure. The bid abstract, where linked, shows every company's price.</p>
+  <p class="small">Only some agencies publish who won. Always check the details with the agency.</p>
+  <p class="small"><a href="/bids">Open bids and RFPs</a></p>
+</section>
+{% endblock %}

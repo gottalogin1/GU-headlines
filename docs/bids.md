@@ -103,6 +103,47 @@ docker compose exec worker guheadlines bids
 `--source SLUG` reads one source. `guheadlines bids --check` shows what each
 source gives without saving anything (`--limit N` bids per source).
 
+## Award history
+
+`/bids/awards` shows who won past Government of Guam bids and for how much,
+newest first, with a word search, an agency filter, each winner's other
+awards (click a company's name) and the top winners by money awarded. It is
+linked from the top of the Bids page.
+
+Only some agencies publish their awards in a list the site can read:
+
+| Source | What its award list gives |
+|---|---|
+| Guam Power Authority (OpenGov Guam) | The company and the amount for every award since fiscal year 2021, and the bid abstract (every bidder's price). About 280 awards worth about $49 million in November 2026. |
+| Port Authority of Guam | The company and the amount, and the contract or award notice, from all pages of its list (about 36 awards). |
+| Guam Memorial Hospital Authority | That the bid was awarded, with a link to its "Award Information" PDF (the company's name is only in the PDF). |
+| GHURA (OpenGov Guam) | Its "Awarded" list was empty in November 2026; its awards show up once it lists some. |
+
+The public notices portal, the Waterworks Authority and the agencies that post
+on the portal put their awards in PDF notices only, which are not read.
+
+Each award is dated by when its bids were due (the Port's by when it was
+posted): the lists don't give the day of the award itself. Award lists are
+read about once a day, after a bids check. An award stays in the history
+after the agency stops listing it, so the history keeps growing. A source's
+award list is the `awards:` address in `config/bids.yaml`. To read the award
+lists now, or to see what they give without saving anything:
+
+```
+docker compose exec worker guheadlines bids --awards
+docker compose exec worker guheadlines bids --awards --check --source gpa
+```
+
+**Who sees what.** While bid alerts are on (see [Bid alerts](bid-alerts.md)),
+every visitor sees the last `BID_AWARDS_FREE_DAYS` days (default 180), and the
+page says how many older awards there are and that bid alerts include them.
+Bid alert subscribers see the whole history, without ads: every alert email,
+the welcome email and their own bid alerts page have an "award history" link.
+That link sets a cookie in their browser (made from their secret code, but not
+the code itself, so it can't change or cancel their alerts) and the browser is
+remembered for 30 days, or until the subscription ends. There is no login.
+While bid alerts are off, everyone sees the whole history.
+
 ## When a source can't be read
 
 A source that is blocked, has no table of bids where it used to be, or
@@ -118,6 +159,7 @@ take effect at the next check; no rebuild needed.
 | Input | For |
 |---|---|
 | `notices` | A notices.guam.gov listing, narrowed to topics with `topic_id[]` in its address. |
+| `awards` | A web page with a table of awarded bids for the [award history](#award-history), read like a `table`, plus a column whose heading says "award" ("Awarded Amount", "Status/Awarded") with the winner, the amount or both. Its next pages are read too (up to 12). |
 | `table` | A web page with a table of bids, one row each. The columns are found by their headings: the number ("Number", "No.", "Announcement"), the title ("Title", "Description", "Project"), the issue date ("Issued", "Posted", "Available"), the due date ("Due", "Deadline", "Submission", "Close") and the status. A page that leaves out the table's row tags (like GWA's) works too. |
 
 Other options per source: `homepage` (linked from the Bids page), `agency`
