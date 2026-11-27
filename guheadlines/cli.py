@@ -367,11 +367,14 @@ def cmd_worker(args, settings: Settings) -> None:
                     session, since, queries.upcoming_event_ids(session, today)
                 )
                 if told_search_engines is None:
-                    paths = indexnow.main_paths(
-                        settings,
-                        [c.slug for c in config.categories],
-                        bool(guides.published(session)),
-                    ) + paths
+                    paths = (
+                        indexnow.main_paths(
+                            settings,
+                            [c.slug for c in config.categories],
+                            bool(guides.published(session)),
+                        )
+                        + paths
+                    )
             told_search_engines = now
             sent = indexnow.submit(settings, paths)
         except Exception:

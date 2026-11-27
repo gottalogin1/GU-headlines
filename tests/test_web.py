@@ -482,29 +482,63 @@ def _json_ld(html: str) -> list[dict]:
     return [json.loads(block.split("</script>", 1)[0]) for block in blocks]
 
 
+def _ld_type(head: str, kind: str) -> dict:
+    """The page's one structured-data block of this @type."""
+    (found,) = [block for block in _json_ld(head) if block["@type"] == kind]
+    return found
+
+
 def test_pages_describe_themselves_to_search_engines(client):
     head = _head(client.get("/?utm_source=facebook&page=1").text)
-    assert "<title>GU Headlines · Guam news, updated every hour</title>" in head
+    assert "<title>Guam Headlines: latest Guam news today from every newsroom</title>" in head
     # One address per page: tracking parameters and ?page=1 are dropped.
     assert '<link rel="canonical" href="http://testserver/">' in head
     assert '<meta property="og:url" content="http://testserver/">' in head
     assert '<meta property="og:image" content="http://testserver/static/social-card.jpg?v=' in head
     assert '<meta name="twitter:card" content="summary_large_image">' in head
     assert 'name="robots"' not in head
-    site = _json_ld(head)
-    assert site[0]["@type"] == "WebSite" and site[0]["name"] == "GU Headlines"
-    assert site[0]["url"] == "http://testserver/"
-    # The home page has a heading for search engines and screen readers.
-    heading = '<h1 class="visually-hidden">GU Headlines: the latest Guam news</h1>'
-    assert heading in client.get("/").text
+    # The home page names the newsrooms people search for.
+    summary = '<meta name="description" content="Today&#39;s Guam news from The Guam Daily Post'
+    assert summary in head
+    site = _ld_type(head, "WebSite")
+    assert site["name"] == "Guam Headlines" and site["url"] == "http://testserver/"
+    assert site["about"]["name"] == "Guam"
+    assert site["alternateName"] == "testserver"
+    # Who runs the site, with its logo.
+    org = _ld_type(head, "Organization")
+    assert org["@id"] == "http://testserver/#organization" == site["publisher"]["@id"]
+    assert org["logo"]["url"].startswith("http://testserver/static/apple-touch-icon.png?v=")
+    assert org["areaServed"]["sameAs"][0] == "https://en.wikipedia.org/wiki/Guam"
+    assert "sameAs" not in org  # no SOCIAL_PROFILES
+    # The page itself: a list of Guam stories, each at its publisher.
+    page = _ld_type(head, "CollectionPage")
+    assert page["url"] == "http://testserver/" and page["isPartOf"]["@id"].endswith("/#website")
+    stories = page["mainEntity"]["itemListElement"]
+    assert stories[0]["position"] == 1 and stories[0]["url"].startswith("https://www.")
+    assert page["dateModified"].endswith("+10:00")
+    # The home page has a heading for search engines and screen readers, and
+    # says what the site is in plain words.
+    home = client.get("/").text
+    heading = (
+        '<h1 class="visually-hidden">Guam Headlines: Guam news today, '
+        "the latest headlines from every newsroom</h1>"
+    )
+    assert heading in home
+    assert '<h2 id="about-title">About Guam Headlines</h2>' in home
+    # Every page links the Guam pages in the words people search for.
+    assert (
+        '<a href="/jobs">Guam jobs</a>' in home and '<a href="/bids">Guam bids and RFPs</a>' in home
+    )
 
     labor = _head(client.get("/category/labor").text)
-    assert "<title>Guam labor and workforce news · GU Headlines</title>" in labor
+    assert "<title>Guam labor and workforce news · Guam Headlines</title>" in labor
+    assert "<h1>Guam labor and workforce news</h1>" in client.get("/category/labor").text
     assert '<meta name="description" content="Jobs, wages, workforce, unions' in labor
     assert '<link rel="canonical" href="http://testserver/category/labor">' in labor
-    crumbs = _json_ld(labor)[0]["itemListElement"]
+    crumbs = _ld_type(labor, "BreadcrumbList")["itemListElement"]
     assert [c["name"] for c in crumbs] == ["Home", "Labor"]
     assert crumbs[0]["item"] == "http://testserver/"
+    assert "Organization" not in labor
 
     # Older pages say where they sit in the series.
     from guheadlines.web.app import settings as app_settings
@@ -524,10 +558,13 @@ def test_pages_describe_themselves_to_search_engines(client):
     assert '<link rel="canonical" href="http://testserver/?page=2">' in second
     assert '<link rel="prev" href="http://testserver/">' in second
     assert '<link rel="next" href="http://testserver/?page=3">' in second
-    assert "WebSite" not in second
+    assert "WebSite" not in second and "Organization" not in second
+    # Each page of a list has its own title.
+    assert "<title>Latest Guam news, page 2 · Guam Headlines</title>" in second
+    assert "About Guam Headlines" not in client.get("/?page=2").text
 
     kuam = _head(client.get("/source/kuam").text)
-    assert "<title>KUAM News headlines · GU Headlines</title>" in kuam
+    assert "<title>KUAM News headlines · Guam Headlines</title>" in kuam
     assert "Every story links to kuam.com." in kuam
 
 
@@ -774,7 +811,7 @@ def test_ad_block_on_the_home_sources_jobs_events_bids_and_obituaries_pages(clie
     ads_txt = client.get("/ads.txt")
     assert ads_txt.text == "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n"
     robots = client.get("/robots.txt").text
-    assert robots.startswith("User-agent: Mediapartners-Google\nDisallow:\n\nUser-agent: *\n")
+    assert "\nUser-agent: Mediapartners-Google\nDisallow:\n\nUser-agent: *\n" in robots
     assert "Advertising and cookies" in client.get("/status").text
 
     # A publisher ID without an ad unit: the site can be verified, but no ad block.
@@ -1242,3 +1279,75 @@ def test_stats_page_names_the_alert_words(counting, monkeypatch):
     assert "Keyword alerts: a new story that mentions typhoon, power outage is posted" in health
     assert "A site that fails for 24 hours, or goes quiet, is posted in Discord." in health
     assert "needs a look" not in health
+
+
+def test_ai_assistants_get_a_plain_summary_and_are_welcome(client):
+    robots = client.get("/robots.txt").text
+    assert "OAI-SearchBot" in robots and "PerplexityBot" in robots and "Claude-SearchBot" in robots
+    assert (
+        "# A plain-text summary of the site for AI assistants: http://testserver/llms.txt" in robots
+    )
+    # No crawler is turned away from the pages.
+    assert "Disallow: /\n" not in robots and "Disallow: /llms" not in robots
+
+    page = client.get("/llms.txt")
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/markdown")
+    text = page.text
+    assert text.startswith("# Guam Headlines\n\n> Guam Headlines (testserver) collects Guam news")
+    assert "- [Guam weather and tides](http://testserver/weather):" in text
+    assert "- [Guam military news](http://testserver/category/military):" in text
+    assert "- [KUAM News](http://testserver/source/kuam): kuam.com" in text
+    # The newest headlines, each linked to the publisher's story.
+    assert "## Latest Guam headlines" in text
+    assert "- [Andersen to host Cope North exercise](https://www.postguam.com/news/" in text
+    assert "github" not in text.lower() and "@" not in text
+
+
+def test_indexnow_key_file(client, monkeypatch):
+    from guheadlines import indexnow
+    from guheadlines.web import app as web
+
+    key = indexnow.key(web.settings)
+    page = client.get(f"/{key}.txt")
+    assert page.status_code == 200 and page.text == key
+    assert client.get("/0123456789abcdef0123456789abcdef.txt").status_code == 404
+    # The other text files still answer as before.
+    assert client.get("/robots.txt").text.startswith("# Search engines")
+    _set(monkeypatch, indexnow=False)
+    assert client.get(f"/{key}.txt").status_code == 404
+
+
+def test_social_profiles_tell_search_engines_where_else_the_site_is(client, monkeypatch):
+    from guheadlines.settings import _web_addresses
+
+    assert _web_addresses(
+        " https://www.facebook.com/guamheadlines , mailto:x@y.z, facebook.com/x,"
+        " https://www.facebook.com/guamheadlines, https://www.instagram.com/guamheadlines"
+    ) == ("https://www.facebook.com/guamheadlines", "https://www.instagram.com/guamheadlines")
+
+    import dataclasses
+
+    from guheadlines.web import seo
+
+    monkeypatch.setattr(
+        seo, "settings", dataclasses.replace(seo.settings, social_profiles=("https://x.com/gu",))
+    )
+    org = _ld_type(_head(client.get("/").text), "Organization")
+    assert org["sameAs"] == ["https://x.com/gu"]
+    about = _head(client.get("/status").text)
+    assert _ld_type(about, "AboutPage")["about"]["name"] == "Guam"
+    assert _ld_type(about, "Organization")["sameAs"] == ["https://x.com/gu"]
+
+
+def test_guam_pages_have_guam_titles(client):
+    for path, title in (
+        ("/jobs", "<title>Guam jobs: the latest job openings on Guam · Guam Headlines</title>"),
+        ("/events", "<title>Guam events calendar: things to do on Guam · Guam Headlines</title>"),
+        ("/bids", "<title>Guam bids and RFPs: Government of Guam procurement · "),
+        ("/archive", "<title>Guam news archive · Guam Headlines</title>"),
+        ("/status", "<title>About Guam Headlines and its news sources · Guam Headlines</title>"),
+    ):
+        head = _head(client.get(path).text)
+        assert title in head, path
+        assert _json_ld(head), path

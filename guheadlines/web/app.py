@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import logging
 import re
 import secrets
@@ -36,7 +37,19 @@ from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import ads, alerts, gas, guides, health, listings, mail, paypal, renewals, sendfox
+from .. import (
+    ads,
+    alerts,
+    gas,
+    guides,
+    health,
+    indexnow,
+    listings,
+    mail,
+    paypal,
+    renewals,
+    sendfox,
+)
 from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
@@ -937,8 +950,9 @@ def _listing(request: Request, template: str, filters: Filters, page: int, **con
     # For search engines and AI assistants: a list of Guam stories, the first
     # few by headline and address, and when the newest came in.
     context.setdefault("page_type", "CollectionPage")
-    context["item_list"] = [(i.article.title, i.article.url) for i in result.items]
-    context["modified"] = max((i.article.published_at for i in result.items), default=None)
+    stories = [item["article"] for item in result.items]
+    context["item_list"] = [(a.title, a.url) for a in stories]
+    context["modified"] = max((a.published_at for a in stories), default=None)
     return render(
         request,
         template,
@@ -1996,6 +2010,17 @@ def robots(request: Request):
     # them; the Sources page is one of them. It does not list pages in search.
     adsense = "User-agent: Mediapartners-Google\nDisallow:\n\n" if settings.adsense_client else ""
     return (
+        # Every search engine and AI assistant may read every page except the
+        # few below, so there is no group of its own for any of them.
+        "# Search engines and AI assistants are welcome to read this site:\n"
+        "# Googlebot, Bingbot, Applebot, DuckDuckBot, and the crawlers of\n"
+        "# ChatGPT (OAI-SearchBot, ChatGPT-User, GPTBot), Perplexity\n"
+        "# (PerplexityBot), Claude (Claude-SearchBot, Claude-User, ClaudeBot),\n"
+        "# Gemini (Google-Extended) and Apple Intelligence (Applebot-Extended).\n"
+        "# Only the addresses under Disallow are left out.\n"
+        "# A plain-text summary of the site for AI assistants: "
+        f"{seo.absolute_url(request, '/llms.txt')}\n"
+        "\n"
         f"{adsense}"
         "User-agent: *\n"
         "Disallow: /search\n"
@@ -2025,8 +2050,110 @@ def ads_txt():
 
 
 # The sitemap's queries group every story; crawlers fetch it now and then, so
-# their results are kept for ten minutes.
+# their results are kept for ten minutes. So is the summary for AI assistants.
 sitemap_cache = _TTLCache(ttl=600)
+llms_cache = _TTLCache(ttl=600)
+
+# How many of the newest headlines /llms.txt lists.
+LLMS_HEADLINES = 20
+
+
+@app.get("/llms.txt", response_class=PlainTextResponse)
+def llms_txt(request: Request):
+    """A plain summary of the site for AI assistants (llmstxt.org): what it is,
+    its main pages, its topics and newsrooms, and the newest headlines, each
+    linked to the publisher's story."""
+    config = config_cache.get()
+
+    def newest() -> list:
+        filters = Filters(hide_sources=_hidden(), hide_topics=_separate(), mute=_muted())
+        with session_scope() as session:
+            result = queries.list_articles(session, filters, 1, LLMS_HEADLINES)
+            updated = queries.last_updated(session)
+        return [result.items, updated]
+
+    items, updated = llms_cache.get("newest", newest)
+    url = lambda path: seo.absolute_url(request, path)  # noqa: E731
+    site = settings.site_name
+    newsrooms = _newsroom_names()
+    lines = [
+        f"# {site}",
+        "",
+        f"> {site} ({seo.absolute_url(request, '/').split('://', 1)[1].rstrip('/')}) collects"
+        f" Guam news {seo.update_text()} from {len(newsrooms)} island newsrooms and lists"
+        " the headlines newest first, each linked to the full story on the publisher's"
+        " website. It also has Guam weather and tides, events, jobs, Government of Guam"
+        " bids and RFPs, power and water outages, and obituaries.",
+        "",
+        "- Times are Chamorro Standard Time (ChST, UTC+10).",
+        "- Headlines, intros and photos belong to their publishers. Read and cite each story"
+        " at its publisher's link.",
+    ]
+    if updated:
+        lines.append(f"- Last checked for new stories: {fmt_datetime(updated)}.")
+    pages = [("Latest Guam news", "/", "every new story from every newsroom, newest first")]
+    if settings.weather_interval_minutes:
+        pages.append(
+            (
+                "Guam weather and tides",
+                "/weather",
+                "the National Weather Service forecast and alerts, typhoons, surf, sunrise"
+                " and sunset, and the high and low tides",
+            )
+        )
+    if settings.outages_interval_minutes:
+        pages.append(
+            (
+                "Guam power and water outages",
+                "/outages",
+                "Guam Power Authority outages, and water outages and boil-water notices",
+            )
+        )
+    pages += [
+        ("Guam events calendar", "/events", "upcoming events on Guam, each with its own page"),
+        ("Guam jobs", "/jobs", "job openings on Guam with pay and closing dates"),
+        ("Guam bids and RFPs", "/bids", "open Government of Guam bids and requests for proposals"),
+    ]
+    if published_guides():
+        pages.append(("Guam visitor guides", "/guides", "things to do, beaches, food, history"))
+    pages += [
+        ("Guam news archive", "/archive", "every story by year, month and day"),
+        ("About the site and its sources", "/status", "the newsrooms read, and when"),
+    ]
+    lines += ["", "## Guam pages", ""]
+    lines += [f"- [{name}]({url(path)}): {what}" for name, path, what in pages]
+    lines += ["", "## Guam news by topic", ""]
+    lines += [
+        f"- [{c.page_title[:1].upper() + c.page_title[1:]}]({url('/category/' + c.slug)}):"
+        f" {c.description}"
+        for c in config.categories
+    ]
+    hidden = set(_hidden())
+    lines += ["", "## Newsrooms", ""]
+    lines += [
+        f"- [{s.name}]({url('/source/' + s.slug)})"
+        + (f": {domain(s.homepage)}" if s.homepage else "")
+        for s in config.sources
+        if s.collected and s.slug not in hidden
+    ]
+    if items:
+        lines += ["", "## Latest Guam headlines", ""]
+        lines += [
+            f"- [{_one_line(i['article'].title)}]({i['article'].url}): {i['source_name']},"
+            f" {fmt_datetime(i['article'].published_at)}"
+            for i in items
+            if safe_url(i["article"].url)
+        ]
+    return PlainTextResponse(
+        "\n".join(lines) + "\n",
+        media_type="text/markdown; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+def _one_line(text: str) -> str:
+    """A headline on one line, without the brackets that would break its link."""
+    return " ".join(text.split()).replace("[", "(").replace("]", ")")
 
 
 @app.get("/sitemap.xml")
@@ -2041,6 +2168,7 @@ def sitemap(request: Request):
         with session_scope() as session:
             found = queries.sitemap_data(session, hidden, separate, config.muted)
             found["events"] = queries.upcoming_event_ids(session, since)
+            found["seen"] = queries.newest_seen(session)
             return found
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
@@ -2061,6 +2189,7 @@ def sitemap(request: Request):
         ],
         advertise=bool(advertising()),
         guides=[(g.slug, g.updated_at) for g in published_guides()],
+        seen=found["seen"],
     )
     return Response(
         seo.sitemap_xml(entries),
@@ -4090,6 +4219,16 @@ async def bid_alerts_link(request: Request):
         log.warning("bid alerts: could not email a page link: %s", exc)
         return _see_other("/bids/alerts?result=error#lost")
     return _see_other("/bids/alerts?result=sent#lost")
+
+
+@app.get("/{name}.txt", include_in_schema=False)
+def indexnow_key(name: str):
+    """The IndexNow key file (indexnow.py), which Bing reads to check that the
+    pages the worker tells it about come from this site. Registered last, so
+    robots.txt, ads.txt and llms.txt come first."""
+    if not (settings.indexnow and hmac.compare_digest(name, indexnow.key(settings))):
+        raise HTTPException(404)
+    return PlainTextResponse(name, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/favicon.ico", include_in_schema=False)

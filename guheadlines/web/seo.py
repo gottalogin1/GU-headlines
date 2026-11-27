@@ -61,8 +61,7 @@ def home_title() -> str:
 def default_description() -> str:
     return (
         f"Today's Guam news and headlines from the island's newsrooms in one place, "
-        f"updated {update_text()}: local, military, business, tourism, sports and "
-        "Saipan news, plus Guam weather, events, jobs and bids."
+        f"updated {update_text()}. Plus Guam weather, tides, events, jobs and bids."
     )
 
 
@@ -73,11 +72,13 @@ def home_description(newsrooms: list[str]) -> str:
         return default_description()
     named, more = newsrooms[:3], len(newsrooms) - 3
     names = f"{named[0]}, {named[1]}, {named[2]}" + (f" and {more} more newsrooms" if more else "")
-    text = (
-        f"Today's Guam news and headlines from {names}, in one place and updated "
-        f"{update_text()}. Plus Guam weather, tides, events, jobs and bids."
-    )
-    return text if len(text) <= 200 else default_description()
+    text = f"Today's Guam news from {names}, updated {update_text()}."
+    # Search results show about 160 characters.
+    endings = (" Plus Guam weather, tides, events and jobs.", " Plus Guam weather and jobs.")
+    for more_text in endings:
+        if len(text + more_text) <= 165:
+            return text + more_text
+    return text if len(text) <= 165 else default_description()
 
 
 def base_url(request: Request) -> str:
@@ -400,6 +401,7 @@ def sitemap_entries(
     listings: Iterable[str] = (),
     advertise: bool = False,
     guides: Iterable[tuple[str, datetime]] = (),
+    seen: dict[str, datetime | None] | None = None,
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events
     and each upcoming event's page (`events`: their IDs), bids (and the bid alerts
@@ -409,8 +411,11 @@ def sitemap_entries(
     the archive down to each day that has stories, and the pages of paid
     listings that are on (`listings`: their paths), and the visitor guides
     page with each published guide (`guides`: (slug, last changed)). `data`
-    comes from queries.sitemap_data; `sources` are the slugs of news sources to list."""
+    comes from queries.sitemap_data; `sources` are the slugs of news sources to list.
+    `seen` (queries.newest_seen) gives the Jobs, Events and Bids pages the time
+    their newest item came in."""
     url = lambda path: absolute_url(request, path)  # noqa: E731
+    seen = seen or {}
     latest = data["latest"]
     entries: list[tuple[str, datetime | None]] = [(url("/"), latest)]
     for c in categories:
@@ -419,10 +424,10 @@ def sitemap_entries(
     for slug in sources:
         if slug in data["sources"]:
             entries.append((url(f"/source/{slug}"), data["sources"][slug]))
-    entries.append((url("/jobs"), None))
-    entries.append((url("/events"), None))
+    entries.append((url("/jobs"), seen.get("jobs")))
+    entries.append((url("/events"), seen.get("events")))
     entries.extend((url(f"/events/{event_id}"), None) for event_id in events)
-    entries.append((url("/bids"), None))
+    entries.append((url("/bids"), seen.get("bids")))
     if bid_alerts:
         entries.append((url("/bids/alerts"), None))
     entries.extend((url(path), None) for path in listings)

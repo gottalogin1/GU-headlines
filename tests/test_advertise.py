@@ -310,7 +310,7 @@ def test_advertise_page_shows_real_numbers_and_the_open_weeks(site):
     page = site.get("/advertise")
     assert page.status_code == 200
     html = page.text
-    assert "<h1>Advertise on GU Headlines</h1>" in html
+    assert "<h1>Advertise on Guam Headlines</h1>" in html
     assert "<dt>Page views</dt><dd>420</dd>" in html
     assert "<dt>A day, on average</dt><dd>14</dd>" in html
     assert "<dt>Clicks on the sponsor spot</dt><dd>7</dd>" in html
