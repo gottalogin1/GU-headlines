@@ -550,6 +550,9 @@ class BidSourceConfig:
     notices: list[str] = field(default_factory=list)
     # Pages with a table of bids, one row each.
     table: list[str] = field(default_factory=list)
+    # Pages with a table of awarded bids (the winner or the amount), for the
+    # award history page. Read once a day.
+    awards: list[str] = field(default_factory=list)
     # Read each open bid's own page for its due date when the table has none.
     details: bool = False
     # The agency asking for the bids, when a bid doesn't say (a table's rows never do).
@@ -602,6 +605,7 @@ def parse_bids_config(data: dict) -> list[BidSourceConfig]:
             key: [str(u).strip() for u in _as_list(raw.get(key)) if str(u).strip()]
             for key in _BID_INPUTS
         }
+        awards = [str(u).strip() for u in _as_list(raw.get("awards")) if str(u).strip()]
         try:
             undated_days = int(raw.get("undated_days", 30))
         except (TypeError, ValueError) as exc:
@@ -613,6 +617,7 @@ def parse_bids_config(data: dict) -> list[BidSourceConfig]:
             name=str(raw["name"]),
             homepage=raw.get("homepage"),
             **urls,
+            awards=awards,
             details=bool(raw.get("details", False)),
             agency=str(raw["agency"]).strip() if raw.get("agency") else None,
             undated_days=undated_days,

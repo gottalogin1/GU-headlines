@@ -278,6 +278,11 @@ class BidSource(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     # Open bids found on the last successful check.
     last_count: Mapped[int | None] = mapped_column(Integer)
+    # The source's award list (bids.yaml `awards`), read once a day: when it
+    # was last read, why that failed, and how many awards it listed.
+    awards_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    awards_error: Mapped[str | None] = mapped_column(Text)
+    awards_count: Mapped[int | None] = mapped_column(Integer)
 
     bids: Mapped[list[Bid]] = relationship(back_populates="source")
 
@@ -320,6 +325,44 @@ class Bid(Base):
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     source: Mapped[BidSource] = relationship(back_populates="bids")
+
+
+class BidAward(Base):
+    """A government bid its agency has awarded: who won it and for how much,
+    for the award history page. Rows are kept after the source stops listing
+    them, so the history grows past what the agencies' lists show."""
+
+    __tablename__ = "bid_awards"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("bid_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    uid: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    number: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str | None] = mapped_column(Text)
+    agency: Mapped[str | None] = mapped_column(Text)
+    # The company (or companies) that won, as the agency writes it.
+    awarded_to: Mapped[str | None] = mapped_column(Text)
+    # The amount awarded in cents (the total when several are given), and the
+    # amounts as written when there are several.
+    amount_cents: Mapped[int | None] = mapped_column(BigInteger)
+    amounts: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    # The bid abstract (every bidder's price) or the contract, when linked.
+    document_url: Mapped[str | None] = mapped_column(Text)
+    posted_on: Mapped[date | None] = mapped_column(Date)
+    # When the bids were due; the award itself follows some weeks later.
+    closed_on: Mapped[date | None] = mapped_column(Date)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    source: Mapped[BidSource] = relationship()
 
 
 class AlertState(Base):
