@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% from "_listing.html" import deal %}
+{# Deals and offers that Guam businesses pay to post by the week (listings.py).
+   A few of them also show on the home page. #}
+{% block main %}
+<header class="page-head">
+  <h1>Deals and offers</h1>
+  <p class="muted">Coupons, specials and offers from Guam businesses. Each one shows until its last day.</p>
+  {% if offers.deal %}
+  <p class="post-offer"><a class="btn" href="/post/deal">Post a deal</a> <span class="muted small">{{ offers.deal.price }} a week, paid with PayPal. It shows here and on the home page.</span></p>
+  {% endif %}
+</header>
+
+<form class="search-form" action="/deals" method="get">
+  <div class="field">
+    <label for="dq">Words</label>
+    <input id="dq" type="search" name="q" value="{{ q }}" placeholder="e.g. lunch, Tumon, oil change" maxlength="200">
+  </div>
+  <div class="field">
+    <label for="dcat">Category</label>
+    <select id="dcat" name="category">
+      <option value="">All categories</option>
+      {% for name in choices %}<option {% if category == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if q or category %}<a class="reset" href="/deals">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(result.total) }} {{ "deal" if result.total == 1 else "deals" }}{% if category %} in {{ category }}{% endif %}{% if q %} matching “{{ q }}”{% endif %}</h2>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No deals here right now</h2>
+  <p>{% if offers.deal %}Run a business? <a href="/post/deal">Post a deal</a>.{% else %}Check back soon.{% endif %}</p>
+</div>
+{% endif %}
+
+{% for l in result.items %}{{ deal(l) }}{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>About the deals</h2>
+  <p class="small">Businesses pay to post these deals, and each one is checked before it shows. {{ settings.site_name }} does not sell anything here: ask the business about the details before you go.</p>
+</section>
+{% include "_sidebar.html" %}
+{% endblock %}
