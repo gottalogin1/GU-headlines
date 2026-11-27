@@ -576,6 +576,16 @@ People and businesses can pay through PayPal to put a listing on the site:
   event page of their own, until the event is over.
 - **Business directory** (`/directory`): a basic entry is free; the featured
   upgrade adds a photo and a website link and puts the entry at the top.
+- **Press releases** (`/press`): news that a business or group writes about
+  itself, with a page of its own (`/press/<number>`), marked "Sponsored". It
+  stays on the site, and goes out once in the [newsletter](newsletter.md): in
+  the next edition after you approve it, after the third story, titled
+  "Press release:".
+- **Deals and offers** (`/deals`): a coupon or special, with a coupon code if
+  it has one, also shown in turns in a "Deals and offers" box at the top of
+  the home page. The business picks the last day (up to 8 weeks ahead) and
+  pays `DEAL_WEEK_PRICE` for each week, or part of a week, from the day it
+  sends the form. A renewal adds one week.
 
 Nobody needs an account. The form leads to a private page for the listing (its
 address has a secret part), with a "Pay with PayPal" link. Each listing then
@@ -589,6 +599,8 @@ paid.
 
 The listings need `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and
 `STATS_PASSWORD`. Without them, the pages and the "Post" buttons do not show.
+No new database table: press releases and deals are kept with the other
+paid listings.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -599,6 +611,8 @@ The listings need `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and
 | `FEATURED_EVENT_PRICE` | `15` | US dollars for a featured event, shown until it is over. `0`: none offered. |
 | `BUSINESS_UPGRADE_PRICE` | `50` | US dollars for the featured upgrade of a directory entry. `0`: no directory. |
 | `BUSINESS_UPGRADE_DAYS` | `365` | Days the upgrade lasts (1 to 3650); then the entry stays as a basic one. |
+| `PRESS_RELEASE_PRICE` | `25` | US dollars for a press release, which stays on the site. `0`: no Press releases page. |
+| `DEAL_WEEK_PRICE` | `10` | US dollars for each week a deal shows. `0`: no Deals page. |
 
 Write prices without the `$` sign (Docker Compose changes values that contain
 it). A new price applies to listings sent after `docker compose up -d`.
@@ -739,9 +753,10 @@ guheadlines bid-alerts` says what is missing, and lists the subscribers. See
 
 Paid listings and booked ads end by themselves: a classified ad and a featured
 job post after their number of days, a business's featured upgrade after
-`BUSINESS_UPGRADE_DAYS` (the entry then stays as a basic one), and a booked ad
-after its last week or edition. A featured event shows until it is over, so it
-gets no reminder.
+`BUSINESS_UPGRADE_DAYS` (the entry then stays as a basic one), a deal after
+its last day (a renewal adds one week), and a booked ad after its last week or
+edition. A featured event shows until it is over, and a press release stays,
+so they get no reminder.
 
 `RENEWAL_REMINDER_DAYS` before the end, the worker emails the buyer a link to
 their own page (it checks after each news check, every hour by default):

@@ -44,12 +44,14 @@
 {% block main %}
 {% set offer = offers[kind.slug] %}
 <header class="page-head">
-  <p class="crumbs"><a href="{{ kind.page }}">{{ {"classified": "Classifieds", "job": "Jobs", "event": "Events", "business": "Business directory"}[kind.slug] }}</a></p>
-  <h1>{{ {"classified": "Post a classified ad", "job": "Post a featured job", "event": "Feature your event", "business": "Add your business"}[kind.slug] }}</h1>
+  <p class="crumbs"><a href="{{ kind.page }}">{{ {"classified": "Classifieds", "job": "Jobs", "event": "Events", "business": "Business directory", "press": "Press releases", "deal": "Deals and offers"}[kind.slug] }}</a></p>
+  <h1>{{ {"classified": "Post a classified ad", "job": "Post a featured job", "event": "Feature your event", "business": "Add your business", "press": "Post a press release", "deal": "Post a deal"}[kind.slug] }}</h1>
   <p class="muted">
   {% if kind.slug == "classified" %}Your ad shows on the Classifieds page for {{ offer.days }} days. It costs {{ offer.price }}.
   {% elif kind.slug == "job" %}Your job shows at the top of the Jobs page, marked Featured, for {{ offer.days }} days. It costs {{ offer.price }}.
   {% elif kind.slug == "event" %}Your event shows at the top of the Events page and on the home page, marked Featured, and on the event calendar, until it is over. It costs {{ offer.price }}.
+  {% elif kind.slug == "press" %}Your press release gets its own page and shows on the Press releases page, marked Sponsored. It stays on the site, and goes out once in the next newsletter. It costs {{ offer.price }}.
+  {% elif kind.slug == "deal" %}Your deal shows on the Deals page and on the home page until the last day you pick. It costs {{ offer.price }} for each week, or part of a week, counted from today.
   {% else %}A basic entry is free. The featured upgrade adds your photo and a link to your website, and puts you at the top of the directory, for {{ offer.days }} days.{% endif %}
   </p>
 </header>
@@ -84,6 +86,24 @@
     {{ field("location", "Place", required=true, maxlength=120, placeholder="e.g. Chamorro Village, Hagåtña") }}
     {{ textarea("description", "About the event", required=false, maxlength=1500) }}
     {{ field("link", "Event page", maxlength=300, type="url", placeholder="https://", hint="Tickets, or more details.") }}
+  {% elif kind.slug == "press" %}
+    {{ field("title", "Headline", required=true, maxlength=140, placeholder="e.g. Island Bakery opens its second shop in Dededo") }}
+    {{ field("name", "Business or group", required=true, maxlength=100) }}
+    {{ textarea("description", "The press release", maxlength=max_press_text, rows=14, hint="Up to about 1,000 words. Leave an empty line between paragraphs. It is posted as you write it, so please check names, dates and spelling.") }}
+    {{ field("contact", "Media contact", maxlength=200, hint="For example a name with a phone number or an email address. Shown at the end of the release.") }}
+    {{ field("link", "Website", maxlength=300, type="url", placeholder="https://", hint="Where readers can find out more.") }}
+    {{ photo_field("A photo or logo shown with the release. A JPG, PNG or WebP photo, at most 6 MB.") }}
+  {% elif kind.slug == "deal" %}
+    {{ field("title", "The offer", required=true, maxlength=100, placeholder="e.g. 20% off all plate lunches") }}
+    {{ field("name", "Business", required=true, maxlength=100) }}
+    {{ choose("category", "Category", business_categories) }}
+    {{ field("end_date", "Last day of the deal", required=true, maxlength=0, type="date", hint="From today to " ~ max_deal_weeks ~ " weeks from now. It shows until the end of this day.", attrs='min="' ~ today.isoformat() ~ '" max="' ~ deal_max_day.isoformat() ~ '"') }}
+    {{ field("price", "Coupon code", maxlength=40, placeholder="e.g. HAFA20", hint="If customers need a code or a word to get the deal.") }}
+    {{ field("location", "Where", maxlength=120, placeholder="e.g. Tumon, or online") }}
+    {{ textarea("description", "Details and fine print", maxlength=600, rows=4, hint="What is included, and any limits, such as dine-in only or one per customer.") }}
+    {{ field("contact", "Phone", maxlength=60) }}
+    {{ field("link", "Website", maxlength=300, type="url", placeholder="https://", hint="The page with the deal, or your website.") }}
+    {{ photo_field("A photo of the deal, your shop or your logo. A JPG, PNG or WebP photo, at most 6 MB.") }}
   {% else %}
     {{ field("title", "Business name", required=true, maxlength=100) }}
     {{ choose("category", "Category", business_categories) }}
@@ -104,7 +124,7 @@
   </div>
   <div class="field wide form-end">
     <button class="btn" type="submit">Continue</button>
-    <p class="hint">{% if kind.slug == "business" %}On the next page you see your entry. For the featured entry, you then pay with PayPal (with a PayPal account or a card).{% else %}On the next page you see your listing, and pay {{ offer.price }} with PayPal (with a PayPal account or a card).{% endif %}
+    <p class="hint">{% if kind.slug == "business" %}On the next page you see your entry. For the featured entry, you then pay with PayPal (with a PayPal account or a card).{% elif kind.slug == "deal" %}On the next page you see your deal and its price for the weeks you picked, and pay with PayPal (with a PayPal account or a card).{% else %}On the next page you see your listing, and pay {{ offer.price }} with PayPal (with a PayPal account or a card).{% endif %}
       Each listing is checked before it shows. If it is not accepted, the payment is given back.</p>
   </div>
 </form>

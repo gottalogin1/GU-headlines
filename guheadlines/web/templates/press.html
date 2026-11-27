@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% from "_listing.html" import press %}
+{# Press releases that Guam businesses and groups pay to post (listings.py).
+   Each has a page of its own (press_release.html). #}
+{% block main %}
+<header class="page-head">
+  <h1>Press releases</h1>
+  <p class="muted">News and announcements from Guam businesses and groups, in their own words. These are paid, sponsored posts, not stories from the news sites.</p>
+  {% if offers.press %}
+  <p class="post-offer"><a class="btn" href="/post/press">Post a press release</a> <span class="muted small">{{ offers.press.price }}, paid with PayPal. It stays on the site and goes out in the newsletter.</span></p>
+  {% endif %}
+</header>
+
+<form class="search-form" action="/press" method="get">
+  <div class="field">
+    <label for="pq">Words</label>
+    <input id="pq" type="search" name="q" value="{{ q }}" placeholder="e.g. opening, award, Tamuning" maxlength="200">
+  </div>
+  <div class="field actions">
+    <button type="submit">Filter</button>
+    {% if q %}<a class="reset" href="/press">Clear</a>{% endif %}
+  </div>
+</form>
+
+<h2 class="result-count">{{ "{:,}".format(result.total) }} press {{ "release" if result.total == 1 else "releases" }}{% if q %} matching “{{ q }}”{% endif %}</h2>
+
+{% if not result.items %}
+<div class="empty">
+  <h2>No press releases yet</h2>
+  <p>{% if offers.press %}Have news to share? <a href="/post/press">Post a press release</a>.{% else %}Check back soon.{% endif %}</p>
+</div>
+{% endif %}
+
+{% for l in result.items %}{{ press(l) }}{% endfor %}
+
+{{ pagination(result, page_url) }}
+{% endblock %}
+
+{% block sidebar %}
+<section class="panel">
+  <h2>About press releases</h2>
+  <p class="small">Businesses and groups pay to post these, and each one is checked before it shows. {{ settings.site_name }} did not write them and does not vouch for what they say.</p>
+</section>
+{% include "_sidebar.html" %}
+{% endblock %}
