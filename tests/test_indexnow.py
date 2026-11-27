@@ -92,6 +92,7 @@ def test_changed_pages(clean_db):
         EventCalendar,
         Job,
         JobSource,
+        Listing,
         Source,
     )
 
@@ -158,18 +159,38 @@ def test_changed_pages(clean_db):
                     first_seen_at=now,
                     last_seen_at=now,
                 ),
+                *(
+                    Listing(
+                        kind="press",
+                        status=status,
+                        key=f"key-{uid}",
+                        title=f"Press release {uid}",
+                        amount_cents=2500,
+                        reviewed_at=reviewed,
+                    )
+                    for uid, status, reviewed in (
+                        ("new", "live", now),
+                        ("old", "live", day_ago),
+                        ("waiting", "review", None),
+                    )
+                ),
             ]
         )
     with session_scope() as session:
         event_ids = dict(session.query(Event.uid, Event.id).all())
+        release_ids = dict(session.query(Listing.key, Listing.id).all())
         paths = indexnow.changed_paths(session, hour_ago, upcoming_events=event_ids.values())
     day = now.astimezone(GUAM_TZ).date()
     assert paths[0] == "/"
     assert {"/category/military", "/source/kuam", "/bids", "/events"} <= set(paths)
     assert f"/archive/{day.year}/{day.month}/{day.day}" in paths
     assert f"/events/{event_ids['new']}" in paths
+    assert {"/press", f"/press/{release_ids['key-new']}"} <= set(paths)
     # Nothing new on these.
     assert not {"/category/labor", "/source/postguam", "/jobs"} & set(paths)
     assert f"/events/{event_ids['old']}" not in paths
+    assert not {f"/press/{release_ids['key-old']}", f"/press/{release_ids['key-waiting']}"} & set(
+        paths
+    )
     with session_scope() as session:
         assert indexnow.changed_paths(session, now + timedelta(minutes=1)) == []

@@ -23,8 +23,8 @@ release, see [Updating](docs/maintenance.md#updating).
 - **Bing hears about new pages within minutes (IndexNow).** After each news
   check, the worker tells Bing (and Yandex, Naver and Seznam) which pages
   are new or changed: the home page, the topics and news sites with new
-  stories, the archive day, new event pages, and Jobs, Bids and the guides
-  when they change. Bing's results also feed DuckDuckGo, Yahoo, Copilot and
+  stories, the archive day, new event pages, newly approved press releases,
+  and Jobs, Bids and the guides when they change. Bing's results also feed DuckDuckGo, Yahoo, Copilot and
   the web searches of AI assistants. Nothing to sign up for; on by default
   once the site has a public address (`INDEXNOW=false` turns it off).
 - **Paid press releases and deals.** Two more kinds of paid listings, sold

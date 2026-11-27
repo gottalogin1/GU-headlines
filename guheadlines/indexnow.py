@@ -6,8 +6,8 @@ ChatGPT. Google does not take part; it reads the sitemap.
 
 After each news check, the worker sends the addresses of the pages that
 changed: the home page, the topic and news-site pages with new stories, the
-archive day, and the Events, Jobs, Bids and guide pages when they have
-something new. When the worker starts, it sends the main pages once.
+archive day, and the Events, Jobs, Bids, guide and press release pages when
+they have something new. When the worker starts, it sends the main pages once.
 
 The key, a code that shows the search engine that these addresses come from
 the site itself, is made from the database address. So it is the same in the
@@ -30,7 +30,9 @@ import httpx
 from sqlalchemy import select
 
 from .guides import PUBLISHED
-from .models import Article, Bid, Event, Guide, Job, Source
+from .listings import KINDS, LIVE
+from .listings import is_on as listing_is_on
+from .models import Article, Bid, Event, Guide, Job, Listing, Source
 from .scraper.text import GUAM_TZ
 from .settings import Settings
 
@@ -77,13 +79,15 @@ def main_paths(settings: Settings, categories: Iterable[str], guides: bool) -> l
         paths.append("/outages")
     if guides:
         paths.append("/guides")
+    paths.extend(KINDS[kind].page for kind in ("press", "deal") if listing_is_on(settings, kind))
     paths.extend(f"/category/{slug}" for slug in categories)
     return paths
 
 
 def changed_paths(session, since: datetime, upcoming_events: Iterable[int] = ()) -> list[str]:
     """The pages that changed since `since`: those with stories, events, jobs,
-    bids or guides that came in (or were edited) after it. `upcoming_events`
+    bids, guides or press releases that came in (or were edited or approved)
+    after it. `upcoming_events`
     are the IDs of the events that have a page (queries.upcoming_event_ids)."""
     paths: dict[str, None] = {}
     rows = session.execute(
@@ -117,6 +121,14 @@ def changed_paths(session, since: datetime, upcoming_events: Iterable[int] = ())
     if guides:
         paths["/guides"] = None
         paths.update((f"/guides/{slug}", None) for slug in guides)
+    releases = session.scalars(
+        select(Listing.id).where(
+            Listing.kind == "press", Listing.status == LIVE, Listing.reviewed_at >= since
+        )
+    ).all()
+    if releases:
+        paths["/press"] = None
+        paths.update((f"/press/{listing_id}", None) for listing_id in releases)
     return list(paths)
 
 
