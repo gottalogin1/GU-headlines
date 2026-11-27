@@ -200,6 +200,10 @@ class Settings:
     # Bid alerts (see bids/alerts.py): the monthly price, in US cents, of an
     # email alert for new bids. 0: no bid alerts.
     bid_alerts_price_cents: int = 0
+    # The award history page (/bids/awards): how many days of awards every
+    # visitor sees. Bid alert subscribers see all of it. With bid alerts off,
+    # everyone sees all of it.
+    bid_awards_free_days: int = 180
     # Renewal reminders (see renewals.py): how many days before a paid
     # listing or a booked ad ends its buyer gets an email. 0: no email.
     renewal_reminder_days: int = 3
@@ -533,6 +537,9 @@ def load_settings() -> Settings:
         smtp_password=env.get("SMTP_PASSWORD", "").strip(),
         mail_from=" ".join(env.get("MAIL_FROM", "").split()),
         bid_alerts_price_cents=_price_cents(env.get("BID_ALERTS_PRICE")),
+        bid_awards_free_days=max(
+            7, min(3650, _int(env.get("BID_AWARDS_FREE_DAYS"), defaults.bid_awards_free_days))
+        ),
         renewal_reminder_days=max(
             0, min(30, _int(env.get("RENEWAL_REMINDER_DAYS"), defaults.renewal_reminder_days))
         ),

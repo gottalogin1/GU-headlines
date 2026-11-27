@@ -45,6 +45,21 @@
 #   cannot_scrape why this source can't be collected; it is never read and
 #                 not shown on the site. Delete the line to try it again.
 #   enabled       false to pause a source (its bids leave the page)
+#   awards        a page with a table of AWARDED bids, for the award history
+#                 page (/bids/awards): who won each bid and for how much. Its
+#                 columns are found by their headings like a table's, plus one
+#                 whose heading says "award" ("Awarded Amount",
+#                 "Status/Awarded"). Pages after the first ("next" links) are
+#                 read too, up to 12. Award lists are read about once a day,
+#                 and an award stays in the history after the agency stops
+#                 listing it. Try it (nothing is saved) with:
+#                     docker compose exec worker guheadlines bids --awards --check
+#
+# Only some agencies say who won: the Power Authority and GHURA (their
+# OpenGov Guam lists name the company and the amount), the Port (company and
+# amount) and the Memorial Hospital (company only). The public notices portal,
+# the Waterworks Authority and the other agencies put awards in PDF notices
+# only, which are not read.
 #
 # Sole-source notices (an agency buying from one named company, so there is
 # nothing to bid on) are always left out. Public hearing notices are not
@@ -89,6 +104,9 @@ sources:
     # The Power Authority's bid list, on the OpenGov Guam portal.
     table: https://go.opengovguam.com/tenders/tenders_list-standalone/gpa?tender_status=Available
     agency: Guam Power Authority
+    # Its awarded bids, every fiscal year since 2021, with the company and the
+    # amount ("$39,600.00 Awarded to: ...") and a link to the bid abstract.
+    awards: https://go.opengovguam.com/tenders/tenders_list-standalone/gpa?tender_status=Awarded&fy=All
 
   - slug: ghura
     name: Guam Housing and Urban Renewal Authority
@@ -97,12 +115,18 @@ sources:
     # those are left out by their status.
     table: https://go.opengovguam.com/bids/bids_list_ghura/ghura?bid_status=Open
     agency: Guam Housing and Urban Renewal Authority
+    # Its awarded bids (none listed yet in November 2026; the list names the
+    # company and the amount once there are some).
+    awards: https://go.opengovguam.com/bids/bids_list_ghura/ghura?bid_status=Awarded
 
   - slug: gmha
     name: Guam Memorial Hospital Authority
     homepage: https://www.gmha.org/procurement/
     table: https://www.gmha.org/procurement/
     agency: Guam Memorial Hospital Authority
+    # The same table: its "Status/Awarded" column names the company that won
+    # (no amounts).
+    awards: https://www.gmha.org/procurement/
 
   - slug: gwa
     name: Guam Waterworks Authority
@@ -117,3 +141,6 @@ sources:
     agency: Port Authority of Guam
     # The Port's list has no due dates; each bid's own page has its "Close Date".
     details: true
+    # The same list, all its pages: awarded bids give the company and the
+    # amount ("HEMA Corporation - $8,990.00") and link the contract.
+    awards: https://portofguam.com/bids-and-rfps

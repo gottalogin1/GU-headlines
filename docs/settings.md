@@ -763,6 +763,7 @@ you@example.com`. The steps are in `.env.example` and in
 | Setting | Default | What it does |
 |---|---|---|
 | `BID_ALERTS_PRICE` | *(empty)* | The monthly price in US dollars, such as `15`. Empty: no bid alerts. |
+| `BID_AWARDS_FREE_DAYS` | `180` | How many days of the [award history](bids.md#award-history) every visitor sees (7 to 3650). Bid alert subscribers see all of it; with bid alerts off, everyone does. |
 
 Bid alerts are on only when the price, PayPal, email and the site's address
 (`SITE_DOMAIN` or `SITE_URL`) are all set. `docker compose exec web

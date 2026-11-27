@@ -6,6 +6,10 @@ marked removed and leave the Bids page. A bid whose due date has passed leaves
 the page by itself, also between checks. When one of a source's inputs can't
 be read, nothing of that source is marked removed, and the reason is shown on
 the Bids page.
+
+Award lists (a source's `awards` pages) are read about once a day, after a
+bids check, for the award history page. Awards are never removed: the history
+keeps growing after an agency stops listing an old award.
 """
 
 from __future__ import annotations
@@ -19,16 +23,39 @@ from sqlalchemy import select, update
 
 from ..config import BidSourceConfig
 from ..db import BIDS_LOCK_KEY, advisory_lock, session_scope
-from ..models import Bid, BidSource
+from ..models import Bid, BidAward, BidSource
 from ..scraper.http import FetchError, HttpClient
 from ..scraper.text import GUAM_TZ
 from ..settings import Settings
-from .readers import BidError, FoundBid, is_closed, read_notices, read_table
+from .readers import (
+    BidError,
+    FoundAward,
+    FoundBid,
+    is_closed,
+    read_awards,
+    read_notices,
+    read_table,
+)
 
 log = logging.getLogger(__name__)
 
 # Sole-source notices announce a purchase from one company: nothing to bid on.
 _SOLE_SOURCE_RE = re.compile(r"\bsole[\s-]*source\b", re.IGNORECASE)
+
+# Award lists change slowly: each is read about once a day.
+AWARDS_EVERY = timedelta(hours=20)
+# Award fields an agency sometimes leaves out on a later read of the same row;
+# what an earlier read found is kept.
+_KEPT_AWARD_FIELDS = ("awarded_to", "amount_cents", "document_url", "closed_on")
+
+
+@dataclass
+class AwardResult:
+    slug: str
+    found: int = 0
+    new: int = 0
+    error: str | None = None
+    awards: list[FoundAward] = field(default_factory=list)
 
 
 @dataclass
@@ -286,3 +313,122 @@ class BidChecker:
                     continue
                 row.removed_at = now
                 result.removed += 1
+
+    # ----------------------------------------------------------------- awards
+
+    def collect_awards(self, source: BidSourceConfig) -> tuple[list[FoundAward], list[str]]:
+        """A source's awarded bids (no database needed), newest first, and the
+        award pages that couldn't be read. Raises BidError when none could."""
+        for url in source.awards:
+            if source.request_delay:
+                self.client.set_host_delay(url, source.request_delay)
+            if source.ignore_robots:
+                self.client.ignore_robots_for(url)
+        found: list[FoundAward] = []
+        errors: list[str] = []
+        for url in source.awards:
+            try:
+                found += read_awards(self.client, url, source.agency)
+            except (FetchError, BidError) as exc:
+                errors.append(str(exc) if url in str(exc) else f"{url}: {exc}")
+        if errors and len(errors) == len(source.awards):
+            raise BidError("; ".join(errors))
+        kept: dict[str, FoundAward] = {}
+        for award in found:
+            award.agency = award.agency or source.agency
+            labels = (award.title, award.number, award.agency)
+            if (
+                source.excluded(*labels)
+                or source.excluded_everywhere(*labels, award.awarded_to)
+                or any(_SOLE_SOURCE_RE.search(t or "") for t in (award.title, award.number))
+            ):
+                continue
+            kept.setdefault(award.uid, award)
+        newest = sorted(
+            kept.values(), key=lambda a: a.closed_on or a.posted_on or date.min, reverse=True
+        )
+        return newest, errors
+
+    def run_awards(
+        self, only: list[str] | None = None, force: bool = False, now: datetime | None = None
+    ) -> list[AwardResult] | None:
+        """Read the award lists not read in the last AWARDS_EVERY (all of them
+        with `force`). None if a bids check holds the lock."""
+        now = now or _now()
+        with advisory_lock(BIDS_LOCK_KEY) as acquired:
+            if not acquired:
+                log.warning("a bids check is running; award lists not read")
+                return None
+            with session_scope() as session:
+                ids = sync_sources(session, self.sources)
+                last = {
+                    slug: when
+                    for slug, when in session.execute(
+                        select(BidSource.slug, BidSource.awards_run_at)
+                    )
+                }
+            chosen = [
+                s
+                for s in self.sources
+                if s.collected
+                and s.awards
+                and (not only or s.slug in only)
+                and (force or last.get(s.slug) is None or last[s.slug] <= now - AWARDS_EVERY)
+            ]
+            return [self.run_award_source(s, ids[s.slug], now) for s in chosen]
+
+    def run_award_source(
+        self, source: BidSourceConfig, source_id: int, now: datetime | None = None
+    ) -> AwardResult:
+        now = now or _now()
+        result = AwardResult(slug=source.slug)
+        try:
+            awards, errors = self.collect_awards(source)
+            result.found = len(awards)
+            result.awards = awards
+            self._store_awards(source_id, awards, now, result)
+            if errors:
+                result.error = "; ".join(errors)
+        except (FetchError, BidError) as exc:
+            result.error = str(exc)
+        except Exception as exc:  # never let one source break the others
+            log.exception("[awards:%s] crashed", source.slug)
+            result.error = f"{type(exc).__name__}: {exc}"
+        values = {"awards_run_at": now, "awards_error": result.error}
+        if result.error is None or result.found:
+            values["awards_count"] = result.found
+        with session_scope() as session:
+            session.execute(update(BidSource).where(BidSource.id == source_id).values(**values))
+        log.info(
+            "[awards:%s] %d awards listed, %d new%s",
+            source.slug,
+            result.found,
+            result.new,
+            f" (error: {result.error})" if result.error else "",
+        )
+        return result
+
+    def _store_awards(
+        self, source_id: int, awards: list[FoundAward], now: datetime, result: AwardResult
+    ) -> None:
+        with session_scope() as session:
+            rows = {
+                row.uid: row
+                for row in session.scalars(select(BidAward).where(BidAward.source_id == source_id))
+            }
+            for found in awards:
+                row = rows.get(found.uid)
+                if row is None:
+                    row = BidAward(source_id=source_id, uid=found.uid, first_seen_at=now)
+                    session.add(row)
+                    rows[found.uid] = row
+                    result.new += 1
+                row.title = found.title[:500]
+                row.url = found.url
+                for name in ("number", "kind", "agency", "posted_on", *_KEPT_AWARD_FIELDS):
+                    value = getattr(found, name)
+                    if value is not None or name not in _KEPT_AWARD_FIELDS:
+                        setattr(row, name, value)
+                if found.amount_cents is not None:
+                    row.amounts = found.amounts
+                row.last_seen_at = now

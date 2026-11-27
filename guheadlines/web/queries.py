@@ -29,6 +29,7 @@ from ..models import (
     SPONSOR_CLICKS,
     Article,
     Bid,
+    BidAward,
     BidSource,
     Event,
     EventCalendar,
@@ -785,6 +786,153 @@ def bid_sources(session: Session, now: datetime) -> list[dict]:
         .order_by(BidSource.name)
     ).all()
     return [{"source": r[0], "open": r.open} for r in rows]
+
+
+# ------------------------------------------------------------ bid awards
+
+AWARDS_PER_PAGE = 40
+
+
+@dataclass
+class AwardFilters:
+    q: str = ""
+    agency: str | None = None
+    # A winner, as the agency writes it (any upper/lower case); awards it
+    # shared with other companies match too.
+    company: str | None = None
+
+
+@dataclass
+class AwardListing:
+    # {"award", "day", "source_name", "source_homepage"}, newest first.
+    page: Page
+    # Money awarded among the matching awards that give an amount.
+    total_cents: int
+    # (agency, awards) of the awards matching the words and company, most first.
+    agencies: list[tuple[str, int]]
+    # (winner, awards, cents) of the awards matching the words and agency, the
+    # most money first.
+    winners: list[tuple[str, int, int]]
+    # Matching awards before `since` (only shown to bid alert subscribers).
+    older: int
+    older_cents: int
+    # The day of the oldest award stored, of all.
+    oldest: date | None
+
+
+def award_day():
+    """An award's day: when its bids were due, else when it was posted, else
+    when it was first seen. The lists don't give the day of the award itself."""
+    return func.coalesce(
+        BidAward.closed_on,
+        BidAward.posted_on,
+        func.date(func.timezone("Pacific/Guam", BidAward.first_seen_at)),
+    )
+
+
+def _award_conditions(f: AwardFilters, *, agency: bool = True, company: bool = True) -> list:
+    conditions = [BidSource.enabled.is_(True)]
+    if f.q:
+        pattern = "%" + f.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        words = func.concat_ws(
+            " ",
+            BidAward.title,
+            BidAward.number,
+            BidAward.kind,
+            BidAward.agency,
+            BidAward.awarded_to,
+        )
+        conditions.append(func.unaccent(words).ilike(func.unaccent(pattern)))
+    if agency and f.agency:
+        conditions.append(BidAward.agency == f.agency)
+    if company and f.company:
+        # Also the awards it shared with other companies ("A; B", "A and B").
+        name = f.company.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conditions.append(BidAward.awarded_to.ilike(f"%{name}%"))
+    return conditions
+
+
+def list_awards(
+    session: Session, f: AwardFilters, since: date | None, page: int = 1
+) -> AwardListing:
+    """The awards matching the filters on or after `since` (all with None),
+    newest first, a page at a time, with their totals and the top winners."""
+    day = award_day()
+    joined = select(BidAward).join(BidSource, BidSource.id == BidAward.source_id)
+    shown = [day >= since] if since else []
+
+    def count_and_sum(*conditions):
+        row = session.execute(
+            select(func.count(BidAward.id), func.coalesce(func.sum(BidAward.amount_cents), 0))
+            .join(BidSource, BidSource.id == BidAward.source_id)
+            .where(*conditions)
+        ).one()
+        return row[0], int(row[1])
+
+    total, total_cents = count_and_sum(*_award_conditions(f), *shown)
+    older, older_cents = count_and_sum(*_award_conditions(f), day < since) if since else (0, 0)
+    rows = session.execute(
+        joined.add_columns(
+            day.label("day"),
+            BidSource.name.label("source_name"),
+            BidSource.homepage.label("homepage"),
+        )
+        .where(*_award_conditions(f), *shown)
+        .order_by(day.desc(), BidAward.id.desc())
+        .offset((page - 1) * AWARDS_PER_PAGE)
+        .limit(AWARDS_PER_PAGE)
+    ).all()
+    items = [
+        {
+            "award": row[0],
+            "day": row.day,
+            "source_name": row.source_name,
+            "source_homepage": row.homepage,
+        }
+        for row in rows
+    ]
+    agencies = session.execute(
+        select(BidAward.agency, func.count(BidAward.id))
+        .join(BidSource, BidSource.id == BidAward.source_id)
+        .where(*_award_conditions(f, agency=False), *shown, BidAward.agency.is_not(None))
+        .group_by(BidAward.agency)
+        .order_by(func.count(BidAward.id).desc(), BidAward.agency)
+    ).all()
+    money = func.coalesce(func.sum(BidAward.amount_cents), 0)
+    winners = session.execute(
+        select(BidAward.awarded_to, func.count(BidAward.id), money)
+        .join(BidSource, BidSource.id == BidAward.source_id)
+        .where(*_award_conditions(f, company=False), *shown, BidAward.awarded_to.is_not(None))
+        .group_by(BidAward.awarded_to)
+        .order_by(money.desc(), func.count(BidAward.id).desc(), BidAward.awarded_to)
+        .limit(10)
+    ).all()
+    oldest = session.scalar(
+        select(func.min(day))
+        .join(BidSource, BidSource.id == BidAward.source_id)
+        .where(BidSource.enabled.is_(True))
+    )
+    return AwardListing(
+        page=Page(items, total, page, AWARDS_PER_PAGE),
+        total_cents=total_cents,
+        agencies=[(a, n) for a, n in agencies],
+        winners=[(w, n, int(c)) for w, n, c in winners],
+        older=older,
+        older_cents=older_cents,
+        oldest=oldest,
+    )
+
+
+def award_sources(session: Session) -> list[BidSource]:
+    """The bid sources whose award lists have been read, for the award
+    history page's source list."""
+    return list(
+        session.scalars(
+            select(BidSource)
+            .where(BidSource.enabled.is_(True), BidSource.awards_run_at.is_not(None))
+            .order_by(BidSource.name)
+        )
+    )
 
 
 # ------------------------------------------------------------ visitor stats

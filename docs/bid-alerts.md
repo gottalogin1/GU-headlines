@@ -25,6 +25,10 @@ happens after a business subscribes.
    business gets one email with the new bids that match, if there are any.
    Each bid shows its kind and number, the agency, the due date, which trade
    or word it matched, and a link to the notice.
+5. The subscription also opens the whole [award history](bids.md#award-history)
+   (who won past bids and for how much), which other visitors see only for
+   the last `BID_AWARDS_FREE_DAYS` days. Every email and the business's own
+   page have the link; it remembers the browser for 30 days.
 
 There is no login or password. Every email has the link to the business's own
 page, where it can change its email address, trades and words, or cancel. A

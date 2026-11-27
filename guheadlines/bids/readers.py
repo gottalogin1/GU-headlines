@@ -608,11 +608,20 @@ def _cell_getter(cells: list[Tag], columns: dict[str, int]):
 
 def parse_table(result: FetchResult, agency: str | None = None) -> list[FoundBid]:
     """Solicitations from a page with a table of bids, one row each."""
+    return [bid for _, bid in _table_rows(result, agency)[1]]
+
+
+def _table_rows(
+    result: FetchResult, agency: str | None = None
+) -> tuple[list[str], list[tuple[list[Tag], FoundBid]]]:
+    """The table's headings, and each row's cells with the solicitation read
+    from them (the awards reader reads more cells of the same rows)."""
     soup = BeautifulSoup(result.content, "lxml")
     found_table = find_table(soup)
     if found_table is None:
         raise BidError(f"no table of bids found on {result.url}; the page may have changed")
     table, columns, width = found_table
+    header = [clean_text(c.get_text(" ")) for c in _header_cells(table)]
     bids = []
     for cells in _rows(table, width, starts_with_kind=columns.get("kind") == 0):
         cell = _cell_getter(cells, columns)
@@ -660,22 +669,27 @@ def parse_table(result: FetchResult, agency: str | None = None) -> list[FoundBid
         number = number or find_number(title)
         key = number or title
         bids.append(
-            FoundBid(
-                uid=f"table:{key}"[:500],
-                title=truncate(tidy_title(title, number) or title, 300),
-                # Without a page of its own, a bid links to the list it is on.
-                url=page or result.url,
-                number=number,
-                kind=kind_of(kind_text, number, title),
-                agency=agency,
-                document_url=document,
-                posted_on=_posted(posted_cell.get_text(" ")) if posted_cell is not None else None,
-                due_at=due[0] if due else None,
-                due_time=due[1] if due else False,
-                status=status or None,
+            (
+                cells,
+                FoundBid(
+                    uid=f"table:{key}"[:500],
+                    title=truncate(tidy_title(title, number) or title, 300),
+                    # Without a page of its own, a bid links to the list it is on.
+                    url=page or result.url,
+                    number=number,
+                    kind=kind_of(kind_text, number, title),
+                    agency=agency,
+                    document_url=document,
+                    posted_on=_posted(posted_cell.get_text(" "))
+                    if posted_cell is not None
+                    else None,
+                    due_at=due[0] if due else None,
+                    due_time=due[1] if due else False,
+                    status=status or None,
+                ),
             )
         )
-    return bids
+    return header, bids
 
 
 _STATUS_WORD_RE = re.compile(
@@ -724,3 +738,205 @@ def read_table(
             if due:
                 bid.due_at, bid.due_time = due
     return bids
+
+
+# -------------------------------------------------------------- awards
+
+AWARD_PAGES = 12  # pages of one award list read per check, at most
+
+
+@dataclass
+class FoundAward:
+    """A solicitation its agency has awarded: who won it, and for how much."""
+
+    # Stays the same when the agency edits the row, so it is updated.
+    uid: str
+    title: str
+    url: str
+    number: str | None = None
+    kind: str | None = None
+    agency: str | None = None
+    # The company (or companies) that won, as the agency writes it.
+    awarded_to: str | None = None
+    # The amount awarded in cents (the total, when several are given), and the
+    # amounts as written when there are several ("$69,000.00 and $15,600.00").
+    amount_cents: int | None = None
+    amounts: str | None = None
+    # The bid abstract (every bidder's price) or the contract, when linked.
+    document_url: str | None = None
+    posted_on: date | None = None
+    # When the bids were due. The lists don't give the day of the award itself,
+    # which comes some weeks later.
+    closed_on: date | None = None
+
+    @property
+    def number_key(self) -> str | None:
+        return number_key(self.number, self.agency)
+
+
+# "$39,600.00", and "$19, 632.41" (a space typed after the comma).
+_MONEY_RE = re.compile(r"\$\s*((?:\d{1,3}(?:,\s?\d{3})+|\d+)(?:\.\d{1,2})?)")
+_AWARDED_TO_RE = re.compile(r"\bawarded\s+to\b\s*:?\s*", re.I)
+# What a winner's cell says when there is no winner (yet).
+_NO_WINNER_RE = re.compile(
+    r"^\W*$|^\W*(n/?a|none|tbd|tba|awarded|see\b.*|award (?:information|notice|letter)s?|"
+    r"notice of award)\W*$|"
+    r"evaluat|pending|protest|review|negotiat|cancel|closed|\bopen\b|reject|no award|"
+    r"not awarded|re-?bid|postpone|\bstay\b|withdraw|suspend|terminat|in progress|"
+    r"intent to award",
+    re.I,
+)
+# A status that says the bid was awarded, without naming the winner: "Awarded",
+# or the Memorial Hospital's link "Award Information" (a PDF).
+_SAID_AWARDED_RE = re.compile(
+    r"^\W*(awarded|award (?:information|notice|letter)s?|notice of award)\W*$", re.I
+)
+_AWARD_DOCUMENT_RES = [
+    re.compile(r"abstract|tabulation|bid results?", re.I),
+    re.compile(r"\baward", re.I),
+    re.compile(r"\bcontract\b", re.I),
+]
+# Amounts above this are a mistake in the list (or not an amount at all).
+_MAX_AMOUNT_CENTS = 10_000_000_000 * 100
+
+
+def split_award(text: str | None) -> tuple[str | None, int | None, str | None]:
+    """(winner, total in cents, the amounts as written when several) from an
+    award cell: "$39,600.00 Awarded to: Pacific Revolution Corp.", "HEMA
+    Corporation dba Deesoniis. - $8,990.00", "N/A Awarded to: N/A" or just a
+    company's name."""
+    text = clean_text(text)
+    if not text:
+        return None, None, None
+    found = _AWARDED_TO_RE.search(text)
+    if found:
+        money, winner = text[: found.start()], _tidy_winner(text[found.end() :])
+    else:
+        # "A - $1.00. B - $2.00": the names are what is left between the amounts.
+        money = text
+        names = [_tidy_winner(part) for part in _MONEY_RE.split(text)[::2]]
+        winner = "; ".join(name for name in names if name)
+    if _NO_WINNER_RE.search(winner):
+        winner = ""
+    amounts = [re.sub(r"[,\s]", "", a) for a in _MONEY_RE.findall(money)]
+    cents = sum(round(float(a) * 100) for a in amounts) if amounts else None
+    if cents is not None and not 0 < cents < _MAX_AMOUNT_CENTS:
+        cents = None
+    written = " and ".join(_money_text(a) for a in amounts) if len(amounts) > 1 else None
+    return truncate(winner, 300) or None, cents, written
+
+
+def _tidy_winner(text: str) -> str:
+    """A winner's name without the dashes, colons and "and" around it."""
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"(?:[\s\-–—:,;/|]|\band\b)+$", "", text)
+    return re.sub(r"^(?:[\s\-–—:,;/|.]|\band\b)+", "", text).strip()
+
+
+def _money_text(amount: str) -> str:
+    """'16078.65' -> '$16,078.65'."""
+    dollars, _, cents = amount.partition(".")
+    return f"${int(dollars):,}" + (f".{cents.ljust(2, '0')}" if cents else "")
+
+
+def _award_column(header: list[str]) -> int | None:
+    """The column naming the winner or the amount: "Awarded Amount",
+    "Status/Awarded"."""
+    found = [i for i, name in enumerate(header) if re.search(r"award", name, re.I)]
+    return found[-1] if found else None
+
+
+def _award_document(cells: list[Tag], base: str, column: int) -> str | None:
+    """The award's document: a file linked in the award column ("Award
+    Information"), else the row's bid abstract, award notice or contract."""
+
+    def links(where: list[Tag]) -> list[tuple[str, str]]:
+        return [
+            (clean_text(a.get_text(" ")), _link(base, a["href"]))
+            for c in where
+            for a in c.find_all("a", href=True)
+            if not a["href"].startswith(("mailto:", "/cdn-cgi/", "#", "javascript:"))
+        ]
+
+    if column < len(cells):
+        for _, href in links([cells[column]]):
+            if _FILE_LINK_RE.search(href.split("?")[0]):
+                return href
+    links = links(cells)
+    for pattern in _AWARD_DOCUMENT_RES:
+        for text, href in links:
+            if pattern.search(text) and _FILE_LINK_RE.search(href.split("?")[0]):
+                return href
+    return None
+
+
+def parse_awards(result: FetchResult, agency: str | None = None) -> list[FoundAward]:
+    """Awarded solicitations from a page with a table of bids that names the
+    winner or the amount: the OpenGov Guam portal's "Awarded" list, the Port's
+    list (all states), the Memorial Hospital's table."""
+    header, rows = _table_rows(result, agency)
+    column = _award_column(header)
+    if column is None:
+        raise BidError(f"no awarded column in the table on {result.url}; the page may have changed")
+    awards = []
+    for cells, bid in rows:
+        text = cells[column].get_text(" ") if column < len(cells) else ""
+        winner, cents, written = split_award(text)
+        said_awarded = bool(bid.status and _SAID_AWARDED_RE.match(bid.status))
+        if not (winner or cents or said_awarded):
+            continue
+        if bid.status and not said_awarded and _NO_WINNER_RE.search(bid.status):
+            # "Cancelled", "Closed": a name in another column isn't a winner.
+            if not winner or clean_text(bid.status) != winner:
+                continue
+        awards.append(
+            FoundAward(
+                uid=f"award:{bid.uid.removeprefix('table:')}"[:500],
+                title=bid.title,
+                url=bid.url,
+                number=bid.number,
+                kind=bid.kind,
+                agency=bid.agency,
+                awarded_to=winner,
+                amount_cents=cents,
+                amounts=written,
+                document_url=_award_document(cells, result.url, column),
+                posted_on=bid.posted_on,
+                closed_on=bid.due_at.astimezone(GUAM_TZ).date() if bid.due_at else None,
+            )
+        )
+    return awards
+
+
+def _next_award_page(result: FetchResult) -> str | None:
+    """The next page of a list split into pages: a "next" link, or a Drupal
+    pager's (the Port's site)."""
+    found = _next_page(result)
+    if found:
+        return found
+    soup = BeautifulSoup(result.content, "lxml")
+    link = soup.select_one('li.pager-next a[href], a[title="Go to next page"]')
+    return _link(result.url, link["href"]) if link else None
+
+
+def read_awards(
+    client: HttpClient, url: str, agency: str | None = None, max_pages: int = AWARD_PAGES
+) -> list[FoundAward]:
+    """Awarded solicitations from an award list and its next pages. A later
+    page that fails keeps the pages read before it."""
+    awards: list[FoundAward] = []
+    seen_pages: set[str] = set()
+    while url and url not in seen_pages and len(seen_pages) < max_pages:
+        seen_pages.add(url)
+        try:
+            result = client.get(url)
+            awards += parse_awards(result, agency)
+        except (FetchError, BidError):
+            if len(seen_pages) == 1:
+                raise
+            break
+        url = _next_award_page(result)
+    kept: dict[str, FoundAward] = {}
+    for award in awards:
+        kept.setdefault(award.uid, award)
+    return list(kept.values())

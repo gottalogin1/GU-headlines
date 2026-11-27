@@ -280,6 +280,11 @@ def cmd_worker(args, settings: Settings) -> None:
                 bid_alerts.send_alerts(settings)
             except Exception:
                 log.exception("bid alerts failed")
+        try:
+            # Award lists not read for a day (the award history page).
+            _run_awards(settings, sources)
+        except Exception:
+            log.exception("award lists check failed")
 
     def look_after_bid_alerts() -> None:
         """Ask PayPal about new and paying bid alert subscriptions (bids/alerts.py)."""
@@ -925,14 +930,28 @@ def _run_bids(settings: Settings, sources, only: list[str] | None = None):
         checker.close()
 
 
+def _run_awards(settings: Settings, sources, only: list[str] | None = None, force=False):
+    from .bids.pipeline import BidChecker
+
+    checker = BidChecker(settings, sources)
+    try:
+        return checker.run_awards(only=only, force=force)
+    finally:
+        checker.close()
+
+
 def cmd_bids(args, settings: Settings) -> None:
     """Read the bid lists in config/bids.yaml now (or, with --check, only show
-    what each source gives, without a database)."""
+    what each source gives, without a database). With --awards, the award
+    lists instead."""
     sources = _bids_config(settings)
     known = {s.slug for s in sources}
     for slug in args.source or []:
         if slug not in known:
             raise SystemExit(f"unknown bid source {slug!r}; see config/bids.yaml")
+    if args.awards:
+        _cmd_awards(args, settings, sources)
+        return
     if not args.check:
         wait_for_db()
         migrate()
@@ -980,6 +999,59 @@ def cmd_bids(args, settings: Settings) -> None:
                 for name in ("kind", "agency", "posted_on", "url", "document_url"):
                     if getattr(b, name):
                         print(f"    {name}: {getattr(b, name)}")
+            print()
+    finally:
+        checker.close()
+
+
+def _cmd_awards(args, settings: Settings, sources) -> None:
+    """`guheadlines bids --awards [--check]`: read the award lists now."""
+    if not args.check:
+        wait_for_db()
+        migrate()
+        results = _run_awards(settings, sources, only=args.source, force=True)
+        if results is None:
+            raise SystemExit("a bids check is running")
+        for r in results:
+            note = f"  ERROR: {r.error}" if r.error else ""
+            print(f"{r.slug:<18} {r.found:>5} awards  {r.new:>5} new{note}")
+        if not results:
+            print("No source has an award list (`awards:` in config/bids.yaml).")
+        return
+
+    from .bids.pipeline import BidChecker
+    from .bids.readers import BidError
+    from .scraper.http import FetchError
+
+    checker = BidChecker(settings, sources)
+    try:
+        for source in sources:
+            if not source.awards or (args.source and source.slug not in args.source):
+                continue
+            print(f"### {source.slug}: {source.name} (awards)")
+            if not source.collected:
+                print("  not collected (cannot_scrape or enabled: false)\n")
+                continue
+            try:
+                awards, errors = checker.collect_awards(source)
+            except (FetchError, BidError) as exc:
+                print(f"  ERROR: {exc}\n")
+                continue
+            for error in errors:
+                print(f"  ERROR (other pages still read): {error}")
+            amounts = [a.amount_cents for a in awards if a.amount_cents]
+            print(
+                f"  {len(awards)} awards, {sum(1 for a in awards if a.awarded_to)} with a winner,"
+                f" {len(amounts)} with an amount (${sum(amounts) / 100:,.2f} in all)"
+            )
+            for a in awards[: args.limit]:
+                money = f"${a.amount_cents / 100:,.2f}" if a.amount_cents else "no amount"
+                when = f"closed {a.closed_on}" if a.closed_on else f"posted {a.posted_on}"
+                print(f"  - {when}  {a.number or '(no number)'}  {a.title}")
+                print(f"    awarded to: {a.awarded_to or '(not given)'}  {money}")
+                for name in ("amounts", "kind", "agency", "url", "document_url"):
+                    if getattr(a, name):
+                        print(f"    {name}: {getattr(a, name)}")
             print()
     finally:
         checker.close()
@@ -1229,6 +1301,11 @@ def main(argv: list[str] | None = None) -> None:
         "--check", action="store_true", help="only show what each source gives; save nothing"
     )
     bids.add_argument("--limit", type=int, default=8, help="with --check: bids to show")
+    bids.add_argument(
+        "--awards",
+        action="store_true",
+        help="read the award lists (the award history page) instead of the open bids",
+    )
 
     sub.add_parser("alert-test", help="post a test alert to your Discord channel")
     report = sub.add_parser("report", help="post a report in your Discord channel now")

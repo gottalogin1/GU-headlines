@@ -86,6 +86,17 @@ release, see [Updating](docs/maintenance.md#updating).
   most-read sections, where readers come from) and your prices, to send to
   local businesses. It is made again every 10 minutes. It needs a new
   package (fpdf2), so rebuild as usual when you update.
+- **Bid award history.** A new page, `/bids/awards`, shows who won past
+  Government of Guam bids and for how much: the Power Authority's awards since
+  2021 (company, amount and bid abstract), the Port's (company, amount and
+  contract) and the Memorial Hospital's (with its award notice), with a word
+  search, an agency filter, each company's awards and the top winners. The
+  award lists are read once a day and kept, so the history keeps growing.
+  Everyone sees the last `BID_AWARDS_FREE_DAYS` days (default 180); bid alert
+  subscribers see all of it, without ads, through the link in their emails
+  and on their bid alerts page (no login). With bid alerts off, everyone sees
+  all of it. New database table (run the update as usual) and one new
+  setting, `BID_AWARDS_FREE_DAYS`. How-to: `docs/bids.md#award-history`.
 - **Visitor guides.** A new section, `/guides`, with practical guides for
   visiting Guam that you write and keep up to date yourself, in your browser,
   on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a

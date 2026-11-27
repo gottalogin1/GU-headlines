@@ -6,6 +6,7 @@
   <h1>Guam bids and RFPs</h1>
   <p class="muted">Open Government of Guam bids and requests for proposals from {{ sources|length }} {{ "source" if sources|length == 1 else "sources" }}, checked every {{ settings.bids_interval_hours }} hours. A bid leaves this page once its due date has passed. Every bid links to the agency or portal that posted it.</p>
   {% if bid_alerts %}<p class="bid-alert-cta"><a href="/bids/alerts">Get new bids for your trade by email</a> <span class="muted">· {{ bid_alerts.price }} a month</span></p>{% endif %}
+  <p class="bid-awards-link"><a href="/bids/awards">Who won past bids, and for how much</a> <span class="muted">· award history</span></p>
 </header>
 
 <form class="search-form bid-filter" action="/bids" method="get">
@@ -101,7 +102,7 @@
 {% if bid_alerts %}
 <section class="panel">
   <h2>Bid alerts by email</h2>
-  <p class="small">Get an email when a new bid matches your trade or your own words. {{ bid_alerts.price }} a month through PayPal; cancel any time.</p>
+  <p class="small">Get an email when a new bid matches your trade or your own words, and the full <a href="/bids/awards">award history</a>. {{ bid_alerts.price }} a month through PayPal; cancel any time.</p>
   <p class="small"><a href="/bids/alerts">Sign up for bid alerts</a></p>
 </section>
 {% endif %}

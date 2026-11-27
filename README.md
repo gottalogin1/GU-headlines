@@ -117,7 +117,9 @@ that is always on can do this by itself after each change; see
   proposals, soonest due first, from notices.guam.gov and the bid lists of
   the Power Authority, GHURA, the hospital, Waterworks and the Port: what
   each is for, the agency, the due date and time, and links to the notice.
-  Closed bids leave by themselves. See [Bids and RFPs](docs/bids.md).
+  Closed bids leave by themselves. An award history (`/bids/awards`) shows
+  who won past bids and for how much; bid alert subscribers see all of it.
+  See [Bids and RFPs](docs/bids.md).
 - **Visitor guides** (`/guides`) that you write and keep up to date in your
   browser, with photos, ads and a sponsor for each guide, and **guide packs**
   that readers buy through PayPal (such as a PCS move pack for military

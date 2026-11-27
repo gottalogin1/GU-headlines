@@ -19,7 +19,7 @@ from datetime import time as dt_time
 from email.utils import format_datetime
 from functools import partial
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import (
@@ -1779,6 +1779,132 @@ def bids(
         breadcrumbs=[("Bids and RFPs", None)],
         show_ad=True,
     )
+
+
+def money_short(cents: int) -> str:
+    """Money in a few characters, for the top winners: $950, $48K, $1.2M."""
+    dollars = cents / 100
+    if dollars >= 999_500:
+        return f"${dollars / 1_000_000:,.1f}M".replace(".0M", "M")
+    if dollars >= 10_000:
+        return f"${dollars / 1000:,.0f}K"
+    return f"${dollars:,.0f}"
+
+
+def award_document(url: str) -> str:
+    """The name of an award's linked document, from its address."""
+    name = unquote(urlsplit(url).path.rsplit("/", 1)[-1]).lower()
+    if "abstract" in name or "tabulation" in name:
+        label = "Bid abstract"
+    elif "contract" in name:
+        label = "Contract"
+    else:
+        label = "Award document"
+    return f"{label} (PDF)" if name.endswith(".pdf") else label
+
+
+templates.env.globals.update(money_short=money_short, award_document=award_document)
+
+# The award history page's cookie: a bid alert subscriber's awards_key
+# (bids/alerts.py), set by the link in their emails and on their own page.
+AWARDS_COOKIE = "bid_awards"
+AWARDS_COOKIE_DAYS = 30
+
+
+def _awards_subscriber(request: Request):
+    """The bid alert subscriber this browser belongs to, if it has the award
+    history cookie and the subscriber still gets alerts."""
+    key = request.cookies.get(AWARDS_COOKIE, "")
+    return bid_alerts.by_awards_key(key) if key else None
+
+
+@app.get("/bids/awards", response_class=HTMLResponse)
+def bid_awards(
+    request: Request,
+    q: str = Query("", max_length=200),
+    agency: str = Query("", max_length=200),
+    company: str = Query("", max_length=300),
+    page: int = Query(1, ge=1, le=500),
+    t: str = Query("", max_length=64),
+    access: str = Query("", max_length=10),
+):
+    """Who won past Government of Guam bids and for how much. Everyone sees
+    the last BID_AWARDS_FREE_DAYS days; bid alert subscribers see all of it.
+    With bid alerts off, everyone does."""
+    alerts_on = bid_alerts.is_on(settings)
+    if t:
+        return _awards_sign_in(request, t, alerts_on)
+    subscriber = _awards_subscriber(request) if alerts_on else None
+    full = subscriber is not None or not alerts_on
+    today = datetime.now(GUAM_TZ).date()
+    since = None if full else today - timedelta(days=settings.bid_awards_free_days)
+    award_filters = queries.AwardFilters(
+        q=q.strip(), agency=agency.strip() or None, company=" ".join(company.split()) or None
+    )
+    collected = {s.slug for s in bids_config_cache.get() if s.collected and s.awards}
+    with session_scope() as session:
+        listing = queries.list_awards(session, award_filters, since, page)
+        sources = [s for s in queries.award_sources(session) if s.slug in collected]
+    if page > 1 and not listing.page.items:
+        raise HTTPException(404)
+    filtered = bool(award_filters.q or award_filters.agency or award_filters.company)
+    response = render(
+        request,
+        "bid_awards.html",
+        listing=listing,
+        result=listing.page,
+        award_filters=award_filters,
+        sources=sources,
+        since=since,
+        subscriber=subscriber is not None,
+        alerts_on=alerts_on,
+        access_ended=access == "ended",
+        title="Bid award history",
+        description=_awards_description([s.name for s in sources]),
+        active_nav="bids",
+        canonical={"page": page},
+        robots="noindex, follow" if filtered or access else None,
+        breadcrumbs=[("Bids and RFPs", "/bids"), ("Award history", None)],
+        # No ads for subscribers: they pay already.
+        show_ad=subscriber is None,
+    )
+    # The full history must not come from a cache to someone without the
+    # cookie, nor the short one to a subscriber who just got it.
+    response.headers["Vary"] = "Cookie"
+    if subscriber is not None:
+        _private(response)
+    elif request.cookies.get(AWARDS_COOKIE):
+        response.delete_cookie(AWARDS_COOKIE, path="/bids/awards")  # the alerts ended
+    return response
+
+
+def _awards_sign_in(request: Request, token: str, alerts_on: bool) -> Response:
+    """The link in a subscriber's emails and on their page (/bids/awards?t=):
+    remember the browser with a cookie, then show the page at its plain
+    address (so the secret code doesn't stay in the address bar)."""
+    sub = bid_alerts.by_token(token) if alerts_on else None
+    if sub is None or not bid_alerts.receiving(sub):
+        return _private(
+            RedirectResponse("/bids/awards?access=ended" if alerts_on else "/bids/awards", 303)
+        )
+    response = _private(RedirectResponse("/bids/awards", 303))
+    response.set_cookie(
+        AWARDS_COOKIE,
+        bid_alerts.awards_key(sub.token),
+        max_age=AWARDS_COOKIE_DAYS * 86400,
+        path="/bids/awards",
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+    )
+    return response
+
+
+def _awards_description(sources: list[str]) -> str:
+    text = "Who won past Government of Guam bids and requests for proposals, and for how much"
+    if sources:
+        text += f": awards from {_names(sources)}"
+    return text + ". Every award links to the agency that published it."
 
 
 def _bids_description(sources: list[str]) -> str:
@@ -5144,6 +5270,7 @@ def bid_alerts_manage(
             paid_until=fmt_date_long(sub.paid_until) if sub.paid_until else "",
             trades=bid_alerts.TRADES,
             result=shown,
+            awards=bid_alerts.receiving(sub, now),
         )
     )
 

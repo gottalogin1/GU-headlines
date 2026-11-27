@@ -116,6 +116,9 @@ jobs:
         env:
           LOG_LEVEL: DEBUG
         run: guheadlines bids --check --limit 8
+      - name: What each award list gives (nothing is saved)
+        if: ${{ !cancelled() }}
+        run: guheadlines bids --awards --check --limit 12
 
   scrape:
     name: Check and scrape sources
@@ -185,6 +188,8 @@ jobs:
         run: guheadlines events
       - name: Read the bid lists
         run: guheadlines bids
+      - name: Read the award lists
+        run: guheadlines bids --awards
       - name: Summary
         # Also runs when an earlier step failed, so a broken run still shows
         # what was loaded.
