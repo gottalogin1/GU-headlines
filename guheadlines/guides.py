@@ -10,8 +10,10 @@ nightly backup keeps them with the rest of the database, and their photos
 with the other photos.
 
 A guide is a "draft" (only the owner sees it) until it is "published". Its
-`access` is "free" for now; "paid" is there for guides that only paying
-readers may read in full, once that is built (docs/guides.md#selling-guides).
+`access` is "free" (everyone reads it all) or "paid": then only readers who
+bought a guide pack with it read it in full, and the others read its opening,
+the text before its first main heading (see guide_packs.py, and
+docs/guides.md#selling-guides).
 
 The site comes with starter guides (guide_starters/), which the owner can
 add as drafts, then read, change and publish.
@@ -231,6 +233,16 @@ def _prepare(tokens: list[Token]) -> list[tuple[str, str]]:
 _GUIDE_LINK = re.compile(r'<a href="/guides/([a-z0-9-]+)(?:#[^"]*)?"[^>]*>(.*?)</a>', re.S)
 
 
+def opening(text: Rendered) -> Rendered:
+    """What readers without a guide pack see of a paid guide: the text before
+    its first main heading (parts[0]); nothing when the guide has no main
+    heading, or starts with one. The list of main headings stays, to show
+    what the rest of the guide is about."""
+    if len(text.parts) < 2 or not text.contents or str(text.parts[0]).lstrip().startswith("<h2"):
+        return Rendered([], text.contents)
+    return Rendered(text.parts[:1], text.contents)
+
+
 def unlink_unpublished(text: Rendered, published_slugs: set[str]) -> Rendered:
     """`text` with each link to a guide that is not published (a draft, or
     no guide at all) turned into its plain words, so readers never land on a
@@ -353,6 +365,7 @@ def check(fields: dict[str, str], has_photo: bool) -> tuple[dict, dict[str, str]
         values["position"] = 100
         errors["position"] = "A whole number from 0 to 9999, please."
     values["status"] = PUBLISHED if fields.get("status") == PUBLISHED else DRAFT
+    values["access"] = PAID if fields.get("access") == PAID else FREE
     values["photo_alt"] = _line(fields.get("photo_alt"), MAX_ALT)
     if has_photo and not values["photo_alt"]:
         errors["photo_alt"] = "Please say what the photo shows, for readers who can't see it."
@@ -454,6 +467,7 @@ def apply(guide: Guide, values: dict, now: datetime) -> None:
         "body",
         "position",
         "status",
+        "access",
         "photo_alt",
         "sponsor_name",
         "sponsor_text",
@@ -504,6 +518,8 @@ class Starter:
     summary: str
     position: int
     body: str
+    # "paid" for a guide meant for a guide pack (guide_starters/packs.yaml).
+    access: str = FREE
 
 
 def starters() -> list[Starter]:
@@ -522,6 +538,7 @@ def starters() -> list[Starter]:
                 summary=" ".join(meta["summary"].split()),
                 position=int(meta.get("position", 100)),
                 body=body.strip(),
+                access=PAID if meta.get("access") == PAID else FREE,
             )
         )
     return sorted(found, key=lambda s: (s.position, s.title))
@@ -548,7 +565,7 @@ def add_starters(session: Session, now: datetime, slugs: Iterable[str]) -> int:
                 body=s.body,
                 position=s.position,
                 status=DRAFT,
-                access=FREE,
+                access=s.access,
                 created_at=now,
                 updated_at=now,
             )

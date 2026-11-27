@@ -22,6 +22,21 @@ release, see [Updating](docs/maintenance.md#updating).
   link to it. New `posts` input for calendars (dated blog posts become
   events) and a new calendar color, `purple`. No new settings, no database
   change. How-to: `docs/events.md`.
+- **Guide packs: sell visitor guides through PayPal.** Set a guide to "Guide
+  pack readers" and everyone else reads its opening (the text before its
+  first heading), then sees the packs that hold it. Readers pay once through
+  PayPal on the pack's page (`/guides/packs/<address>`) and read with a
+  private link, kept in their browser and emailed to the address they paid
+  with: no accounts. Make packs and set their prices on `/admin/guides`; the
+  same page lists the sales, with **Turn off** for a shared link and
+  **Refund**. Three starter packs come with ten new guides, as drafts for you
+  to check: a PCS move pack for military families (move checklist, housing,
+  pets, cars, schools, typhoon season), a First week on Guam pack (a
+  seven-day plan, three or four days, Guam on a budget, before you fly) and
+  an Every guide pack. Sales count in the daily money report. New database
+  tables (run the update as usual), no new settings: packs need PayPal and
+  `STATS_PASSWORD`, and email for the link by email. How-to:
+  [docs/guides.md](docs/guides.md#selling-guides).
 - **Paid press releases and deals.** Two more kinds of paid listings, sold
   through PayPal and checked by you on `/admin/listings` like the others.
   **Press releases** (`/press`): a business or group posts its own news,

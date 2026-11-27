@@ -50,6 +50,13 @@
     <label class="plan-choice"><input type="radio" name="status" value="published" {% if values.get('status') == 'published' %}checked{% endif %}>
       <span><strong>Published</strong><br><span class="muted small">Everyone, on /guides.</span></span></label>
   </fieldset>
+  <fieldset class="field plan">
+    <legend>Who can read it all</legend>
+    <label class="plan-choice"><input type="radio" name="access" value="free" {% if values.get('access') != 'paid' %}checked{% endif %}>
+      <span><strong>Free</strong><br><span class="muted small">Everyone reads the whole guide.</span></span></label>
+    <label class="plan-choice"><input type="radio" name="access" value="paid" {% if values.get('access') == 'paid' %}checked{% endif %}>
+      <span><strong>Guide pack readers</strong><br><span class="muted small">Others read the text before the first ## heading, then see the packs that hold it.{% if not sales_on %} Packs are sold once PayPal is set up.{% endif %}</span></span></label>
+  </fieldset>
 
   <div class="field wide{% if errors.get('summary') %} has-error{% endif %}">
     <label for="f-summary">Summary</label>
