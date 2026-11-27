@@ -818,7 +818,7 @@ and buyers can still renew from their own page.
 | `USAJOBS_API_KEY`, `USAJOBS_EMAIL` | (empty) | A free key for the USAJOBS job board and the email address it was sent to. Without them that board is skipped. See [Jobs](jobs.md#usajobs). |
 | `EVENTS_INTERVAL_HOURS` | `3` | How often to read the event calendars for the [Events page](events.md), in hours. They are also read when GU Headlines starts. |
 | `BIDS_INTERVAL_HOURS` | `6` | How often to read the government bid lists for the [Bids page](bids.md), in hours. They are also read when GU Headlines starts. |
-| `GOOGLE_CALENDAR_API_KEY` | (empty) | A free Google key for reading the Guam Legislature's calendar (Google Calendar). Without it that calendar is skipped; the Legislature's session agendas are still listed. See [Events](events.md#google-calendar-key). |
+| `GOOGLE_CALENDAR_API_KEY` | (empty) | A free Google key for reading the Google calendars on the Events page (the Guam Legislature's and Life in the Son Christian Fellowship's). Without it those calendars are skipped; the Legislature's session agendas and the church's dated blog posts are still listed. See [Events](events.md#google-calendar-key). |
 | `PER_HOST_DELAY` | `1.5` | Seconds to wait between two requests to the same news site. Higher is gentler. Individual sites can be slowed down further in `sources.yaml` (`request_delay`). |
 | `SCRAPER_WORKERS` | `4` | How many news sites are checked at the same time. |
 | `REQUEST_TIMEOUT` | `25` | Seconds to wait for a news site to answer before giving up (it will try again later). |

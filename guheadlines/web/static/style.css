@@ -39,6 +39,7 @@
 
   /* Events on the month calendar, by calendar (events.yaml `color`). */
   --cal-green: #86c095; --cal-red: #e5958b; --cal-blue: #93b6de; --cal-gold: #d9b45a;
+  --cal-purple: #bba3de;
   /* Paid listings marked "Featured" (listings.py). */
   --tag-featured: #e6c77a; --tag-featured-bg: #3a311c;
 
@@ -85,6 +86,7 @@
   --tag-cnmi: #84375e;      --tag-cnmi-bg: #eedbe4;
   --tag-obituaries: #4f4c47; --tag-obituaries-bg: #e5e2db;
   --cal-green: #2f7a45; --cal-red: #b03a2e; --cal-blue: #2f62a0; --cal-gold: #9a6f12;
+  --cal-purple: #6b4a9a;
   --tag-featured: #6f5210; --tag-featured-bg: #f0e2bf;
   --warning-text: #6b1f19; --warning-bg: #f3dfdb; --warning-line: #b9584d;
   --watch-text: #5c3d0d;   --watch-bg: #f2e6cc;   --watch-line: #b08a3e;
@@ -855,6 +857,14 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .story.event .story-body { padding-left: 0; }
+/* An upcoming event among the stories of the home page (news_feed calendars),
+   and a story's link to its event on the Events page. */
+.feed-event-kicker {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 6px;
+  font-size: .72rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+}
+.feed-event .event-facts { margin-top: 4px; }
+.on-calendar { display: flex; align-items: baseline; gap: 7px; margin: 4px 0 0; font-size: .88rem; font-weight: 650; }
 @media (max-width: 640px) {
   .event-filter .event-words { grid-column: 1 / -1; }
   .story.event { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -895,6 +905,7 @@ a.cal-day:focus-visible { outline-offset: -3px; border-radius: 0; }
 .cal-dot.cal-red { background: var(--cal-red); }
 .cal-dot.cal-blue { background: var(--cal-blue); }
 .cal-dot.cal-gold { background: var(--cal-gold); }
+.cal-dot.cal-purple { background: var(--cal-purple); }
 .cal-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 2px 0; color: var(--text-soft); }
 .cal-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .cal-note { margin: 2px 2px 0; }

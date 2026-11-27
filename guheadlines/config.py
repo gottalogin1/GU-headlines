@@ -394,6 +394,9 @@ class CalendarConfig:
     ical: list[str] = field(default_factory=list)
     # RSS feeds of calendars built with Modern Campus (the University of Guam's).
     moderncampus: list[str] = field(default_factory=list)
+    # RSS feeds of posts (news, announcements) that write their event's date in
+    # the text, such as a church's "Events & Announcements" blog.
+    posts: list[str] = field(default_factory=list)
     # Pages that list meeting agendas as PDF links under a dated heading
     # (the Guam Legislature's session agendas).
     agendas: list[str] = field(default_factory=list)
@@ -420,6 +423,9 @@ class CalendarConfig:
     not_main: list[re.Pattern[str]] = field(default_factory=list)
     # The colour of its events on the month calendar (one of CALENDAR_COLORS).
     color: str | None = None
+    # Also show its events in the home page's news feed, each one the day
+    # before it (only its main events: see main_events).
+    news_feed: bool = False
     enabled: bool = True
     request_delay: float | None = None
     ignore_robots: bool = False
@@ -433,7 +439,7 @@ class CalendarConfig:
     @property
     def addresses(self) -> list[str]:
         """Every web address this calendar reads (for robots.txt and delays)."""
-        return self.ical + self.moderncampus + self.agendas + self.notices + self.pages
+        return self.ical + self.moderncampus + self.posts + self.agendas + self.notices + self.pages
 
     def excluded(self, *labels: str | None) -> bool:
         return any(p.search(label) for p in self.exclude for label in labels if label)
@@ -452,8 +458,8 @@ class CalendarConfig:
 
 # Colours a calendar's events can have on the month calendar (style.css has
 # a muted shade of each for the light and the dark look).
-CALENDAR_COLORS = ("green", "red", "blue")
-_INPUTS = ("google_calendar", "ical", "moderncampus", "agendas", "notices", "pages")
+CALENDAR_COLORS = ("green", "red", "blue", "purple")
+_INPUTS = ("google_calendar", "ical", "moderncampus", "posts", "agendas", "notices", "pages")
 
 
 def _main_events(value, where: str) -> tuple[bool | list[re.Pattern[str]], list]:
@@ -511,6 +517,7 @@ def parse_events_config(data: dict) -> list[CalendarConfig]:
             main_events=main_events,
             not_main=not_main,
             color=color,
+            news_feed=bool(raw.get("news_feed", False)),
             enabled=bool(raw.get("enabled", True)),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),

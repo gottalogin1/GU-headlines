@@ -24,12 +24,14 @@ from ..settings import Settings
 from .ical import CalendarError, CalendarEvent
 from .readers import (
     merge_agendas,
+    merge_posts,
     read_agendas,
     read_google_calendar,
     read_ical,
     read_listing,
     read_moderncampus,
     read_notices,
+    read_posts,
 )
 
 log = logging.getLogger(__name__)
@@ -126,6 +128,7 @@ class EventChecker:
                 (u, lambda u: read_moderncampus(self.client, u, start, end))
                 for u in calendar.moderncampus
             ]
+            + [(u, lambda u: read_posts(self.client, u, start, end)) for u in calendar.posts]
             + [(u, lambda u: read_agendas(self.client, u, start, end)) for u in calendar.agendas]
             + [(u, lambda u: read_notices(self.client, u, start, end)) for u in calendar.notices]
             + [
@@ -146,7 +149,7 @@ class EventChecker:
 
     def _tidy(self, calendar: CalendarConfig, events: list[CalendarEvent]) -> list[CalendarEvent]:
         kept: dict[str, CalendarEvent] = {}
-        for event in merge_agendas(events):
+        for event in merge_posts(merge_agendas(events)):
             event.location = event.location or calendar.location
             event.organizer = event.organizer or calendar.organizer
             if (

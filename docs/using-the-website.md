@@ -118,7 +118,11 @@ Each story shows:
 - **"Read the full story at …"**, which also opens the story.
 
 Stories are grouped by day ("Today", "Yesterday", then dates), with the
-newest story at the top. A story's time is the time the news site gives. If
+newest story at the top. On the home page, some calendars' events are in the
+list too, from the morning before each one (marked **Event · Tomorrow**,
+linked to the event's page); a story that is about an upcoming event says
+"On our events calendar" with a link to it (see
+[In the home page's news feed](events.md#in-the-home-page-news-feed)). A story's time is the time the news site gives. If
 the site gives no time, the story gets the time it was collected (for a story
 that shows only a date, this applies when it is collected on that date). All
 times are **Chamorro Standard Time (ChST)**.
