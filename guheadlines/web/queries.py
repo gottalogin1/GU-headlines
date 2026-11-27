@@ -913,6 +913,29 @@ def newsletter_edition(
     return edition.formed_at, [by_id[i] for i in edition.article_ids if i in by_id]
 
 
+def press_for_edition(session: Session, formed_at: datetime) -> list[Listing]:
+    """The press releases (listings.py) of a newsletter edition: those approved
+    since the edition before it (or in the week before the first edition),
+    still on the site, oldest first. So each press release goes into one
+    edition."""
+    before = session.scalar(
+        select(func.max(NewsletterEdition.formed_at)).where(NewsletterEdition.formed_at < formed_at)
+    )
+    since = before or formed_at - timedelta(days=7)
+    return list(
+        session.scalars(
+            select(Listing)
+            .where(
+                Listing.kind == "press",
+                Listing.status == LIVE,
+                Listing.reviewed_at >= since,
+                Listing.reviewed_at < formed_at,
+            )
+            .order_by(Listing.reviewed_at, Listing.id)
+        )
+    )
+
+
 # --------------------------------------------------------------- listings
 
 

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{# A paid press release's own page (/press/<id>, listings.py): its whole
+   text, marked as sponsored. Its links carry rel="sponsored". #}
+{% block main %}
+{% set l = release %}
+<header class="page-head">
+  <p class="crumbs"><a href="/press">Press releases</a></p>
+  <div class="tags"><span class="tag tag-featured">Sponsored</span><span class="tag">Press release</span></div>
+  <h1>{{ l.title }}</h1>
+  <p class="job-employer"><strong>{{ l.name }}</strong>{% if l.reviewed_at %} · <time datetime="{{ (l.reviewed_at|to_local).date().isoformat() }}">{{ l.reviewed_at|fmt_day }}</time>{% endif %}</p>
+</header>
+
+<article class="story no-photo press-release">
+  <div class="story-body">
+    {% if l.photo %}
+    <img class="press-photo" src="/media/{{ l.photo }}" width="{{ l.photo_width }}" height="{{ l.photo_height }}" alt="" decoding="async">
+    {% endif %}
+    <div class="press-text">
+      {% for p in l.description|paragraphs %}<p>{{ p }}</p>{% endfor %}
+    </div>
+    {% if l.contact %}
+    <dl class="job-facts"><div><dt>Media contact</dt><dd>{{ l.contact }}</dd></div></dl>
+    {% endif %}
+    {% if l.link %}
+    <p class="job-links"><a class="read-link" href="{{ l.link|safe_url }}" target="_blank" rel="sponsored noopener">More at <span class="read-domain">{{ l.link|domain }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></a></p>
+    {% endif %}
+  </div>
+</article>
+
+<p class="muted small event-note">This is a paid press release from {{ l.name }}, posted as they sent it. {{ settings.site_name }} did not write it and does not vouch for it.{% if offers.press %} <a href="/post/press">Post your own press release</a>.{% endif %}</p>
+{% endblock %}

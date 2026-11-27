@@ -177,6 +177,12 @@ class Settings:
     featured_event_price_cents: int = 1500
     business_upgrade_price_cents: int = 5000
     business_upgrade_days: int = 365
+    # A press release (on the Press releases page, with a page of its own,
+    # and once in the newsletter) costs press_release_price_cents. A deal
+    # (on the Deals page and the home page) costs deal_week_price_cents for
+    # each week that it shows.
+    press_release_price_cents: int = 2500
+    deal_week_price_cents: int = 1000
     # The Advertise page (/advertise, see ads.py): businesses book and pay for
     # the sponsor spot by the week, and for a sponsor line in the newsletter
     # by the edition, through PayPal. Prices in US cents; 0: not for sale.
@@ -512,6 +518,10 @@ def load_settings() -> Settings:
         business_upgrade_days=max(
             1, min(3650, _int(env.get("BUSINESS_UPGRADE_DAYS"), defaults.business_upgrade_days))
         ),
+        press_release_price_cents=_cents(
+            env.get("PRESS_RELEASE_PRICE"), defaults.press_release_price_cents
+        ),
+        deal_week_price_cents=_cents(env.get("DEAL_WEEK_PRICE"), defaults.deal_week_price_cents),
         sponsor_week_price_cents=_price_cents(env.get("SPONSOR_WEEK_PRICE")),
         newsletter_sponsor_price_cents=_price_cents(env.get("NEWSLETTER_SPONSOR_PRICE")),
         smtp_host=env.get("SMTP_HOST", "").strip(),

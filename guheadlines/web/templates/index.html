@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import card, pagination %}
-{% from "_listing.html" import featured_events with context %}
+{% from "_listing.html" import featured_events, deals_panel with context %}
 {% block main %}
 {% if not heading %}
 {# The home page's heading, for search engines and screen readers; the top bar already shows the name. #}
@@ -8,6 +8,7 @@
 {% endif %}
 {% if show_weather and weather and (weather.conditions or weather.forecast or weather.storms is not none) %}{% include "_weather.html" %}{% endif %}
 {{ featured_events(featured) }}
+{{ deals_panel(deals) }}
 {% if heading %}
 <header class="page-head">
   {% if archive_day %}<p class="crumbs"><a href="/archive">Archive</a> › <a href="/archive/{{ archive_day.year }}/{{ archive_day.month }}">{{ months[archive_day.month - 1] }} {{ archive_day.year }}</a></p>{% endif %}

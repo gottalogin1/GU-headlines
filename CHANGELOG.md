@@ -27,6 +27,20 @@ release, see [Updating](docs/maintenance.md#updating).
   when they change. Bing's results also feed DuckDuckGo, Yahoo, Copilot and
   the web searches of AI assistants. Nothing to sign up for; on by default
   once the site has a public address (`INDEXNOW=false` turns it off).
+- **Paid press releases and deals.** Two more kinds of paid listings, sold
+  through PayPal and checked by you on `/admin/listings` like the others.
+  **Press releases** (`/press`): a business or group posts its own news,
+  with a photo, a media contact and a website. Each one gets a page of its
+  own, is marked "Sponsored", stays on the site, and goes out once in the
+  newsletter feed, after the third story of the next edition, titled "Press
+  release:". **Deals and offers** (`/deals`): a coupon or special with an
+  optional coupon code, filtered by category, and shown in turns in a box at
+  the top of the home page. The business picks the deal's last day (up to 8
+  weeks ahead) and pays for each week; before it ends, it gets the renewal
+  email and can add a week. New settings `PRESS_RELEASE_PRICE` (default 25
+  dollars) and `DEAL_WEEK_PRICE` (default 10 dollars a week); `0` turns
+  either off. Links in the sidebar's "Buy, sell and find local" box and at
+  the bottom of every page. No database change.
 - **Visitor guides.** A new section, `/guides`, with practical guides for
   visiting Guam that you write and keep up to date yourself, in your browser,
   on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a
