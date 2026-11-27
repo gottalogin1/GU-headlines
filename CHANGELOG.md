@@ -6,6 +6,22 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Weekly health check in Discord.** Every Monday at 8:00 AM Guam time, the
+  worker opens every page of the site (every page in the sitemap, plus the
+  search, the calendar and newsletter feeds, robots.txt and llms.txt) and
+  posts **🩺 Weekly health check**: pages that don't open (server error, not
+  found, no answer), pages slower than `SLOW_PAGE_SECONDS` (1 second) twice
+  in a row, the kinds of pages where visitors got a server error or that
+  were often slow for them during the week, news sites whose new stories
+  stopped coming with a photo (or whose photos could not be saved), sources
+  still not working or quiet, and how often the site answered the worker's
+  check every 5 minutes. "All good" comes without a phone notification.
+  Pages that wait for PayPal never count as slow. For visitors, only the kind
+  of page is counted (such as `/events/…`), never the page or who visited.
+  New settings `HEALTH_CHECK_DAY` (`monday`; `off` turns it off) and
+  `SLOW_PAGE_SECONDS`; without Docker, `WEBSITE_ADDRESS`. No database
+  change. Run it now with `guheadlines health-check --show`. How-to:
+  `docs/maintenance.md#weekly-health-check`.
 - **Life in the Son Christian Fellowship's events.** The church's events
   (lifeinthesonguam.org/events) are on the Events page, in purple on the
   month calendar, each with its own page and in the calendar app feed. They

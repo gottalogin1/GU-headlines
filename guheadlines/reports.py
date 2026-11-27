@@ -24,9 +24,12 @@ spot and the ads, newsletter sign-ups, new bid alert subscribers, and the
 money of the week. AdSense and affiliate earnings are not in it: those are
 only on AdSense's and each partner's own site.
 
-The worker posts them (cli._reports_loop). Rows "report:daily" and
-"report:weekly" in the alerts table remember when each was last sent, so a
-restart of the worker neither skips nor repeats one. A report that can't be
+The weekly health check (checkup.py, HEALTH_CHECK_DAY) comes at the same
+time: broken and slow pages, news sites whose photos stopped, and uptime.
+
+The worker posts them (cli._reports_loop). Rows "report:daily",
+"report:weekly" and "report:health" in the alerts table remember when each
+was last sent, so a restart of the worker neither skips nor repeats one. A report that can't be
 sent is tried again every 10 minutes, for up to 12 hours.
 """
 
@@ -67,6 +70,7 @@ log = logging.getLogger(__name__)
 
 DAILY_KEY = "report:daily"
 WEEKLY_KEY = "report:weekly"
+HEALTH_KEY = "report:health"
 EVERY_DAY = tuple(range(7))
 # A report more than this late (the worker was off at the time) is skipped.
 LATE = timedelta(hours=12)
@@ -543,6 +547,8 @@ def _jobs(settings: Settings) -> list[tuple[str, tuple[int, ...]]]:
         jobs.append((DAILY_KEY, EVERY_DAY))
     if settings.weekly_report_day is not None:
         jobs.append((WEEKLY_KEY, (settings.weekly_report_day,)))
+    if settings.health_check_day is not None:
+        jobs.append((HEALTH_KEY, (settings.health_check_day,)))
     return jobs
 
 
@@ -551,17 +557,21 @@ def is_on(settings: Settings) -> bool:
 
 
 def describe(settings: Settings) -> str:
-    """For the worker's log and alert-test: "a money summary every day and a
-    weekly report on Mondays, at 8:00 AM (Guam time)"."""
+    """For the worker's log and alert-test: "a money summary every day, a
+    weekly report on Mondays and a health check on Mondays, at 8:00 AM (Guam
+    time)"."""
     parts = []
     for key, days in _jobs(settings):
         if key == DAILY_KEY:
             parts.append("a money summary every day")
-        else:
+        elif key == WEEKLY_KEY:
             parts.append(f"a weekly report on {DAY_NAMES[days[0]].capitalize()}s")
+        else:
+            parts.append(f"a health check on {DAY_NAMES[days[0]].capitalize()}s")
     at = settings.report_time
     when = f"{at.hour % 12 or 12}:{at.minute:02d} {'AM' if at.hour < 12 else 'PM'}"
-    return " and ".join(parts) + f", at {when} (Guam time)"
+    listed = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+    return listed + f", at {when} (Guam time)"
 
 
 def next_report_time(settings: Settings, now: datetime) -> datetime | None:
@@ -586,7 +596,10 @@ def send_due(
             state = session.get(AlertState, key)
             if state is not None and state.notified_at and state.notified_at >= due:
                 continue
-        build = daily_alert if key == DAILY_KEY else weekly_alert
+        if key == HEALTH_KEY:
+            from .checkup import health_alert as build
+        else:
+            build = daily_alert if key == DAILY_KEY else weekly_alert
         if not send(settings, build(settings, due, transport), transport):
             continue
         with session_scope() as session:

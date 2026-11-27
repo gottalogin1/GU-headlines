@@ -56,6 +56,8 @@ def _settings(**changes):
         paypal_client_secret="secret",
         site_url="https://guamheadlines.com",
         stats_password="pw",
+        # The weekly health check has tests of its own (test_checkup.py).
+        health_check_day=None,
     )
     return replace(base, **changes)
 
@@ -213,6 +215,13 @@ def test_reports_need_discord_and_the_money_summary_needs_paypal():
     assert not reports.is_on(_settings(weekly_report_day=None, daily_report=False))
     assert reports.describe(_settings()) == (
         "a money summary every day and a weekly report on Mondays, at 8:00 AM (Guam time)"
+    )
+    assert reports.describe(_settings(health_check_day=0, daily_report=False)) == (
+        "a weekly report on Mondays and a health check on Mondays, at 8:00 AM (Guam time)"
+    )
+    assert reports._jobs(_settings(health_check_day=2, weekly_report_day=None))[-1] == (
+        reports.HEALTH_KEY,
+        (2,),
     )
 
 

@@ -989,6 +989,8 @@ docker compose up -d
 | `REPORT_TIME` | `8:00` | When the reports are posted in Discord, Guam time. See [Reports](maintenance.md#reports). |
 | `DAILY_REPORT` | `true` | The money summary every morning: yesterday's payments, and what waits for your approval. Only while PayPal is set up. |
 | `WEEKLY_REPORT_DAY` | `monday` | The day of the weekly report (readers, sign-ups and money of the 7 days before). `off`: no weekly report. |
+| `HEALTH_CHECK_DAY` | `monday` | The day of the weekly health check in Discord, at `REPORT_TIME`: broken and slow pages, news sites whose photos stopped, sources not working, uptime. `off`: no health check. See [Weekly health check](maintenance.md#weekly-health-check). |
+| `SLOW_PAGE_SECONDS` | `1` | A page that takes longer than this to make, in seconds, counts as slow in the health check. From `0.1` to `60`. |
 | `DISK_ALERT_PERCENT` | `90` | Discord alert when the server's disk is this full, in percent. `0` turns it off. Read by `scripts/server-check.sh`; see [Server checks](maintenance.md#server-checks). |
 | `MEMORY_ALERT_PERCENT` | `90` | Discord alert when this much of the memory, in percent, has been in use for about 15 minutes. `0` turns it off. |
 | `CERT_ALERT_DAYS` | `14` | Discord alert when the site's (or the mail server's) https certificate ends within this many days. `0` turns it off. |

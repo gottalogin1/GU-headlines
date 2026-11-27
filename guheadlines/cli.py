@@ -449,6 +449,16 @@ def cmd_worker(args, settings: Settings) -> None:
         threading.Thread(
             target=_reports_loop, args=(settings, stop), name="reports", daemon=True
         ).start()
+    from . import checkup
+
+    if checkup.is_on(settings):
+        log.info(
+            "health check on: the site at %s is checked every 5 minutes",
+            settings.website_address,
+        )
+        threading.Thread(
+            target=_uptime_loop, args=(settings, stop), name="uptime", daemon=True
+        ).start()
     if indexnow_on := indexnow.is_on(settings):
         log.info("IndexNow on: Bing and others are told about new pages after each check")
     if settings.scrape_on_start:
@@ -559,6 +569,23 @@ def _reports_loop(settings: Settings, stop: threading.Event) -> None:
             return
 
 
+def _uptime_loop(settings: Settings, stop: threading.Event) -> None:
+    """Asks the website every 5 minutes whether it works, for the uptime in
+    the weekly health check (checkup.py). The first time is a minute after the
+    start, so that the website has started too."""
+    from .checkup import UPTIME_EVERY, ping
+
+    if stop.wait(60):
+        return
+    while True:
+        try:
+            ping(settings)
+        except Exception:
+            log.exception("uptime check failed")
+        if stop.wait(UPTIME_EVERY):
+            return
+
+
 def cmd_report(args, settings: Settings) -> None:
     """Post the money summary of yesterday, or the report of the last week,
     in Discord now (or only show it with --show)."""
@@ -581,6 +608,27 @@ def cmd_report(args, settings: Settings) -> None:
         return
     if not send(settings, alert):
         raise SystemExit("the report could not be posted; see the message above")
+    print("Posted in your Discord channel. It shows within a few seconds.")
+
+
+def cmd_health_check(args, settings: Settings) -> None:
+    """Run the weekly health check now, for the 7 days before today: open
+    every page of the site, and post what needs looking at in Discord (or
+    only show it with --show)."""
+    from . import checkup
+    from .alerts import discord_text, send
+
+    wait_for_db()
+    migrate()
+    print(f"Opening the pages of the site at {settings.website_address}; this takes a minute...")
+    alert = checkup.health_alert(settings, datetime.now(timezone.utc))
+    if args.show or not settings.discord_webhook_url:
+        print(discord_text(alert))
+        if not settings.discord_webhook_url:
+            print("\n(DISCORD_WEBHOOK_URL is empty, so it was only shown here.)")
+        return
+    if not send(settings, alert):
+        raise SystemExit("the health check could not be posted; see the message above")
     print("Posted in your Discord channel. It shows within a few seconds.")
 
 
@@ -1315,6 +1363,13 @@ def main(argv: list[str] | None = None) -> None:
     report.add_argument(
         "--show", action="store_true", help="only show it here; post nothing in Discord"
     )
+    health = sub.add_parser(
+        "health-check",
+        help="open every page now and post the weekly health check in your Discord channel",
+    )
+    health.add_argument(
+        "--show", action="store_true", help="only show it here; post nothing in Discord"
+    )
     sub.add_parser("sendfox-check", help="show the SendFox lists, and the one that sign-ups join")
     sub.add_parser("paypal-check", help="check that PayPal accepts the PayPal settings")
     mail_test = sub.add_parser("mail-test", help="send a test email through the SMTP settings")
@@ -1354,6 +1409,7 @@ def main(argv: list[str] | None = None) -> None:
         "bids": cmd_bids,
         "alert-test": cmd_alert_test,
         "report": cmd_report,
+        "health-check": cmd_health_check,
         "sendfox-check": cmd_sendfox_check,
         "paypal-check": cmd_paypal_check,
         "mail-test": cmd_mail_test,
