@@ -970,6 +970,12 @@ a.btn:hover { filter: brightness(1.08); text-decoration: none; }
 .featured-list a { font-family: var(--serif); font-weight: 700; color: var(--text); }
 .featured-offer { margin: 6px 0 0; }
 .featured-jobs { margin-bottom: 8px; }
+/* Deals and press releases */
+.deal-code { margin: 0 0 8px; font-size: .9rem; color: var(--muted); }
+.deal-code strong { display: inline-block; margin-left: 4px; padding: 1px 8px; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92rem; letter-spacing: .06em; color: var(--text); background: var(--well); }
+.press-release { margin-bottom: 14px; }
+.press-photo { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 14px; border-radius: var(--r-sm); }
+.press-text p { margin: 0 0 12px; color: var(--text); font-size: 1rem; line-height: 1.65; overflow-wrap: anywhere; }
 .listing-status h2 { margin: 0 0 6px; font-size: 1.15rem; letter-spacing: -.01em; }
 .listing-status p { margin: 8px 0 0; color: var(--text-soft); }
 .listing-status .listing-renew { margin-top: 20px; }

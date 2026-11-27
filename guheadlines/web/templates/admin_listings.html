@@ -8,6 +8,7 @@
   #{{ l.id }} · {{ listing_kinds[l.kind].name }}{% if l.kind == "business" %} ({{ "featured" if l.featured else "basic, free" }}){% endif %}
   · sent {{ l.created_at|fmt_datetime }}
   {% if l.paid_at %}· paid {{ l.amount_cents|money }} {{ l.paid_at|fmt_datetime }} (PayPal {{ l.capture_id }}){% endif %}
+  {% if l.kind == "deal" %}· {{ deal_weeks(l) }} {{ "week" if deal_weeks(l) == 1 else "weeks" }}, last day {{ deal_last_day(l)|fmt_day }}{% endif %}
   {% if l.live_until and l.status == "live" %}· shows until {{ l.live_until|fmt_day }}{% endif %}
   · <a href="/listing/{{ l.id }}/{{ l.key }}">poster's page</a>
 </p>
@@ -88,7 +89,7 @@
 {% block sidebar %}
 <section class="panel">
   <h2>How review works</h2>
-  <p class="small"><strong>Approve</strong> puts the listing on the site at once. Classified ads and job posts then show for their days; featured events until they are over.</p>
+  <p class="small"><strong>Approve</strong> puts the listing on the site at once. Classified ads and job posts then show for their days; featured events until they are over; deals until the last day their business picked. Press releases stay, and go out once in the next newsletter.</p>
   <p class="small"><strong>Reject</strong> gives a paid listing's money back through PayPal, and shows your reason on the poster's page.</p>
   <p class="small"><strong>Take down</strong> removes a live listing without a refund. To refund it too, use the payment in your PayPal account.</p>
 </section>

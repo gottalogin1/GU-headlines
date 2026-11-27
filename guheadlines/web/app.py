@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import random
 import re
 import secrets
 import threading
@@ -425,6 +426,26 @@ def featured_events() -> list[dict]:
     return featured_cache.get("featured", load)
 
 
+# Paid deals (listings.py), on the home page and the Deals page. The home page
+# shows a few, picked again each minute, so that each deal gets its turn.
+deals_cache = _TTLCache(ttl=60)
+DEALS_SHOWN = 3
+
+
+def current_deals() -> dict:
+    """A few of the deals on the site now, and how many there are."""
+
+    def load():
+        with session_scope() as session:
+            found = queries.listings(session, "deal", datetime.now(timezone.utc), per_page=60)
+        return {"items": found.items, "total": found.total}
+
+    found = deals_cache.get("deals", load)
+    items = found["items"]
+    picked = random.sample(items, DEALS_SHOWN) if len(items) > DEALS_SHOWN else items
+    return {"items": picked, "total": found["total"]}
+
+
 # --------------------------------------------------------- template helpers
 
 
@@ -663,6 +684,8 @@ templates.env.globals.update(
     airport_schedule_url=AIRPORT_SCHEDULE_URL,
     climate_url=CLIMATE_URL,
     upgraded=listings.upgraded,
+    deal_last_day=listings.deal_last_day,
+    deal_weeks=listings.paid_weeks,
     listing_kinds=listings.KINDS,
     featured_calendar=FEATURED_CALENDAR,
     guide_minutes=lambda guide: guides.reading_minutes(guide.body),
@@ -969,6 +992,7 @@ def home(request: Request, page: int = Query(1, ge=1, le=10000)):
         show_ad=True,
         show_weather=page == 1,
         featured=featured_events() if page == 1 else [],
+        deals=current_deals() if page == 1 else None,
     )
 
 
@@ -2124,6 +2148,12 @@ def sitemap(request: Request):
         with session_scope() as session:
             found = queries.sitemap_data(session, hidden, separate, config.muted)
             found["events"] = queries.upcoming_event_ids(session, since)
+            found["press"] = [
+                listing.id
+                for listing in queries.listings(
+                    session, "press", datetime.now(timezone.utc), per_page=1000
+                ).items
+            ]
             return found
 
     news_sources = [s.slug for s in config.sources if not s.cannot_scrape and s.slug not in hidden]
@@ -2139,9 +2169,10 @@ def sitemap(request: Request):
         bid_alerts=bid_alerts.is_on(settings),
         listings=[
             listings.KINDS[kind].page
-            for kind in ("classified", "business")
+            for kind in ("classified", "business", "press", "deal")
             if listings.is_on(settings, kind)
-        ],
+        ]
+        + [f"/press/{listing_id}" for listing_id in found["press"]],
         advertise=bool(advertising()),
         guides=[(g.slug, g.updated_at) for g in published_guides()],
     )
@@ -2161,6 +2192,10 @@ def _xml_text(text: str | None) -> str:
     return _NOT_XML.sub("", text or "")
 
 
+# Where paid press releases go in the newsletter: after this many stories.
+PRESS_AFTER_STORIES = 3
+
+
 @app.get("/feed.xml")
 def newsletter_feed(request: Request):
     """The newsletter feed that an email service such as SendFox reads (see
@@ -2172,8 +2207,11 @@ def newsletter_feed(request: Request):
         formed_at, rows = queries.newsletter_edition(session, _muted()) or (None, [])
         # The sponsor line that a business booked for this edition (ads.py).
         booked = None
+        press = []
         if formed_at:
             booked = ads.newsletter_ad(session, formed_at.astimezone(GUAM_TZ).date())
+            # Paid press releases approved since the edition before (listings.py).
+            press = queries.press_for_edition(session, formed_at)
     base = seo.base_url(request)
     items = []
     for row in rows:
@@ -2200,6 +2238,23 @@ def newsletter_feed(request: Request):
                 "height": a.image_height if a.image_path else None,
             }
         )
+    # The press releases go after the first few stories, marked as paid.
+    at = min(PRESS_AFTER_STORIES, len(items))
+    items[at:at] = [
+        {
+            "title": _xml_text(f"Press release: {release.title}"),
+            "link": f"{base}/press/{release.id}",
+            "guid": f"{base}/press/{release.id}",
+            "summary": _xml_text(truncate(release.description or "", 280)),
+            "source": _xml_text(release.name),
+            "sponsored": True,
+            "photo": f"{base}/media/{release.photo}" if release.photo else None,
+            "photo_type": "image/webp" if release.photo else None,
+            "width": release.photo_width,
+            "height": release.photo_height,
+        }
+        for release in press
+    ]
     xml = templates.get_template("feed.xml").render(
         settings=settings,
         home=base + "/",
@@ -2409,7 +2464,7 @@ def _listing_page(
     categories: tuple[str, ...],
     page: int,
 ):
-    """The Classifieds or the Directory page."""
+    """The Classifieds, Directory, Press releases or Deals page."""
     if category and category not in categories:
         category = ""
     with session_scope() as session:
@@ -2467,6 +2522,67 @@ def classifieds(
     )
 
 
+@app.get("/press", response_class=HTMLResponse)
+def press_releases(
+    request: Request,
+    q: str = Query("", max_length=200),
+    page: int = Query(1, ge=1, le=1000),
+):
+    return _listing_page(
+        request,
+        "press",
+        "press.html",
+        "Press releases",
+        "News and announcements from Guam businesses and groups, in their own words:"
+        f" sponsored press releases on {settings.site_name}.",
+        q,
+        "",
+        (),
+        page,
+    )
+
+
+@app.get("/press/{listing_id:int}", response_class=HTMLResponse)
+def press_release(request: Request, listing_id: int):
+    """A press release's own page, with its whole text."""
+    with session_scope() as session:
+        release = session.get(Listing, listing_id) if 1 <= listing_id < 2**63 else None
+    if release is None or release.kind != "press" or release.status != listings.LIVE:
+        raise HTTPException(404)
+    return render(
+        request,
+        "press_release.html",
+        release=release,
+        title=release.title,
+        description=truncate(f"Press release from {release.name}: {release.description}", 160),
+        active_nav="listings",
+        canonical={},
+        breadcrumbs=[("Press releases", "/press"), (release.title, None)],
+        show_ad=True,
+    )
+
+
+@app.get("/deals", response_class=HTMLResponse)
+def deals(
+    request: Request,
+    q: str = Query("", max_length=200),
+    category: str = Query("", max_length=60),
+    page: int = Query(1, ge=1, le=1000),
+):
+    return _listing_page(
+        request,
+        "deal",
+        "deals.html",
+        "Deals and offers",
+        "Coupons, specials and offers from Guam businesses: restaurants, shops, services"
+        f" and more, on {settings.site_name}.",
+        q,
+        category,
+        listings.BUSINESS_CATEGORIES,
+        page,
+    )
+
+
 @app.get("/directory", response_class=HTMLResponse)
 def directory(
     request: Request,
@@ -2490,6 +2606,10 @@ def directory(
 
 def _post_form(request: Request, kind: str, values: dict, errors: dict, status_code: int = 200):
     info = listings.KINDS[kind]
+    title = {
+        "press": "Post a press release",
+        "deal": "Post a deal",
+    }.get(kind, f"Post a {info.name.lower()}")
     return render(
         request,
         "listing_form.html",
@@ -2499,12 +2619,15 @@ def _post_form(request: Request, kind: str, values: dict, errors: dict, status_c
         errors=errors,
         today=datetime.now(GUAM_TZ).date(),
         last_day=datetime.now(GUAM_TZ).date() + timedelta(days=listings.EVENT_DAYS_AHEAD),
+        deal_max_day=datetime.now(GUAM_TZ).date() + timedelta(weeks=listings.MAX_DEAL_WEEKS),
+        max_deal_weeks=listings.MAX_DEAL_WEEKS,
+        max_press_text=listings.MAX_PRESS_TEXT,
         sections=listings.CLASSIFIED_SECTIONS,
         business_categories=listings.BUSINESS_CATEGORIES,
-        title=f"Post a {info.name.lower()}",
+        title=title,
         robots="noindex, follow",
         canonical={},
-        breadcrumbs=[(f"Post a {info.name.lower()}", None)],
+        breadcrumbs=[(title, None)],
         show_signup=False,
     )
 
@@ -2832,6 +2955,7 @@ def _review(request: Request, listing_id: int, action: str, note: str) -> str:
         with session_scope() as session:
             done = listings.approve(session, settings, listing_id, now)
         featured_cache._data.clear()
+        deals_cache._data.clear()
         return "approved" if done else "gone"
     if action == "reject":
         if listing.status != listings.REVIEW:
@@ -2854,6 +2978,7 @@ def _review(request: Request, listing_id: int, action: str, note: str) -> str:
         if done:
             listings.delete_photo(settings.media_dir, listing.photo)
             featured_cache._data.clear()
+            deals_cache._data.clear()
         return "removed" if done else "gone"
     if action == "check" and listing.status == listings.UNPAID and listing.order_id:
         return "paid" if _settle(request, listing, listing.order_id) == "ok" else "unpaid"

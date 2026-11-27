@@ -471,30 +471,33 @@ FEATURED_CALENDAR = "featured"
 
 class Listing(Base):
     """A listing that someone posts on the site and pays for (see listings.py):
-    a classified ad, a featured job post, a featured event, or a business in
-    the directory (a basic entry is free). Fields a kind does not use are
-    left empty."""
+    a classified ad, a featured job post, a featured event, a business in
+    the directory (a basic entry is free), a press release or a deal. Fields
+    a kind does not use are left empty."""
 
     __tablename__ = "listings"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    # "classified", "job", "event" or "business"
+    # "classified", "job", "event", "business", "press" or "deal"
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     # "unpaid", "review" (paid, or free, and waiting for the owner of the
     # site), "live", "rejected" or "removed" (taken down after it was live)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     # The secret part of the poster's own page (/listing/<id>/<key>).
     key: Mapped[str] = mapped_column(Text, nullable=False)
-    # What is sold, the job title, the event's name or the business's name.
+    # What is sold, the job title, the event's name, the business's name, the
+    # press release's headline or the deal's offer.
     title: Mapped[str] = mapped_column(Text, nullable=False)
-    # The section of a classified ad, or the category of a business.
+    # The section of a classified ad, or the category of a business or a deal.
     category: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     # The village or address, or the event's place.
     location: Mapped[str | None] = mapped_column(Text)
-    # The asking price of a classified ad, or the pay of a job.
+    # The asking price of a classified ad, the pay of a job, or a deal's
+    # coupon code.
     price: Mapped[str | None] = mapped_column(Text)
-    # The employer of a job, or the organizer of an event.
+    # The employer of a job, the organizer of an event, or the business (or
+    # group) of a press release or a deal.
     name: Mapped[str | None] = mapped_column(Text)
     # A phone number, an email address or "how to apply", shown as text.
     contact: Mapped[str | None] = mapped_column(Text)
@@ -504,7 +507,8 @@ class Listing(Base):
     photo: Mapped[str | None] = mapped_column(Text)
     photo_width: Mapped[int | None] = mapped_column(Integer)
     photo_height: Mapped[int | None] = mapped_column(Integer)
-    # An event's time; all_day when only the date is given.
+    # An event's time; all_day when only the date is given. For a deal,
+    # ends_at is the end of its last day.
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     all_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -520,8 +524,9 @@ class Listing(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Until when a live listing shows (classified ads and job posts), or until
-    # when a business's upgrade lasts. Empty: no end.
+    # Until when a live listing shows (classified ads, job posts and deals),
+    # or until when a business's upgrade lasts. Empty: no end (a press
+    # release stays).
     live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The featured event's copy on the events calendar, once approved.
     event_id: Mapped[int | None] = mapped_column(

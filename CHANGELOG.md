@@ -6,6 +6,20 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Paid press releases and deals.** Two more kinds of paid listings, sold
+  through PayPal and checked by you on `/admin/listings` like the others.
+  **Press releases** (`/press`): a business or group posts its own news,
+  with a photo, a media contact and a website. Each one gets a page of its
+  own, is marked "Sponsored", stays on the site, and goes out once in the
+  newsletter feed, after the third story of the next edition, titled "Press
+  release:". **Deals and offers** (`/deals`): a coupon or special with an
+  optional coupon code, filtered by category, and shown in turns in a box at
+  the top of the home page. The business picks the deal's last day (up to 8
+  weeks ahead) and pays for each week; before it ends, it gets the renewal
+  email and can add a week. New settings `PRESS_RELEASE_PRICE` (default 25
+  dollars) and `DEAL_WEEK_PRICE` (default 10 dollars a week); `0` turns
+  either off. Links in the sidebar's "Buy, sell and find local" box and at
+  the bottom of every page. No database change.
 - **Bid award history.** A new page, `/bids/awards`, shows who won past
   Government of Guam bids and for how much: the Power Authority's awards since
   2021 (company, amount and bid abstract), the Port's (company, amount and
