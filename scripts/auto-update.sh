@@ -17,9 +17,11 @@
 #      (docker compose up -d --build). If the site does not answer within 5
 #      minutes, it goes back to the version before and sends an alert. A
 #      version that failed is not tried again; the next new commit is.
-#   2. Once a week, when your own mail server is on (docs/email-server.md),
-#      it downloads new versions of the mail server and the webmail, which
-#      bring security fixes, and restarts them.
+#   2. Once a week, it downloads new versions of the programs the site is
+#      built on, which bring security fixes: the database, Caddy, the Python
+#      image of the website and, when your own mail server is on
+#      (docs/email-server.md), the mail server and the webmail. Only what
+#      changed is restarted.
 #   3. Watch. If the site does not answer in two rounds in a row (about 10
 #      minutes), it sends an alert, and another when the site answers again.
 #      The same when the news has not been checked for 3 hours, and when the
@@ -172,22 +174,29 @@ mail_on() {
     env_value COMPOSE_PROFILES | tr ',' '\n' | grep -qx '[[:space:]]*mail[[:space:]]*'
 }
 
-# Once a week, download the newest versions of the mail server and the
-# webmail (security fixes) and restart them when there is one. Mail that
-# arrives during the few seconds of the restart waits at the sender and comes
-# a little later.
-update_mail() {
-    mail_on || return 0
-    [ -n "$(find "$STATE/mail-updated" -mtime -7 2>/dev/null)" ] && return 0
-    if docker compose pull --quiet mailserver webmail >"$STATE/mail-update.out" 2>&1 &&
-        docker compose up -d mailserver webmail >>"$STATE/mail-update.out" 2>&1; then
-        say "checked the mail server and webmail for new versions"
-        touch "$STATE/mail-updated"
+# Once a week, download the newest versions of the programs the site is
+# built on, which bring security fixes: the database (PostgreSQL 16), Caddy,
+# the Python image that the website is built from and, with your own mail
+# server on, the mail server and the webmail. Only the containers whose
+# program changed are restarted, which takes a few seconds. (Mail that
+# arrives meanwhile waits at the sender and comes a little later.) The
+# versions stay within the same series (PostgreSQL 16, Caddy 2, Python
+# 3.12), so your data and settings keep working.
+update_images() {
+    local services="db caddy backup"
+    [ -n "$(find "$STATE/images-updated" -mtime -7 2>/dev/null)" ] && return 0
+    mail_on && services="$services mailserver webmail"
+    # shellcheck disable=SC2086 # the names are separate words on purpose
+    if docker compose pull --quiet $services >"$STATE/images-update.out" 2>&1 &&
+        docker compose build --pull --quiet >>"$STATE/images-update.out" 2>&1 &&
+        docker compose up -d >>"$STATE/images-update.out" 2>&1; then
+        say "checked the database, Caddy, Python$(mail_on && echo ', the mail server and the webmail') for new versions"
+        touch "$STATE/images-updated"
         docker image prune -f >/dev/null 2>&1
     else
-        say "could not update the mail server: $(tail -n 1 "$STATE/mail-update.out")"
+        say "could not download new versions of the programs: $(tail -n 1 "$STATE/images-update.out")"
         # Try again in a day, not every 5 minutes.
-        touch -d '6 days ago' "$STATE/mail-updated"
+        touch -d '6 days ago' "$STATE/images-updated"
     fi
 }
 
@@ -408,7 +417,7 @@ main() {
     flock -n 9 || return 0
 
     update
-    update_mail
+    update_images
     watch
     check_backup
     # Its own file, so it can also be run by hand. "bash": see install_cron.

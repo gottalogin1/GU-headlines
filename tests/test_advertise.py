@@ -141,11 +141,18 @@ class FakePayPal:
             order = self.orders[order_id]
             if path.endswith("/capture"):
                 order["status"] = "COMPLETED"
-            answer = {"id": order_id, "status": order["status"]}
+            unit = order["body"]["purchase_units"][0]
+            answer = {
+                "id": order_id,
+                "status": order["status"],
+                # PayPal shows the order's custom_id, as create_order gave it.
+                "purchase_units": [{"custom_id": unit["custom_id"], "amount": unit["amount"]}],
+            }
             if order["status"] == "COMPLETED":
-                amount = order["body"]["purchase_units"][0]["amount"]
+                amount = unit["amount"]
                 answer["purchase_units"] = [
                     {
+                        "custom_id": unit["custom_id"],
                         "payments": {
                             "captures": [
                                 {
@@ -154,7 +161,7 @@ class FakePayPal:
                                     "amount": {**amount, "value": self.value or amount["value"]},
                                 }
                             ]
-                        }
+                        },
                     }
                 ]
             return httpx.Response(201 if path.endswith("/capture") else 200, json=answer)

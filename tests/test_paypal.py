@@ -37,17 +37,22 @@ class FakePayPal:
         self.tokens = 0
         self.refuse_token_once = False
         self.refund_issue = None
+        # The custom_id that the order was made with (None: not shown).
+        self.custom_id = None
 
-    def _order(self, order_id):
+    def _order(self, order_id, show_custom_id=True):
         body = {"id": order_id, "status": self.order_status}
+        unit = {"custom_id": self.custom_id} if self.custom_id and show_custom_id else {}
         if self.order_status == "COMPLETED":
             capture = {
                 "id": "CAP-1",
                 "status": self.capture_status,
                 "amount": {"currency_code": "USD", "value": self.value},
             }
-            body["purchase_units"] = [{"payments": {"captures": [capture]}}]
+            unit["payments"] = {"captures": [capture]}
             body["payer"] = {"email_address": "buyer@example.com", "payer_id": "P1"}
+        if unit:
+            body["purchase_units"] = [unit]
         return body
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -81,7 +86,8 @@ class FakePayPal:
             )
         if path.startswith("/v2/checkout/orders/") and path.endswith("/capture"):
             self.order_status = "COMPLETED"
-            return httpx.Response(201, json=self._order(path.split("/")[4]))
+            # PayPal's short answer to a capture leaves custom_id out.
+            return httpx.Response(201, json=self._order(path.split("/")[4], False))
         if path.startswith("/v2/checkout/orders/"):
             return httpx.Response(200, json=self._order(path.split("/")[-1]))
         if path.startswith("/v2/payments/captures/") and path.endswith("/refund"):
@@ -267,3 +273,23 @@ def test_paypal_check_command(monkeypatch, capsys):
     )
     with pytest.raises(SystemExit, match="Problem: PayPal refused"):
         cmd_paypal_check(None, _settings(paypal_mode="live"))
+
+
+def test_an_order_for_something_else_is_neither_captured_nor_used():
+    fake = FakePayPal(order_status="APPROVED")
+    fake.custom_id = "listing-8-renewal"
+    with pytest.raises(paypal.PayPalError) as caught:
+        paypal.capture_order(
+            _settings(), "ORDER-1", transport=fake.transport, custom_id="listing-9"
+        )
+    assert caught.value.issue == paypal.WRONG_ORDER
+    assert ("POST", "/v2/checkout/orders/ORDER-1/capture") not in fake.calls()
+    capture = paypal.capture_order(
+        _settings(), "ORDER-1", transport=fake.transport, custom_id="listing-8-renewal"
+    )
+    assert capture.paid and capture.custom_id == "listing-8-renewal"
+    # An order that shows no custom_id at all is not used either.
+    fake.custom_id = None
+    with pytest.raises(paypal.PayPalError) as caught:
+        paypal.capture_order(_settings(), "ORDER-1", transport=fake.transport, custom_id="x-1")
+    assert caught.value.issue == paypal.WRONG_ORDER

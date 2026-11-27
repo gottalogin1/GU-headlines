@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote, urlencode
@@ -77,6 +77,10 @@ class Capture:
     currency: str | None = None
     # The buyer's email address at PayPal, for an email about the purchase.
     payer_email: str | None = None
+    # Our own name for what the order pays for (create_order's custom_id),
+    # such as "listing-12". The caller checks it, so a payment made for one
+    # thing can never be used to pay for another.
+    custom_id: str | None = None
 
     @property
     def paid(self) -> bool:
@@ -295,6 +299,22 @@ def _payer_email(order: dict) -> str | None:
     return email if isinstance(email, str) and "@" in email else None
 
 
+def _custom_id(order: dict) -> str | None:
+    """The custom_id that create_order gave the order, as PayPal shows it."""
+    units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        if isinstance(unit.get("custom_id"), str):
+            return unit["custom_id"]
+        payments = unit.get("payments") if isinstance(unit.get("payments"), dict) else {}
+        captures = payments.get("captures") if isinstance(payments.get("captures"), list) else []
+        for capture in captures:
+            if isinstance(capture, dict) and isinstance(capture.get("custom_id"), str):
+                return capture["custom_id"]
+    return None
+
+
 def _capture(order: dict) -> Capture:
     """The payment of an order as PayPal describes it."""
     units = order.get("purchase_units") if isinstance(order.get("purchase_units"), list) else []
@@ -310,19 +330,40 @@ def _capture(order: dict) -> Capture:
                 amount_cents=_cents(amount.get("value")) if "value" in amount else None,
                 currency=amount.get("currency_code"),
                 payer_email=_payer_email(order),
+                custom_id=_custom_id(order),
             )
-    return Capture(status=str(order.get("status") or "UNKNOWN"))
+    return Capture(status=str(order.get("status") or "UNKNOWN"), custom_id=_custom_id(order))
+
+
+# PayPalError.issue when an order pays for something else (capture_order).
+WRONG_ORDER = "WRONG_ORDER"
 
 
 def capture_order(
-    settings: Settings, order_id: str, transport: httpx.BaseTransport | None = None
+    settings: Settings,
+    order_id: str,
+    transport: httpx.BaseTransport | None = None,
+    *,
+    custom_id: str | None = None,
 ) -> Capture:
     """Take the money of an order that the buyer approved. Safe to call more
     than once (the buyer reloads the page, or an earlier answer was lost): it
     reads the order first, and only captures an order that is approved and
-    not captured yet."""
-    path = f"/v2/checkout/orders/{order_id}"
+    not captured yet.
+
+    The order's ID comes back from the buyer's browser, so anyone can send
+    the ID of another order of the site. With `custom_id` (what create_order
+    was given, such as "listing-12"), an order made for anything else is
+    neither captured nor used: PayPalError with issue WRONG_ORDER. So one
+    payment can never pay for two things."""
+    path = f"/v2/checkout/orders/{quote(order_id, safe='')}"
     order = call(settings, "GET", path, transport=transport)
+    found = _custom_id(order)
+    if custom_id is not None and found != custom_id:
+        raise PayPalError(
+            f"PayPal order {order_id} pays for {found or 'something else'}, not {custom_id}",
+            issue=WRONG_ORDER,
+        )
     if order.get("status") == "APPROVED":
         order = call(
             settings,
@@ -332,7 +373,11 @@ def capture_order(
             request_id=f"capture-{order_id}",
             transport=transport,
         )
-    return _capture(order)
+    capture = _capture(order)
+    # PayPal's answer to the capture itself may leave custom_id out.
+    if capture.custom_id is None and found is not None:
+        capture = replace(capture, custom_id=found)
+    return capture
 
 
 def refund_capture(

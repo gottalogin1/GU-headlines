@@ -83,6 +83,19 @@ jobs:
             echo "the site names its web server software"
             exit 1
           fi
+      - name: Huge uploads are refused
+        run: |
+          # 21 MB: over the 20 MB that Caddy (caddy/Caddyfile) and the site
+          # (MAX_REQUEST_BYTES) take. Caddy starting at all shows that the
+          # Caddyfile with its request_body limit is valid.
+          head -c 22020096 /dev/zero > big.bin
+          for path in / /advertise/booking/x/again; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -H "Origin: http://localhost" \
+              --data-binary @big.bin "http://localhost$path")
+            echo "21 MB upload to $path -> $code"
+            test "$code" = 413
+          done
+          rm big.bin
       - name: https with a domain
         run: |
           # "localhost" gets a certificate from Caddy's own local authority

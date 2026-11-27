@@ -387,6 +387,24 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **Security hardening.** After 10 wrong passwords within 15 minutes, an
+  address is blocked from the private pages (`/stats`, `/admin/...`,
+  `/advertise/review`, backup downloads) for an hour, and Discord gets an
+  alert; the stats page warns about a short `STATS_PASSWORD`. Requests over
+  20 MB are refused by Caddy and the site. Once a week, automatic updates now
+  also download new versions of the database, Caddy and the Python image
+  (security fixes), not only of the mail server. The server checks make
+  `.env` and the `backups` folder readable by their owner only, and post in
+  Discord when Linux needs a restart to finish its security updates. The
+  quick database backups are readable by their owner only. New guide,
+  `docs/security.md`, and a script that makes the server itself safer in one
+  go: `./scripts/harden-server.sh` turns on automatic Linux security
+  updates, Fail2Ban and the firewall, makes ssh take keys only (only when
+  you signed in with a key, so you can't lock yourself out), replaces a
+  `STATS_PASSWORD` shorter than 12 characters with a long random one, and
+  lists what is still yours to do (the ssh key on your computer, two-step
+  sign-in on your accounts). `--check` only shows where each step stands. No
+  new settings.
 - `scripts/backup.sh` (the quick database backup before each automatic
   update) keeps its files 7 days instead of 30, as the nightly backups keep
   14 days of everything. It no longer saves the mailboxes: the nightly
@@ -468,6 +486,11 @@ Agendas page and the other calendars.
   on GitHub, if you added them.
 
 ### Fixed
+- **One PayPal payment can no longer pay for two things.** When a buyer
+  came back from PayPal, a new listing accepted the ID of any order of the
+  site with the same price, such as a renewal or an ad booking that the
+  buyer was paying for anyway. Now the site checks with PayPal that the order
+  was made for this very listing, renewal or ad before it takes the money.
 - **The AdSense publisher ID is found in any form that AdSense shows.** The
   site serves `ads.txt` only when `ADSENSE_CLIENT` holds a publisher ID. A
   value in a different form, such as the full line from the ads.txt page of

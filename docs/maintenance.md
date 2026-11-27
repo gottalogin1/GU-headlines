@@ -2,7 +2,9 @@
 
 GU Headlines mostly runs by itself. This guide covers the occasional jobs:
 checking it's healthy, backups, updates, alerts, and putting it on the
-internet.
+internet. To make the server itself safe (ssh keys, firewall, security
+updates: mostly one script, `./scripts/harden-server.sh`), see
+[Keeping the site safe](security.md).
 
 All commands are run from inside the `GU-headlines` folder.
 
@@ -275,9 +277,13 @@ it has, the server does the steps above by itself: it downloads the new
 version, makes a database backup, and rebuilds and restarts the site. If the
 new version doesn't answer within 5 minutes, the server goes back to the
 version before. It also checks every 5 minutes that the site answers, and
-that the server has disk space and memory left ([server checks](#server-checks)). With
-[your own email server](email-server.md) on, it downloads new versions of the
-mail server and the webmail once a week too (they bring security fixes).
+that the server has disk space and memory left ([server checks](#server-checks)).
+Once a week it downloads new versions of the programs the site is built on,
+which bring security fixes: the database (PostgreSQL 16), Caddy, the Python
+image of the website and, with [your own email server](email-server.md) on,
+the mail server and the webmail. Only what changed is restarted, in a few
+seconds. The versions stay in the same series (PostgreSQL 16, Caddy 2,
+Python 3.12), so your data and settings keep working.
 
 It's meant for a Linux server. On a Windows or Mac computer, update by hand.
 
@@ -425,6 +431,11 @@ every 5 minutes (`scripts/server-check.sh`), and posts in Discord when:
 | Memory | 90% of the memory has been in use for about 15 minutes. | `MEMORY_ALERT_PERCENT` |
 | https certificates | The site's certificate, or the mail server's, ends within 14 days. Caddy renews them about 30 days before the end, so this means renewing has failed. Checked every 6 hours. | `CERT_ALERT_DAYS` |
 | Spam block lists | Once a day, with your own mail server on: the server's IP address is on Spamhaus, Barracuda, SpamCop, PSBL or Mailspike. | (none) |
+| Restart needed | Linux has installed security updates that only work after a restart (see [Keeping the site safe](security.md#4-restart-when-discord-says-so)). Posted once, and again after a week. Run `sudo reboot` when it suits you. | (none) |
+
+It also makes `.env` (every password of the site) and the `backups` folder
+readable by their owner only, so no other user or program on the server can
+read them. The log says so when it changed one.
 
 A setting of `0` turns that check off. Once a week, on Sunday night (Guam
 time), it also deletes Docker's leftovers: old versions of the program

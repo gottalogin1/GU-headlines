@@ -68,16 +68,22 @@ class FakePayPal:
 
     def describe(self, order_id: str) -> dict:
         order = self.orders[order_id]
-        answer = {"id": order_id, "status": order["status"]}
+        unit = order["body"]["purchase_units"][0]
+        # PayPal shows the order's custom_id, as create_order gave it.
+        answer = {
+            "id": order_id,
+            "status": order["status"],
+            "purchase_units": [{"custom_id": unit["custom_id"], "amount": unit["amount"]}],
+        }
         if order["status"] == "COMPLETED":
-            amount = order["body"]["purchase_units"][0]["amount"]
+            amount = unit["amount"]
             value = self.paid_value or amount["value"]
             capture = {
                 "id": f"CAP-{order_id}",
                 "status": self.capture_status,
                 "amount": {"currency_code": "USD", "value": value},
             }
-            answer["purchase_units"] = [{"payments": {"captures": [capture]}}]
+            answer["purchase_units"][0]["payments"] = {"captures": [capture]}
             answer["payer"] = {"email_address": "buyer@example.com"}
         return answer
 
@@ -664,6 +670,45 @@ def test_a_classified_ad_is_renewed_through_paypal(client, fake_paypal):
     back = _get(live.id).live_until - datetime.now(timezone.utc)
     assert timedelta(days=29, hours=23) < back <= timedelta(days=30)
     assert "Corolla" in client.get("/classifieds").text
+
+
+def test_one_payment_never_pays_for_two_things(client, fake_paypal):
+    """The order's ID comes back from the buyer's browser, so a buyer could
+    send the ID of another order: here, a renewal of the same price."""
+    live = _live(client, fake_paypal)
+    page = f"/listing/{live.id}/{live.key}"
+    to_paypal = client.get(f"{page}/renew", follow_redirects=False)
+    order_id = to_paypal.headers["location"].split("token=")[1]
+    fake_paypal.approve(order_id)
+    other = _new(client, "classified", **CLASSIFIED)
+    other_page = f"/listing/{other.id}/{other.key}"
+    captures = fake_paypal.captures
+    back = client.get(f"{other_page}/paid", params={"token": order_id}, follow_redirects=False)
+    assert back.headers["location"].endswith("paid=mismatch")
+    assert _get(other.id).status == "unpaid"
+    assert fake_paypal.captures == captures  # not even taken from the buyer
+    # The renewal that it was made for still goes through.
+    back = client.get(f"{page}/renewed", params={"token": order_id}, follow_redirects=False)
+    assert back.headers["location"].endswith("renewed=ok")
+    # Once paid, it still can't pay for the new listing.
+    back = client.get(f"{other_page}/paid", params={"token": order_id}, follow_redirects=False)
+    assert back.headers["location"].endswith("paid=mismatch")
+    assert _get(other.id).status == "unpaid"
+    # Nor can the new listing's own order renew the live one.
+    to_paypal = client.get(f"{other_page}/pay", follow_redirects=False)
+    own = to_paypal.headers["location"].split("token=")[1]
+    fake_paypal.approve(own)
+    assert (
+        client.get(f"{page}/renewed?token={own}", follow_redirects=False)
+        .headers["location"]
+        .endswith("renewed=unfinished")
+    )
+    assert _pay_back(client, other_page, own) == "ok"
+
+
+def _pay_back(client, page: str, order_id: str) -> str:
+    back = client.get(f"{page}/paid", params={"token": order_id}, follow_redirects=False)
+    return back.headers["location"].split("paid=")[1]
 
 
 def test_a_listing_taken_down_while_it_is_renewed_gets_its_money_back(client, fake_paypal):

@@ -33,6 +33,12 @@
   </span>
 </nav>
 
+{% if weak_password %}
+<p class="stats-alert"><span class="error">⚠ Your password (STATS_PASSWORD) is short.</span>
+  It opens every private page, and a short one is easier to guess. Make one of 32 letters and
+  digits (see STATS_PASSWORD in .env.example), put it in .env, then run: docker compose up -d</p>
+{% endif %}
+
 {% if problems %}
 <p class="stats-alert"><span class="error">⚠ {{ problems|length }} {{ "source needs" if problems|length == 1 else "sources need" }} a look:</span>
   {% for h in problems %}{{ h.name }} ({{ h.status }}){{ ", " if not loop.last }}{% endfor %}.

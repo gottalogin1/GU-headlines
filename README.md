@@ -30,6 +30,7 @@ needed; you will copy and paste a few commands.
 | 5. [Topics](docs/topics.md) | How stories are sorted into Local, Military, Business, Labor, Tourism, Sports, Food and Saipan & CNMI (plus Obituaries), and how to change or add topics |
 | 6. [Looking after it](docs/maintenance.md) | Backups, updates (also automatic ones), alerts in Discord when something stops working or the server runs low, daily money and weekly reports, putting it on the internet with your own domain and https |
 | 7. [How it works](docs/how-it-works.md) | Behind the scenes, for the curious and for developers |
+| [Keeping the site safe](docs/security.md) | What the site does against hackers, and making the server safe: an ssh key from your computer, then one script for the firewall, Fail2Ban, security updates and key-only ssh |
 | [Jobs](docs/jobs.md) | The Jobs page: which job boards are read, adding a USAJOBS key, and boards that can't be collected |
 | [Newsletter feed](docs/newsletter.md) | The feed of top stories for an email newsletter, and connecting SendFox step by step |
 | [Events](docs/events.md) | The Events page: the month calendar, which calendars are read, and adding a free Google key for the Legislature's calendar |
