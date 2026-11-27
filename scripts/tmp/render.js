@@ -7,18 +7,29 @@ const { chromium } = require('playwright');
   const seen = [];
   page.on('response', async (res) => {
     const u = res.url();
-    if (/eventscalendar|boomte|inffuse|calendar|ical|\.ics/i.test(u) && !/parastorage|wixstatic/.test(u)) {
-      let body = '';
-      try { body = (await res.text()).slice(0, 2500); } catch (e) { body = '(no body)'; }
-      seen.push(`RESPONSE ${res.status()} ${u}\n${body}\n`);
+    if (/calendar\/v3\/calendars/.test(u)) {
+      seen.push(`CAL ${u.replace(/key=[^&]+/, 'key=X')}`);
+      try {
+        const data = JSON.parse(await res.text());
+        for (const it of data.items || []) {
+          seen.push(`  ${(it.start || {}).dateTime || (it.start || {}).date} | ${it.summary} | ${it.location || ''} | rec=${it.recurringEventId ? 'y' : 'n'} | ${(it.description || '').replace(/\s+/g, ' ').slice(0, 120)}`);
+        }
+      } catch (e) { seen.push('  (no json)'); }
     }
+    if (/calendar\.google\.com\/calendar\/embed/.test(u)) seen.push(`EMBED ${u}`);
   });
   await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
   for (let y = 0; y < 8000; y += 600) { await page.mouse.wheel(0, 600); await page.waitForTimeout(400); }
   await page.waitForTimeout(5000);
+  // Also the next months, in the calendar's own frame.
+  const cal = page.frames().find((f) => /calendar\.google\.com/.test(f.url()));
+  if (cal) {
+    for (let i = 0; i < 3; i++) {
+      try { await cal.click('[aria-label*="Next" i]', { timeout: 5000 }); await page.waitForTimeout(3000); } catch (e) { console.log('no next button', e.message.slice(0, 100)); }
+    }
+  }
   for (const f of page.frames()) {
     console.log('FRAME', f.url().slice(0, 400));
-    try { const t = await f.evaluate(() => document.body ? document.body.innerText : ''); console.log(t.slice(0, 3000)); } catch (e) {}
   }
   console.log(seen.join('\n'));
   const footer = await page.evaluate(() => (document.querySelector('footer') || document.body).innerText);
