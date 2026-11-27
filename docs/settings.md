@@ -536,8 +536,9 @@ connecting SendFox step by step.
 
 ## PayPal
 
-The parts of the site that sell something take the money through PayPal. The
-buyer pays on PayPal's own page (with a PayPal account, or with a card as a
+The parts of the site that sell something (paid listings, ads, bid alerts and
+the [guide packs](guides.md#selling-guides) of the visitor guides) take the
+money through PayPal. The buyer pays on PayPal's own page (with a PayPal account, or with a card as a
 guest), and PayPal then sends the buyer back to your site. The site shows no
 PayPal button and loads no PayPal script: a plain link opens PayPal's page, so
 the pages stay as fast and as strict as before.
