@@ -1,5 +1,5 @@
 {# What search engines and link previews read; built in web/seo.py. #}
-  <title>{% if title %}{{ seo.title }} · {{ settings.site_name }}{% else %}{{ seo.title }}{% endif %}</title>
+  <title>{{ seo.full_title }}</title>
   <meta name="description" content="{{ seo.description }}">
   {% if seo.robots %}<meta name="robots" content="{{ seo.robots }}">{% endif %}
   {% if seo.canonical %}<link rel="canonical" href="{{ seo.canonical }}">{% endif %}

@@ -676,7 +676,7 @@ def test_bids_page(web):
     sidebar = html.split('<aside class="sidebar">', 1)[1]
     assert 'href="/bids?source=gpa"' in sidebar and "no table of bids found" in sidebar
     assert 'href="/bids" aria-current="page"' in html
-    assert "<title>Bids and RFPs" in html
+    assert "<title>Guam bids and RFPs" in html
     assert "chamber" not in html.lower() and "github" not in html.lower()
     assert '<meta name="robots"' not in html
 

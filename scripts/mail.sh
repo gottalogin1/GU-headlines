@@ -387,7 +387,7 @@ setup() {
         echo "     SMTP_PORT=587"
         echo "     SMTP_USER=$site_box"
         echo "     SMTP_PASSWORD=$site_password"
-        echo "     MAIL_FROM=${siteName:-GU Headlines} <$site_box>"
+        echo "     MAIL_FROM=${siteName:-Guam Headlines} <$site_box>"
         echo
         echo "   This password is shown only now. If you lose it, give the mailbox a new"
         echo "   one with: ./scripts/mail.sh password $site_box"

@@ -4,7 +4,7 @@
 {% block main %}
 {% if not heading %}
 {# The home page's heading, for search engines and screen readers; the top bar already shows the name. #}
-<h1 class="visually-hidden">{{ settings.site_name }}: the latest Guam news</h1>
+<h1 class="visually-hidden">{{ settings.site_name }}: Guam news today, the latest headlines from every newsroom</h1>
 {% endif %}
 {% if show_weather and weather and (weather.conditions or weather.forecast or weather.storms is not none) %}{% include "_weather.html" %}{% endif %}
 {{ featured_events(featured) }}
@@ -49,4 +49,24 @@
 {% endfor %}
 
 {{ pagination(result, page_url) }}
+
+{% if show_about and newsrooms %}
+{# What the site is, in plain words, for readers, search engines and AI
+   assistants that describe the site. #}
+<section class="site-note site-about" aria-labelledby="about-title">
+  <h2 id="about-title">About {{ settings.site_name }}</h2>
+  <p>{{ settings.site_name }} collects Guam news {{ update_text }} from
+    {% if newsrooms|length > 3 %}{{ newsrooms|length }} island newsrooms, including {{ newsrooms[0] }}, {{ newsrooms[1] }} and {{ newsrooms[2] }},
+    {%- else %}{{ newsrooms|join(", ") }},{% endif %}
+    and lists the headlines here, newest first, each with a link to the full story on the
+    publisher's website. <a href="/status">See every source</a>.</p>
+  <p>It also brings together Guam's
+    {%- if settings.weather_interval_minutes %} <a href="/weather">weather{% if settings.tide_station %} and tides{% endif %}</a>,{% endif %}
+    <a href="/events">events</a>, <a href="/jobs">jobs</a>,
+    <a href="/bids">Government of Guam bids</a>
+    {%- if settings.outages_interval_minutes %}, <a href="/outages">power and water outages</a>{% endif %}
+    {%- for c in categories if c.slug == "obituaries" %} and <a href="/category/{{ c.slug }}">obituaries</a>{% endfor %},
+    and every story since the site began is in the <a href="/archive">archive</a>.</p>
+</section>
+{% endif %}
 {% endblock %}

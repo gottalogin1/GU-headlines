@@ -674,7 +674,7 @@ def test_weather_page(client):
         "Right now",
         "Watches, warnings and advisories",
         "Next 24 hours",
-        "Tides at Apra Harbor",
+        "Guam tides at Apra Harbor",
         "This week",
         "On the water",
         "Dive and snorkel",

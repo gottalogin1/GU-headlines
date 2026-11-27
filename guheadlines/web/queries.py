@@ -398,6 +398,16 @@ def sitemap_data(
     }
 
 
+def newest_seen(session: Session) -> dict[str, datetime | None]:
+    """When the newest job, event and bid came in, for the sitemap's
+    last-changed dates of the Jobs, Events and Bids pages."""
+    return {
+        "jobs": session.scalar(select(func.max(Job.first_seen_at))),
+        "events": session.scalar(select(func.max(Event.first_seen_at))),
+        "bids": session.scalar(select(func.max(Bid.first_seen_at))),
+    }
+
+
 def source_status(session: Session) -> list[dict]:
     day_ago = datetime.now(timezone.utc) - timedelta(days=1)
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
