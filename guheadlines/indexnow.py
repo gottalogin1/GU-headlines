@@ -74,7 +74,7 @@ def main_paths(settings: Settings, categories: Iterable[str], guides: bool) -> l
     """The site's main pages, sent once when the worker starts."""
     paths = ["/", "/events", "/jobs", "/bids", "/archive", "/status"]
     if settings.weather_interval_minutes:
-        paths.append("/weather")
+        paths += ["/weather", "/typhoon"]
     if settings.outages_interval_minutes:
         paths.append("/outages")
     if guides:

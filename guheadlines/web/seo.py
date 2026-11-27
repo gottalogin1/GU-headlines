@@ -409,7 +409,7 @@ def sitemap_entries(
 ) -> list[tuple[str, datetime | None]]:
     """Every page worth finding in a search: home, topics, news sources, jobs, events
     and each upcoming event's page (`events`: their IDs), bids (and the bid alerts
-    page, when `bid_alerts` is on), the Weather page (when `weather` is on), the
+    page, when `bid_alerts` is on), the Weather and Typhoon pages (when `weather` is on), the
     Outages page (when `outages` is on), the Advertise page (when `advertise` is
     on), the Sources page, and
     the archive down to each day that has stories, and the pages of paid
@@ -438,6 +438,7 @@ def sitemap_entries(
     entries.extend((url(path), None) for path in listings)
     if weather:
         entries.append((url("/weather"), None))
+        entries.append((url("/typhoon"), None))
     if outages:
         entries.append((url("/outages"), None))
     if advertise:

@@ -377,6 +377,7 @@ def test_headings_go_down_one_level_at_a_time(client):
         "/events",
         "/bids",
         "/weather",
+        "/typhoon",
         "/status",
         "/search?q=wage",
         "/search",
@@ -745,7 +746,16 @@ def test_site_and_scraper_do_not_mention_github(client, monkeypatch):
     from guheadlines.settings import load_settings
 
     _set(monkeypatch, adsense_client="ca-pub-1234567890123456", adsense_slot="9876543210")
-    pages = ("/", "/status", "/jobs", "/events", "/bids", "/weather", "/category/obituaries")
+    pages = (
+        "/",
+        "/status",
+        "/jobs",
+        "/events",
+        "/bids",
+        "/weather",
+        "/typhoon",
+        "/category/obituaries",
+    )
     for path in (*pages, "/robots.txt", "/sitemap.xml", "/events.ics", "/nope"):
         assert "github" not in client.get(path).text.lower(), path
     assert "github" not in load_settings().user_agent.lower()

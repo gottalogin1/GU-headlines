@@ -49,12 +49,11 @@
       {% if weather.storms is none %}
       <span>See the <a href="{{ jtwc_url }}" target="_blank" rel="noopener">Joint Typhoon Warning Center ↗</a></span>
       {% elif weather.storms %}
-      {% for s in weather.storms %}<a class="weather-storm" href="{{ s.url|safe_url }}" target="_blank" rel="noopener">{{ s.name }} ↗</a>{% endfor %}
-      <a class="muted" href="{{ jtwc_url }}" target="_blank" rel="noopener" title="Joint Typhoon Warning Center">JTWC ↗</a>
+      {% for s in weather.storms %}<a class="weather-storm" href="/typhoon#{{ s.key or 'storms' }}">{{ s.title or s.name }}</a>{% endfor %}
       {% else %}
       <span>None in the western Pacific</span>
-      <a class="muted" href="{{ jtwc_url }}" target="_blank" rel="noopener" title="Joint Typhoon Warning Center">JTWC ↗</a>
       {% endif %}
+      <a class="{{ 'weather-storm' if storm_near(weather) else 'muted' }}" href="/typhoon">Typhoon tracker →</a>
     </div>
     {% if weather.tides %}
     {% set t = weather.tides %}

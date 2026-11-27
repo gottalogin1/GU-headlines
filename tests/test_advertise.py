@@ -119,12 +119,14 @@ def test_sections_that_can_have_a_sponsor():
         "events",
         "bids",
         "weather",
+        "typhoon",
         "outages",
     ]
     assert found[0].kind == f"section:{topics[0].slug}"
-    # Weather and Outages only while their pages are on.
+    assert ads.section_path("typhoon") == "/typhoon"
+    # Weather (with the Typhoon tracker) and Outages only while their pages are on.
     off = dataclasses.replace(settings, weather_interval_minutes=0, outages_interval_minutes=0)
-    assert {"weather", "outages"}.isdisjoint(s.slug for s in ads.sections(off, topics))
+    assert {"weather", "typhoon", "outages"}.isdisjoint(s.slug for s in ads.sections(off, topics))
 
 
 # ------------------------------------------------------------- the site

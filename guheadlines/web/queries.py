@@ -1049,6 +1049,45 @@ def gas_price_stories(
     return [dict(row._mapping) for row in session.execute(stmt)]
 
 
+# Headlines about storms on Guam (Postgres regular expression, any case):
+# typhoons, tropical storms, COR levels, emergency shelters.
+_STORM_TITLE_RE = (
+    r"\m(typhoons?|tropical (storms?|depressions?|cyclones?|disturbances?|systems?)"
+    r"|invest \d\dw|cor ?[1-4]|condition of readiness|(emergency|typhoon) shelters?"
+    r"|shelters? (open|close)|storm surge|jtwc)\M"
+)
+
+
+def storm_stories(
+    session: Session,
+    since: datetime,
+    hide_sources: list[str] | None = None,
+    hide_topics: list[str] | None = None,
+    mute: tuple[str, ...] | list[str] = (),
+    limit: int = 8,
+) -> list[dict]:
+    """Stories published since `since` with a typhoon, a tropical storm, a
+    COR level or a shelter in the headline, newest first (the Typhoon page)."""
+    stmt = (
+        select(
+            Article.id,
+            Article.url,
+            Article.title,
+            Article.published_at,
+            Source.name.label("source"),
+        )
+        .join(Source, Source.id == Article.source_id)
+        .where(
+            Article.published_at >= since,
+            Article.title.op("~*")(_STORM_TITLE_RE),
+            *_left_out(hide_sources, hide_topics, mute),
+        )
+        .order_by(Article.published_at.desc(), Article.id.desc())
+        .limit(limit)
+    )
+    return [dict(row._mapping) for row in session.execute(stmt)]
+
+
 # ------------------------------------------------------------- newsletter
 
 

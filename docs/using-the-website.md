@@ -68,7 +68,8 @@ comes from, with a link to that service.
   near high tide, and a link to Guam EPA's weekly beach report (beaches with
   too much bacteria).
 - **Typhoons and tropical storms**: the storms that the Joint Typhoon Warning
-  Center has warnings for in the western North Pacific.
+  Center has warnings for in the western North Pacific, each linked to the
+  [Typhoon tracker](#the-typhoon-tracker).
 - **Guam's climate through the year**: the average high, low, rain and rainy
   days of each month (NOAA's 1991 to 2020 averages at the airport), with
   this month in bold, for visitors planning a trip.
@@ -77,6 +78,50 @@ comes from, with a link to that service.
   (arrivals and departures), and more.
 
 See [Weather](settings.md#weather) for where the weather comes from.
+
+## The Typhoon tracker
+
+`/typhoon`: typhoons and tropical storms near Guam, and what to do about
+them. It is linked from the weather box on the home page ("Typhoon tracker",
+in bold while a storm is near), from each storm on the Weather page, from a
+Typhoon or Tropical Storm Watch or Warning in the banner, and from the
+footer.
+
+- **Right now**: Guam's Condition of Readiness (COR) level and what it
+  means, from the newest Guam Homeland Security release that names one in
+  its title (without one in the last 10 days, COR 4, as all year), with a
+  link to that release. Next to it: any National Weather Service typhoon or
+  tropical storm watch or warning for Guam, and one line per storm, such as
+  "Typhoon Yagi is 396 miles east-southeast of Guam, moving west-northwest at
+  14 mph, with winds of 98 mph. JTWC's forecast takes it closest to Guam,
+  about 42 miles north-northeast, around Fri, Nov 27, 8:30 PM ChST."
+- **Map**: drawn by the site from JTWC's positions (no picture from another
+  site): Guam with rings 100, 300 and 500 miles away, the islands around it,
+  each storm's path so far (from the warnings the site has read), its
+  forecast path with a dot every 12 hours and the date each day, how far its
+  39 mph winds reach, the band where a storm may form, and the areas JTWC is
+  watching. The map grows to show every storm. Colors: blue a depression,
+  gold a tropical storm, red a typhoon, purple a super typhoon.
+- **Typhoons and tropical storms**: one card per storm: its winds in mph
+  (and the hurricane category it matches), distance and direction from
+  Guam, where it is heading and how fast, gusts, how far its strong winds
+  reach, pressure, wave height, when it comes closest to Guam, and JTWC's
+  forecast for each 12 or 24 hours (when, miles from Guam, winds, strength).
+- **Areas to watch**: where a storm may form, with JTWC's chance (low,
+  medium or high) for the next day.
+- **Guam Homeland Security**: its newest releases (COR levels, shelters, the
+  all clear).
+- **Typhoon shelters**: shelter announcements from GHS/OCD and local news of
+  the last week, linked to the release with the list of schools, then how
+  shelters work on Guam and what to bring. The site doesn't keep its own
+  list, because the schools change with each storm.
+- **COR levels**: what COR 4, 3, 2 and 1 mean, with a short checklist for
+  each; the current level is marked "Now".
+- **Typhoon kit checklist**: what to have for 7 to 10 days, with tick boxes
+  (not saved; print the page to keep a copy).
+- **After the storm**, **Storm news from Guam** (the week's stories about
+  typhoons, COR levels and shelters from the newsrooms the site reads) and
+  links to more.
 
 ## The Outages page
 

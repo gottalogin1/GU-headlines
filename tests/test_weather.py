@@ -160,13 +160,18 @@ def test_storm_list():
         {
             "name": "Typhoon 25W (Yagi) Warning #12",
             "url": "https://www.metoc.navy.mil/jtwc/products/wp2524web.txt",
+            "key": "wp2524",
         },
         # 03B is in the Bay of Bengal: left out.
         {
             "name": "Tropical Cyclone Formation Alert",
             "url": "https://www.metoc.navy.mil/jtwc/products/wp9624web.txt",
+            "key": "wp9624",
         },
     ]
+    # With no storm anywhere, JTWC's feed has one entry instead of its lists
+    # (the real feed of 2026-11-27).
+    assert weather.parse_storms(fixture_bytes("jtwc_quiet.rss")) == []
     changed = fixture_bytes("jtwc.rss").replace(b"No Current Tropical Cyclone Warnings", b"?")
     with pytest.raises(weather.WeatherError):
         weather.parse_storms(changed)
@@ -225,6 +230,8 @@ def _fake_sources(fail: tuple[str, ...] = ()):
         "/products/types/SRF/locations/GUM/latest": "nws_surf.json",
         "/products/types/CWF/locations/GUM/latest": "nws_marine.json",
         "/jtwc/rss/jtwc.rss": "jtwc.rss",
+        "/jtwc/products/abpwweb.txt": "jtwc_abpw_quiet.txt",
+        "/rss.xml": "ghs.rss",
         "/api/prod/datagetter": "noaa_tides.json",
         "/mdapi/prod/webapi/stations/1630000.json": "noaa_station.json",
     }
@@ -262,6 +269,8 @@ def test_check_saves_each_source_and_keeps_the_last_good_copy(clean_db):
         ("surf", None),
         ("marine", None),
         ("storms", None),
+        ("outlook", None),
+        ("ghs", None),
         ("tides", None),
     ]
     assert seen[0].url.params["zone"] == "GUZ001,PMZ151"
@@ -276,6 +285,8 @@ def test_check_saves_each_source_and_keeps_the_last_good_copy(clean_db):
         "surf",
         "marine",
         "storms",
+        "outlook",
+        "ghs",
         "tides",
     }
     assert first["conditions"][0]["temp_f"] == 82
@@ -361,8 +372,10 @@ def test_banner_on_every_page_and_weather_box_on_the_home_page(client):
     assert 'class="weather"' in home
     assert ">82°F<" in home and "Feels like 89°F" in home and "Wind E 9 mph" in home
     assert "Low 77°" in home and "High 88°" in home and "Thanksgiving Day" in home
-    assert 'href="https://www.metoc.navy.mil/jtwc/products/wp2524web.txt"' in home
+    # Each storm and the Typhoon page are linked from the box.
+    assert '<a class="weather-storm" href="/typhoon#wp2524">' in home
     assert "Typhoon 25W (Yagi) Warning #12" in home
+    assert 'href="/typhoon">Typhoon tracker →</a>' in home
     # Advisories are in the box; the warning is in the banner only.
     box = home.split('class="weather"', 1)[1].split("</section>", 1)[0]
     assert "<summary><strong>Small Craft Advisory</strong></summary>" in box

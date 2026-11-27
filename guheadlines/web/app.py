@@ -19,6 +19,7 @@ from datetime import time as dt_time
 from email.utils import format_datetime
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -53,6 +54,7 @@ from .. import (
     paypal,
     renewals,
     sendfox,
+    typhoon,
 )
 from ..bids import alerts as bid_alerts
 from ..config import (
@@ -764,6 +766,15 @@ templates.env.globals.update(
     theme_script=Markup(THEME_SCRIPT),
     nws_guam_url=NWS_GUAM_URL,
     jtwc_url=JTWC_URL,
+    storm_near=typhoon.storm_near,
+    is_tropical=typhoon.is_tropical,
+    ghs_url=typhoon.GHS_URL,
+    ghs_news_url=typhoon.GHS_NEWS_URL,
+    nws_tropical_url=typhoon.NWS_TROPICAL_URL,
+    jtwc_outlook_url=typhoon.JTWC_OUTLOOK_URL,
+    ready_url=typhoon.READY_URL,
+    cor_levels=typhoon.COR_LEVELS,
+    near_miles=typhoon.NEAR_MILES,
     guam_radar_url=GUAM_RADAR_URL,
     surf_page_url=SURF_PAGE,
     marine_page_url=MARINE_PAGE,
@@ -1432,6 +1443,45 @@ def weather_view(request: Request):
         modified=_newest_reading(),
         breadcrumbs=[("Weather", None)],
         show_travel=True,
+    )
+
+
+# The storm news on the Typhoon page: stories of the last week.
+STORM_NEWS_DAYS = 7
+
+
+def storm_stories() -> list[dict]:
+    """Recent stories with a typhoon, tropical storm, COR level or shelter
+    in the headline (queries.storm_stories), each with its link."""
+    since = datetime.now(timezone.utc) - timedelta(days=STORM_NEWS_DAYS)
+    with session_scope() as session:
+        rows = queries.storm_stories(session, since, mute=_muted())
+    return [{**row, "href": story_link(SimpleNamespace(**row))} for row in rows]
+
+
+@app.get("/typhoon", response_class=HTMLResponse)
+def typhoon_view(request: Request):
+    if not settings.weather_interval_minutes:
+        raise HTTPException(404)
+    now = datetime.now(timezone.utc)
+    reports = weather_reports()
+    shown = for_page(reports, now, settings.tide_station)
+    page = typhoon.typhoon_page(shown, reports, storm_stories(), now)
+    return render(
+        request,
+        "typhoon.html",
+        storm_page=page,
+        title="Guam typhoon tracker: storms near Guam, COR level and shelters",
+        description=(
+            "Typhoons and tropical storms near Guam: where each one is, how close the Joint"
+            " Typhoon Warning Center's forecast takes it, National Weather Service watches and"
+            " warnings, Guam's COR level, shelter news and a typhoon checklist."
+        ),
+        active_nav="typhoon",
+        canonical={},
+        page_type="WebPage",
+        modified=_newest_reading(),
+        breadcrumbs=[("Weather", "/weather"), ("Typhoon tracker", None)],
     )
 
 
@@ -2201,6 +2251,7 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         "/jobs": "Jobs",
         "/events": "Events",
         "/weather": "Weather",
+        "/typhoon": "Typhoon tracker",
         "/outages": "Outages",
         "/advertise": "Advertise",
         "/status": "Sources",
@@ -2395,6 +2446,14 @@ def llms_txt(request: Request):
                 "/weather",
                 "the National Weather Service forecast and alerts, typhoons, surf, sunrise"
                 " and sunset, and the high and low tides",
+            )
+        )
+        pages.append(
+            (
+                "Guam typhoon tracker",
+                "/typhoon",
+                "storms near Guam on a map with the Joint Typhoon Warning Center's forecast,"
+                " the COR level, shelter news and a typhoon checklist",
             )
         )
     if settings.outages_interval_minutes:
