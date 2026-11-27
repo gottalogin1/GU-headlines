@@ -73,7 +73,7 @@ site_label() {
     local name
     name=$(first_domain)
     [ -n "$name" ] || name=$(env_value SITE_NAME)
-    echo "${name:-GU Headlines}"
+    echo "${name:-Guam Headlines}"
 }
 
 guam_time() {

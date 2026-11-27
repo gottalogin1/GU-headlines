@@ -336,7 +336,7 @@ def test_advertise_page_shows_real_numbers_and_the_open_weeks(site):
     page = site.get("/advertise")
     assert page.status_code == 200
     html = page.text
-    assert "<h1>Advertise on GU Headlines</h1>" in html
+    assert "<h1>Advertise on Guam Headlines</h1>" in html
     assert "<dt>Page views</dt><dd>420</dd>" in html
     assert "<dt>A day, on average</dt><dd>14</dd>" in html
     assert "<dt>Clicks on the sponsor spot</dt><dd>7</dd>" in html
@@ -992,13 +992,13 @@ def test_the_media_kit(site, monkeypatch):
     response = site.get("/advertise/media-kit.pdf")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert 'filename="gu-headlines-media-kit-' in response.headers["content-disposition"]
+    assert 'filename="guam-headlines-media-kit-' in response.headers["content-disposition"]
     assert response.headers["x-robots-tag"] == "noindex"
     data = response.content
     assert data.startswith(b"%PDF-") and data.count(b"/Type /Page\n") == 1
     text = _pdf_text(data)
     for words in (
-        "GU Headlines",
+        "Guam Headlines",
         "MEDIA KIT",
         "testserver",  # the site's address (SITE_URL when it is set)
         "Readers in the last 30 days",

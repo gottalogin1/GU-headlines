@@ -135,11 +135,13 @@ through Caddy.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `SITE_NAME` | `GU Headlines` | The name in the top bar, browser tab and footer. |
-| `SITE_TAGLINE` | `Guam news, updated every hour` | The short line in the footer and in the description search engines show. If you change how often the site checks for news, update this too. |
+| `SITE_NAME` | `Guam Headlines` | The name in the top bar, browser tab and footer, and the site's name in Google. It matches the domain and the words people search for. |
+| `SITE_TAGLINE` | `Guam news, updated every hour` | The short line under the name and in the footer. If you change how often the site checks for news, update this too. |
 | `SITE_URL` | *(empty)* | The site's public address, such as `https://news.example.com`, once it is [on the internet](maintenance.md#putting-it-on-the-internet). Search engines are given this address for every page (in each page's canonical link, link previews and the sitemap), so a page is never listed twice under two addresses. Empty: `https://` and the first name in `SITE_DOMAIN`, or, without `SITE_DOMAIN`, the address each visitor used. Set it only to pick a different main address, such as `https://www.guamheadlines.com`. |
 | `GOOGLE_SITE_VERIFICATION` | *(empty)* | Proves to [Google Search Console](https://search.google.com/search-console) that the site is yours: choose **URL prefix**, then **HTML tag**, and paste only the `content="..."` value here. See [Search engines](maintenance.md#search-engines). |
 | `BING_SITE_VERIFICATION` | *(empty)* | The same for [Bing Webmaster Tools](https://www.bing.com/webmasters) (its **HTML Meta Tag** option). |
+| `SOCIAL_PROFILES` | *(empty)* | The site's own pages elsewhere (a Facebook page, an Instagram account), full `https://` addresses with commas between them. Search engines and AI assistants are told they belong to the site; visitors don't see the list. See [Search engines](maintenance.md#search-engines). |
+| `INDEXNOW` | `true` | After each news check, tell Bing (and Yandex, Naver, Seznam) which pages are new or changed through [IndexNow](https://www.indexnow.org/), so they read them within minutes. Nothing to sign up for: the key is made from the database password and served at `/<key>.txt`. Only sent when the site has a public address (`SITE_DOMAIN` or `SITE_URL`). Google doesn't take part; it reads the sitemap. |
 | `PAGE_SIZE` | `30` | Stories per page before the **Older →** link. Anything from 5 to 100. |
 
 **Example: rename the site**
@@ -151,7 +153,7 @@ SITE_TAGLINE=Every Guam story, every hour
 
 The picture shown when someone shares a link to the site (on Facebook,
 Messenger, X and in text messages) is
-`guheadlines/web/static/social-card.jpg`, and it says "GU Headlines". After
+`guheadlines/web/static/social-card.jpg`, and it says "Guam Headlines". After
 renaming the site, replace it with your own 1200 × 630 JPEG of the same name,
 then run `docker compose up -d --build`.
 

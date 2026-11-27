@@ -964,7 +964,7 @@ def test_events_feed(web):
     assert response.headers["content-type"] == "text/calendar; charset=utf-8"
     assert response.headers["x-robots-tag"] == "noindex"
     text = response.text
-    assert "X-WR-CALNAME:Guam events · GU Headlines" in text
+    assert "X-WR-CALNAME:Guam events · Guam Headlines" in text
     assert "REFRESH-INTERVAL;VALUE=DURATION:PT3H" in text
     # The main events, as on the month calendar (GovGuam meetings are not one),
     # and the past month's, so subscribed calendars keep them.
@@ -975,7 +975,7 @@ def test_events_feed(web):
     # One calendar: every event on it.
     text = web.get("/events.ics?calendar=govguam-meetings").text
     assert "SUMMARY:Board Meeting" in text and "Regular Session" not in text
-    assert "X-WR-CALNAME:GovGuam public meetings · GU Headlines" in text
+    assert "X-WR-CALNAME:GovGuam public meetings · Guam Headlines" in text
     assert web.get("/events.ics?calendar=nope").status_code == 404
 
 

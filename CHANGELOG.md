@@ -6,6 +6,28 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Found more easily in Google, Bing and AI assistants.** Every page's
+  title, summary and heading now use the words people search for ("Guam
+  news today", "Guam weather today: forecast, typhoons, tides and surf",
+  "Guam jobs", "Guam events calendar", "Guam bids and RFPs", "Guam power
+  outages and water outages today", "Guam obituaries"), and later pages of a
+  list say which page they are. The home page names the newsrooms in its
+  summary and ends with a short "About" section; the footer of every page
+  links the Guam pages. Pages describe themselves to search engines in more
+  detail: the site's name, logo and other pages (new setting
+  `SOCIAL_PROFILES`), that every page is about Guam, the stories a page
+  lists and when it last changed. `/llms.txt` is a plain-text summary of
+  the site for AI assistants, and `robots.txt` names the AI crawlers that
+  are welcome. The sitemap gives the Jobs, Events and Bids pages the time
+  their newest item came in. How-to: `docs/maintenance.md#search-engines`.
+- **Bing hears about new pages within minutes (IndexNow).** After each news
+  check, the worker tells Bing (and Yandex, Naver and Seznam) which pages
+  are new or changed: the home page, the topics and news sites with new
+  stories, the archive day, new event pages, newly approved press releases,
+  and Jobs, Bids and the guides when they change. Bing's results also feed
+  DuckDuckGo, Yahoo, Copilot and the web searches of AI assistants. Nothing
+  to sign up for; on by default once the site has a public address
+  (`INDEXNOW=false` turns it off).
 - **Guide packs: sell visitor guides through PayPal.** Set a guide to "Guide
   pack readers" and everyone else reads its opening (the text before its
   first heading), then sees the packs that hold it. Readers pay once through
@@ -429,6 +451,10 @@ Without it, the Events page still lists the Legislature's sessions from its
 Agendas page and the other calendars.
 
 ### Changed
+- **The site is now called Guam Headlines** (it was GU Headlines), which
+  matches its domain and the words people search for. If your `.env` has
+  `SITE_NAME=GU Headlines`, change it to `SITE_NAME=Guam Headlines`. The
+  picture shown when someone shares a link has the new name.
 - **Security hardening.** After 10 wrong passwords within 15 minutes, an
   address is blocked from the private pages (`/stats`, `/admin/...`,
   `/advertise/review`, backup downloads) for an hour, and Discord gets an

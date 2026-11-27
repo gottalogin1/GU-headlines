@@ -80,6 +80,16 @@
   <footer class="footer">
     <div class="wrap footer-inner">
       <strong>{{ settings.site_name }}</strong> · {{ settings.site_tagline }}.<br>
+      {# Every Guam page in words people search for, so search engines (and
+         readers) find each one from any page. #}
+      <span class="footer-guam"><a href="/">Guam news</a>
+      {%- if settings.weather_interval_minutes %} · <a href="/weather">Guam weather</a>
+      {%- if settings.tide_station %} · <a href="/weather#tides">Guam tides</a>{% endif %}{% endif %}
+       · <a href="/events">Guam events</a> · <a href="/jobs">Guam jobs</a> · <a href="/bids">Guam bids and RFPs</a>
+      {%- if settings.outages_interval_minutes %} · <a href="/outages">Guam power outages</a>{% endif %}
+      {%- for c in categories if c.slug == "obituaries" %} · <a href="/category/{{ c.slug }}">Guam obituaries</a>{% endfor %}
+      {%- if guides_menu %} · <a href="/guides">Guam visitor guides</a>{% endif %}
+       · <a href="/archive">Guam news archive</a></span><br>
       Headlines, intros and images belong to their publishers; every story links to the original.
       Checked for new stories every hour. Times are Chamorro Standard Time (ChST).<br>
       <a href="/status">Sources</a> · <a href="/status#about">About this site</a> · <a href="/status#disclaimer">Disclaimer</a>

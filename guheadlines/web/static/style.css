@@ -256,6 +256,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .15em; border-radius:
 .site-note p { margin: 10px 0 0; max-width: 75ch; color: var(--text-soft); }
 .site-note.legal { margin-top: 34px; }
 .site-note.legal p { font-size: .9rem; }
+/* The home page's "About" note, after the stories. */
+.site-note.site-about { margin: 34px 0 0; }
 
 /* ---------- story cards ---------- */
 .day { margin-bottom: 10px; }
@@ -798,6 +800,7 @@ a.btn:hover { text-decoration: none; filter: brightness(1.08); }
 .empty h1, .empty h2 { margin-top: 0; letter-spacing: -.02em; }
 .footer { padding: 8px 0 40px; color: var(--muted); font-size: .84rem; }
 .footer-inner { text-align: center; max-width: 720px; }
+.footer-guam a { white-space: nowrap; }
 
 /* ---------- accessibility ---------- */
 @media (prefers-contrast: more) {
