@@ -72,8 +72,6 @@ jobs:
           URLS: ${{ inputs.urls }}
           OUTLINE: ${{ inputs.outline }}
         run: |
-          ( cd scripts/tmp && npm install --silent --no-audit --no-fund playwright@1.56.1 && npx playwright install --with-deps chromium > /dev/null && for url in $URLS; do echo "### TEMP render of $url"; node render.js "$url" || true; done ) || true
-          exit 0
           if [ "$OUTLINE" = "true" ]; then
             # shellcheck disable=SC2086
             guheadlines probe --outline $URLS

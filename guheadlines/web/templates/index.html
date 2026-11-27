@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import card, pagination %}
+{% from "_macros.html" import card, event_card, pagination %}
 {% from "_listing.html" import featured_events, deals_panel with context %}
 {% block main %}
 {% if not heading %}
@@ -37,12 +37,11 @@
 {# The second ad unit goes after this many stories, when more stories follow. #}
 {% set ad_after = 5 %}
 {% set stories_ad = show_ad and settings.adsense_stories_slot and result.items|length > ad_after %}
-{% set shown = namespace(count=0) %}
+{% set shown = namespace(count=0, story=0) %}
 {% for label, items in groups %}
-{% set first_day = loop.first %}
 <section class="day">
   <h2 class="day-label">{{ label }}</h2>
-  {% for item in items %}{{ card(item, category_names, first=first_day and loop.first) }}
+  {% for item in items %}{% if item.feed_card %}{{ event_card(item) }}{% else %}{{ card(item, category_names, first=shown.story == 0) }}{% set shown.story = shown.story + 1 %}{% endif %}
   {%- set shown.count = shown.count + 1 %}
   {%- if stories_ad and shown.count == ad_after %}{% include "_ad_stories.html" %}{% endif %}
   {%- endfor %}

@@ -396,6 +396,20 @@ sources:
       - https://guamnewsnetwork.com/feed.xml
     allow_sections: [Sports]
 
+  # Life in the Son Christian Fellowship, a church in Tamuning (Wix site;
+  # robots.txt lets everyone read it). Its blog is the "Events &
+  # Announcements" on its Events page: a handful of posts a year, each with a
+  # picture. The post pages are built by JavaScript, so stories are made from
+  # the feed alone (its first lines). Posts that give a date are also on the
+  # Events page (the lits calendar in events.yaml).
+  - slug: lits
+    name: Life in the Son Christian Fellowship
+    homepage: https://www.lifeinthesonguam.org/events
+    feeds:
+      - https://www.lifeinthesonguam.org/blog-feed.xml
+    feed_only: true
+    categories: [local]
+
   # Isla Public Media (KPRG, Guam's NPR station). Grove CMS; its feed is
   # empty, so the news page is scanned. The newsroom's own stories are at
   # /news/<date>/<slug> (NPR's national and world stories, at /<date>/<slug>,

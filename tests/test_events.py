@@ -25,10 +25,12 @@ from guheadlines.events.readers import (
     _notice_title,
     google_event,
     merge_agendas,
+    merge_posts,
     parse_agendas,
     parse_listing,
     parse_moderncampus,
     parse_notices,
+    parse_posts,
     parse_when,
     read_google_calendar,
     tidy_name,
@@ -167,6 +169,46 @@ def test_tidy_description():
 )
 def test_parse_when(text, expected):
     assert parse_when(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text, written, expected",
+    [
+        # The next December 12 after the post.
+        (
+            "on Saturday, December 12th, starting at 10:00 AM",
+            date(2026, 11, 25),
+            (guam(2026, 12, 12, 10), None, False),
+        ),
+        ("on October 25 at 10:45 AM", date(2026, 8, 14), (guam(2026, 10, 25, 10, 45), None, False)),
+        # Written in December about next year's April.
+        (
+            "Easter sunrise service, April 5",
+            date(2026, 12, 20),
+            (guam(2027, 4, 5), guam(2027, 4, 6), True),
+        ),
+        # A few days after the event (a recap) stays that day, which is over.
+        (
+            "We met on November 21.",
+            date(2026, 11, 25),
+            (guam(2026, 11, 21), guam(2026, 11, 22), True),
+        ),
+        # The weekday decides the year: Saturday, November 21 was in 2026.
+        (
+            "On Saturday, November 21 we gathered",
+            date(2026, 12, 30),
+            (guam(2026, 11, 21), guam(2026, 11, 22), True),
+        ),
+        # A full date is read as before.
+        ("December 12th, 2027 at 6 PM", date(2026, 11, 1), (guam(2027, 12, 12, 18), None, False)),
+        ("Call (671) 685-6444 to help", date(2026, 11, 20), None),
+    ],
+)
+def test_parse_when_dates_without_a_year(text, written, expected):
+    assert parse_when(text, after=written) == expected
+    # Only with the day the text was written.
+    if "2027" not in text:
+        assert parse_when(text) is None
 
 
 # ------------------------------------------------------- google calendar
@@ -512,6 +554,105 @@ def test_moderncampus_cancelled_and_broken():
         parse_moderncampus(uog_feed(b""))
 
 
+# ------------------------------------------------------------------- posts
+
+LITS_FEED = "https://www.lifeinthesonguam.org/blog-feed.xml"
+
+
+def lits_feed(content: bytes | None = None) -> FetchResult:
+    content = fixture_bytes("lits_blog_feed.xml") if content is None else content
+    return FetchResult(url=LITS_FEED, status=200, content=content, headers={})
+
+
+def test_posts_feed():
+    events = {e.title: e for e in parse_posts(lits_feed())}
+    # Posts without a date (a call for volunteers, shirts for sale, a church
+    # in Palau) are not events.
+    assert set(events) == {"Women’s Christmas Brunch and Cookie Swap", "New Visitors' Lunch"}
+    brunch = events["Women’s Christmas Brunch and Cookie Swap"]  # was in capitals
+    assert (brunch.starts_at, brunch.ends_at, brunch.all_day) == (
+        guam(2026, 12, 12, 10),
+        None,
+        False,
+    )
+    assert brunch.uid == "post:6b067bfbfd2f116e9a89babd"
+    assert (
+        brunch.url
+        == "https://www.lifeinthesonguam.org/post/women-s-christmas-brunch-and-cookie-swap"
+    )
+    assert brunch.description.startswith("Ladies, mark your calendars!")
+    assert brunch.location is None  # the calendar's own location is used
+    lunch = events["New Visitors' Lunch"]
+    assert lunch.starts_at == guam(2026, 10, 25, 10, 45)
+
+
+def test_posts_that_are_not_a_feed():
+    with pytest.raises(CalendarError, match="not an RSS or Atom feed"):
+        parse_posts(lits_feed(b"<html><body>Site maintenance"))
+    assert parse_posts(lits_feed(b'<?xml version="1.0"?><rss version="2.0"><channel/></rss>')) == []
+
+
+def test_post_about_an_event_the_calendar_lists_is_not_listed_twice():
+    post = CalendarEvent(
+        uid="post:1",
+        title="Women’s Christmas Brunch and Cookie Swap",
+        starts_at=guam(2026, 12, 12, 10),
+        description="Ladies, mark your calendars!",
+        url="https://www.lifeinthesonguam.org/post/brunch",
+    )
+    entry = CalendarEvent(
+        uid="g:abc",
+        title="Women's Christmas Brunch",
+        starts_at=guam(2026, 12, 12, 9, 30),
+        location="Main Auditorium",
+        url="https://www.google.com/calendar/event?eid=abc",
+    )
+    other_day = CalendarEvent(
+        uid="g:def", title="Christmas Brunch", starts_at=guam(2026, 12, 13, 10)
+    )
+    (kept, later) = merge_posts([entry, other_day, post])
+    assert (kept.uid, later.uid) == ("g:abc", "g:def")
+    assert kept.url == post.url and kept.description == post.description
+    assert kept.location == "Main Auditorium" and kept.starts_at == guam(2026, 12, 12, 9, 30)
+    # Same day, different event: both stay.
+    prayer = CalendarEvent(uid="g:x", title="Night of Prayer", starts_at=guam(2026, 12, 12, 19))
+    assert len(merge_posts([prayer, post])) == 2
+
+
+def test_posts_and_google_calendar_together(checker, monkeypatch):
+    """The church's calendar reads both inputs; a post on the same day as the
+    calendar's own entry for that event is merged into it."""
+    from guheadlines.events import readers
+
+    church = calendar(
+        google_calendar="church@example.gu", posts=LITS_FEED, location="Life in the Son"
+    )
+    google = [
+        CalendarEvent(
+            uid="g:1", title="Women's Christmas Brunch", starts_at=guam(2026, 12, 12, 10)
+        ),
+        CalendarEvent(
+            uid="g:2", title="Night of Prayer and Worship", starts_at=guam(2026, 12, 25, 19)
+        ),
+    ]
+    monkeypatch.setattr(readers, "read_google_calendar", lambda *a: google)
+    monkeypatch.setattr("guheadlines.events.pipeline.read_google_calendar", lambda *a: google)
+    monkeypatch.setattr(
+        "guheadlines.events.pipeline.read_posts",
+        lambda client, url, start, end: [
+            e for e in parse_posts(lits_feed()) if start <= e.starts_at <= end
+        ],
+    )
+    events, errors = checker.collect(church, now=guam(2026, 12, 1, 8))
+    assert errors == []
+    assert [(e.uid, e.title) for e in events] == [
+        ("g:1", "Women's Christmas Brunch"),
+        ("g:2", "Night of Prayer and Worship"),
+    ]
+    assert events[0].url.endswith("/post/women-s-christmas-brunch-and-cookie-swap")
+    assert events[1].location == "Life in the Son"
+
+
 # ------------------------------------------------------------------ config
 
 
@@ -542,6 +683,14 @@ def test_events_yaml_is_valid():
         assert c.excluded_everywhere("Business mixer", None, None, "Hosted by the Guam Chamber.")
         assert not c.excluded_everywhere("Regular Session", "Guam Legislature")
     assert "chamber" not in {s for s in calendars}
+    # Life in the Son: its Google Calendar and its blog's dated posts, in
+    # purple, and in the home page's news feed too.
+    lits = calendars["lits"]
+    assert lits.collected and lits.google_calendar == ["litsguampodcast@gmail.com"]
+    assert lits.posts == ["https://www.lifeinthesonguam.org/blog-feed.xml"]
+    assert lits.posts[0] in lits.addresses
+    assert (lits.color, lits.news_feed) == ("purple", True)
+    assert not any(c.news_feed for s, c in calendars.items() if s != "lits")
 
 
 def test_main_events_and_colors():
@@ -556,7 +705,7 @@ def test_main_events_and_colors():
         calendar(ical="https://x.gu/a.ics", main_events={"only": ["x"]})
     assert calendar(ical="https://x.gu/a.ics", color="Green").color == "green"
     with pytest.raises(ConfigError, match="color must be one of"):
-        calendar(ical="https://x.gu/a.ics", color="purple")
+        calendar(ical="https://x.gu/a.ics", color="orange")
     with pytest.raises(ConfigError, match="main_events must be"):
         calendar(ical="https://x.gu/a.ics", main_events=[])
 
@@ -693,10 +842,11 @@ def web(clean_db):
 
     from guheadlines.db import session_scope
     from guheadlines.models import Event, EventCalendar
-    from guheadlines.web.app import app, sidebar_cache, sitemap_cache
+    from guheadlines.web.app import app, news_feed_cache, sidebar_cache, sitemap_cache
 
     sidebar_cache._data.clear()
     sitemap_cache._data.clear()
+    news_feed_cache._data.clear()
     now = datetime.now(timezone.utc)
     today = datetime.now(GUAM_TZ).date()
 
@@ -992,6 +1142,139 @@ def test_events_page_offers_the_feed(web):
     assert "Get every Guam Community College event in your calendar" in html
     # A calendar that isn't in events.yaml: the feed of every calendar.
     assert 'href="webcal://testserver/events.ics"' in web.get("/events?calendar=nope").text
+
+
+# ------------------------------------------------- the home page news feed
+
+CHURCH_POST = "https://www.lifeinthesonguam.org/post/women-s-christmas-brunch-and-cookie-swap"
+
+
+def _church_event(title: str, days: int, hour: int, url: str | None = None) -> int:
+    """An event of the church's calendar (news_feed: true in events.yaml)."""
+    from guheadlines.db import session_scope
+    from guheadlines.models import Event, EventCalendar
+
+    now = datetime.now(timezone.utc)
+    day = datetime.now(GUAM_TZ).date() + timedelta(days=days)
+    with session_scope() as session:
+        church = session.scalar(select(EventCalendar).where(EventCalendar.slug == "lits"))
+        if church is None:
+            church = EventCalendar(
+                slug="lits",
+                name="Life in the Son Christian Fellowship",
+                homepage="https://www.lifeinthesonguam.org/events",
+                last_run_at=now,
+            )
+            session.add(church)
+            session.flush()
+        event = Event(
+            calendar_id=church.id,
+            uid=f"post:{title}",
+            title=title,
+            starts_at=datetime.combine(day, time(hour), tzinfo=GUAM_TZ),
+            location="Life in the Son, Tamuning",
+            url=url,
+            first_seen_at=now - timedelta(days=30),
+            last_seen_at=now,
+        )
+        session.add(event)
+        session.flush()
+        return event.id
+
+
+def _feed_cards(html: str) -> list[str]:
+    return re.findall(r'<article class="story no-photo feed-event">(.*?)</article>', html, re.S)
+
+
+def test_church_events_join_the_home_page_news_feed_the_day_before(web):
+    tonight = _church_event("Christmas Eve Candlelight Service", 0, 23)
+    _church_event("New Year's Prayer Night", 5, 19)  # not yet
+    cards = _feed_cards(web.get("/").text)
+    assert len(cards) == 1
+    (card,) = cards
+    assert "Event · Today" in card
+    assert f'href="/events/{tonight}">Christmas Eve Candlelight Service</a>' in card
+    assert "Life in the Son, Tamuning" in card
+    assert 'href="/events?calendar=lits">Life in the Son Christian Fellowship</a>' in card
+    assert "cal-dot cal-purple" in card
+    # Calendars without news_feed (the Legislature's session tomorrow) stay on
+    # the Events page, and other story lists don't get the church's events.
+    assert "Regular Session" not in web.get("/").text
+    assert not _feed_cards(web.get("/category/local").text)
+    # Over once its day is over: an event from yesterday is gone.
+    _church_event("Last Sunday's Service", -1, 9)
+    from guheadlines.web.app import news_feed_cache
+
+    news_feed_cache._data.clear()
+    assert len(_feed_cards(web.get("/").text)) == 1
+
+
+def test_story_from_the_churchs_post_links_to_its_event(web):
+    from guheadlines.db import session_scope
+    from guheadlines.models import Article, Source
+
+    event_id = _church_event("Women’s Christmas Brunch and Cookie Swap", 1, 10, url=CHURCH_POST)
+    with session_scope() as session:
+        church = Source(
+            slug="lits",
+            name="Life in the Son Christian Fellowship",
+            homepage="https://www.lifeinthesonguam.org/events",
+        )
+        session.add(church)
+        session.flush()
+        session.add(
+            Article(
+                source_id=church.id,
+                url=CHURCH_POST,
+                title="Women’s Christmas Brunch and Cookie Swap",
+                intro="Ladies, mark your calendars!",
+                categories=["local"],
+                published_at=datetime.now(timezone.utc) - timedelta(days=2),
+            )
+        )
+    html = web.get("/").text
+    assert "On our events calendar" in html
+    assert f'href="/events/{event_id}"' in html
+    # The story is enough; no second item for the same event.
+    assert not _feed_cards(html)
+
+
+def test_news_feed_events_fall_on_one_page(monkeypatch):
+    from types import SimpleNamespace
+
+    from guheadlines.web import app as web_app
+
+    now = datetime.now(timezone.utc)
+
+    def story(hours: int) -> dict:
+        return {
+            "article": SimpleNamespace(published_at=now - timedelta(hours=hours), url=f"s{hours}")
+        }
+
+    def event(name: str, hours: int) -> dict:
+        return {
+            "event": SimpleNamespace(url=None, title=name),
+            "feed_time": now - timedelta(hours=hours),
+        }
+
+    events = [event("newest", 1), event("between pages", 5), event("old", 9), event("later", -2)]
+    monkeypatch.setattr(web_app, "news_feed_events", lambda: events)
+
+    def names(items):
+        return [i["event"].title if "feed_time" in i else i["article"].url for i in items]
+
+    more = SimpleNamespace(has_next=True)
+    # Page 1 (stories 0-4 hours old) runs back to its last story.
+    page1 = web_app._with_feed_events([story(0), story(2), story(4)], more, None)
+    assert names(page1) == ["s0", "newest", "s2", "s4"]
+    # Page 2 from just after page 1's last story, so "between pages" is here.
+    page2 = web_app._with_feed_events([story(6), story(8)], more, now - timedelta(hours=4))
+    assert names(page2) == ["between pages", "s6", "s8"]
+    # The last page takes everything older.
+    last = web_app._with_feed_events(
+        [story(10)], SimpleNamespace(has_next=False), now - timedelta(hours=8)
+    )
+    assert names(last) == ["old", "s10"]
 
 
 def _stored_event(**fields):

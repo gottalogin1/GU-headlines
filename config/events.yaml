@@ -13,6 +13,12 @@
 #                    calendars in ("Subscribe", "Export" or "iCal feed" links).
 #   moderncampus     the RSS feed of a calendar built with Modern Campus (its
 #                    "Add to RSS" link), like the University of Guam's.
+#   posts            the RSS feed of a site's posts (news or announcements)
+#                    that write the event's date in the text, like "on
+#                    Saturday, December 12th, at 10:00 AM". Each post with a
+#                    date becomes an event on that day; posts without one are
+#                    skipped. If the same day's calendar entry has the same
+#                    name, the entry is kept and links to the post instead.
 #   agendas          a page that lists meeting agendas (PDFs) under dated
 #                    headings, like the Legislature's session agendas.
 #   notices          a notices.guam.gov listing: GovGuam's public meeting notices.
@@ -33,8 +39,13 @@
 #                   it): all (the default), none, a list of patterns (only
 #                   events whose title matches one), or "except:" and a list
 #                   of patterns (all events but those whose title matches one)
-#   color           the colour of its events on the month calendar: green, red
-#                   or blue. Leave it out for the plain colour.
+#   color           the colour of its events on the month calendar: green, red,
+#                   blue or purple. Leave it out for the plain colour.
+#   news_feed       true to also show its events in the news feed on the home
+#                   page: each event appears there at 6 in the morning the day
+#                   before it (or as soon as it is found, if that's later),
+#                   linked to its page on this site, and leaves the feed when
+#                   it is over. Only its main events (see main_events).
 #   request_delay   seconds between requests to this site
 #   ignore_robots   read this site even where its robots.txt disallows it
 #   cannot_scrape   why this calendar can't be collected; it is never read and
@@ -120,3 +131,20 @@ calendars:
         - "dissertation defense"
         - "^evaluations\\b"
     color: green
+
+  - slug: lits
+    name: Life in the Son Christian Fellowship
+    homepage: https://www.lifeinthesonguam.org/events
+    # The church's Events page has two parts. Its "Event Calendar" is this
+    # public Google Calendar (read with GOOGLE_CALENDAR_API_KEY, like the
+    # Legislature's), and its "Events & Announcements" are blog posts, read
+    # from the blog's feed: a post that gives a date ("Saturday, December
+    # 12th, starting at 10:00 AM") is an event that day. The same posts are
+    # also stories in the news (the lits news source in sources.yaml).
+    google_calendar: litsguampodcast@gmail.com
+    posts: https://www.lifeinthesonguam.org/blog-feed.xml
+    location: Life in the Son, 134 Tun Vicente Leon Guerrero Dr, Tamuning
+    organizer: Life in the Son Christian Fellowship
+    color: purple
+    # Its events also appear in the news feed on the home page, the day before.
+    news_feed: true

@@ -14,6 +14,7 @@ from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
+from datetime import time as dt_time
 from email.utils import format_datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -426,6 +427,64 @@ def featured_events() -> list[dict]:
     return featured_cache.get("featured", load)
 
 
+# Events of the calendars with news_feed: true (events.yaml), shown as items
+# in the home page's news feed: each from 6 in the morning the day before it
+# (or from when it was first found, if that's later) until its day is over.
+news_feed_cache = _TTLCache(ttl=60)
+NEWS_FEED_HOUR = 6
+
+
+def news_feed_events() -> list[dict]:
+    """The upcoming main events of the news_feed calendars, each with the time
+    it joins the news feed ("feed_time")."""
+    calendars = {c.slug: c for c in events_config_cache.get() if c.news_feed and c.collected}
+    if not calendars:
+        return []
+
+    def load():
+        today = datetime.now(GUAM_TZ).date()
+        since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
+        with session_scope() as session:
+            found = queries.news_feed_events(session, list(calendars), since)
+        items = []
+        for item in found:
+            event = item["event"]
+            if not calendars[item["calendar_slug"]].is_main(event.title):
+                continue
+            day_before = to_local(event.starts_at).date() - timedelta(days=1)
+            joins = datetime.combine(day_before, dt_time(NEWS_FEED_HOUR), tzinfo=GUAM_TZ)
+            item["feed_time"] = max(joins, event.first_seen_at)
+            item["color"] = calendars[item["calendar_slug"]].color
+            items.append(item)
+        return items
+
+    return news_feed_cache.get("events", load)
+
+
+def _with_feed_events(items: list[dict], result, newer_than_page) -> list[dict]:
+    """The page's stories with the news feed's events that fall among them.
+    A page covers the times from its last story (when more pages follow) up
+    to the last story of the page before it, so each event is on one page."""
+    events = news_feed_events()
+    if not events:
+        return items
+    now = datetime.now(timezone.utc)
+    oldest = items[-1]["article"].published_at if items and result.has_next else None
+    # A story made from the same post (the church's blog, say) is enough.
+    shown = {item["article"].url for item in items}
+    cards = [
+        dict(e, feed_card=True)
+        for e in events
+        if e["feed_time"] <= now
+        and (newer_than_page is None or e["feed_time"] <= newer_than_page)
+        and (oldest is None or e["feed_time"] > oldest)
+        and not (e["event"].url and e["event"].url in shown)
+    ]
+    if not cards:
+        return items
+    return sorted(items + cards, key=item_time, reverse=True)
+
+
 # Paid deals (listings.py), on the home page and the Deals page. The home page
 # shows a few, picked again each minute, so that each deal gets its turn.
 deals_cache = _TTLCache(ttl=60)
@@ -548,6 +607,15 @@ def event_when(event) -> str:
     return text
 
 
+def coming_up(event) -> str:
+    """How soon an event is, in Guam days: "Today", "Tomorrow", "In 3 days",
+    or "On now" for one that began on an earlier day."""
+    days = (to_local(event.starts_at).date() - datetime.now(GUAM_TZ).date()).days
+    if days < 0:
+        return "On now"
+    return "Today" if days == 0 else "Tomorrow" if days == 1 else f"In {days} days"
+
+
 def bid_due(bid) -> str:
     """When a bid is due: "Tue, Dec 1, 2026, 10:00 AM ChST", or the day alone
     when the source gives no time."""
@@ -650,6 +718,7 @@ templates.env.filters.update(
     fmt_datetime=fmt_datetime,
     fmt_time=fmt_time,
     event_when=event_when,
+    coming_up=coming_up,
     fmt_until=fmt_until,
     short_day=_short_day,
     fmt_hour=fmt_hour,
@@ -695,12 +764,18 @@ templates.env.globals.update(
 )
 
 
+def item_time(item: dict) -> datetime:
+    """When a news feed item belongs: a story's publication time, or the time
+    an event joins the feed."""
+    return item["feed_time"] if "feed_time" in item else item["article"].published_at
+
+
 def group_by_day(items: list[dict]) -> list[tuple[str, list[dict]]]:
     """[(day label, items)] in the given order; items are sorted newest or oldest first."""
     groups: list[tuple[str, list[dict]]] = []
     current = None
     for item in items:
-        day = to_local(item["article"].published_at).date()
+        day = to_local(item_time(item)).date()
         if day != current:
             groups.append((day_label(day), []))
             current = day
@@ -944,13 +1019,41 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
 # ------------------------------------------------------------------ routes
 
 
-def _listing(request: Request, template: str, filters: Filters, page: int, **context):
-    """A page of stories grouped by day (home, topic, source and archive day pages)."""
+def _listing(
+    request: Request,
+    template: str,
+    filters: Filters,
+    page: int,
+    *,
+    with_events: bool = False,
+    **context,
+):
+    """A page of stories grouped by day (home, topic, source and archive day
+    pages). `with_events`: with the news feed's events among them (home page)."""
     filters.mute = _muted()
+    today = datetime.now(GUAM_TZ).date()
+    since = datetime.combine(today, datetime.min.time(), tzinfo=GUAM_TZ)
     with session_scope() as session:
         result = queries.list_articles(session, filters, page, settings.page_size)
+        # Stories made from a post that is also an upcoming event (a church's
+        # announcement, say) link to the event's page.
+        on_calendar = queries.events_at(session, [i["article"].url for i in result.items], since)
+        newer_than_page = (
+            queries.published_before_page(session, filters, page, settings.page_size)
+            if with_events
+            else None
+        )
     if page > 1 and not result.items:
         raise HTTPException(404)
+    if on_calendar:
+        colors = {c.slug: c.color for c in events_config_cache.get() if c.color}
+        for item in result.items:
+            found = on_calendar.get(item["article"].url)
+            if found:
+                item["on_calendar"] = dict(found, color=colors.get(found["calendar_slug"]))
+    items = result.items
+    if with_events:
+        items = _with_feed_events(items, result, newer_than_page)
     context.setdefault("canonical", {"page": page})
     if context.pop("noindex_if_empty", False) and not result.items:
         context["robots"] = "noindex"
@@ -958,7 +1061,7 @@ def _listing(request: Request, template: str, filters: Filters, page: int, **con
         request,
         template,
         result=result,
-        groups=group_by_day(result.items),
+        groups=group_by_day(items),
         filters=filters,
         **context,
     )
@@ -988,6 +1091,7 @@ def home(request: Request, page: int = Query(1, ge=1, le=10000)):
         "index.html",
         Filters(hide_sources=_hidden(), hide_topics=_separate()),
         page,
+        with_events=True,
         active_nav="latest",
         show_ad=True,
         show_weather=page == 1,
