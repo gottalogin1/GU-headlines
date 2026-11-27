@@ -222,7 +222,7 @@ page once their due date has passed. Use **Words**, **Agency** and
 of open bids and a red **⚠** when its last check failed. More in
 [Bids and RFPs](bids.md).
 
-## Classifieds, the business directory and featured listings
+## Classifieds, the business directory, deals, press releases and featured listings
 
 These parts show once PayPal and `STATS_PASSWORD` are set (see
 [Paid listings](settings.md#paid-listings)). The **Buy, sell and find local**
@@ -241,6 +241,15 @@ box in the sidebar and the links at the bottom of every page open them.
 - **Featured events** are at the top of the Events page and on the home page,
   in gold on the month calendar, and in the calendar subscription, until the
   event is over. **Feature your event** opens the form.
+- **Deals and offers** lists coupons and specials from local businesses, each
+  with its last day and its coupon code when it has one. A few of them, in
+  turns, are in a **Deals and offers** box at the top of the home page. Use
+  **Words** and **Category** to narrow the list. **Post a deal** opens the
+  form, where the business picks the last day; it pays for each week.
+- **Press releases** lists news that businesses and groups wrote about
+  themselves, marked **Sponsored**. Each has a page of its own with the whole
+  text, and goes out once in the newsletter, marked as a paid press release.
+  **Post a press release** opens the form.
 
 After the form, the poster sees a private page with the listing and a **Pay
 with PayPal** link (with a PayPal account or a card). The address of that
@@ -248,10 +257,10 @@ page is the poster's way back: there are no accounts. Each listing waits for
 the site's owner to approve it on `/admin/listings` before it shows; a
 rejected listing's payment is given back.
 
-A classified ad, a featured job post and a business's featured upgrade end
-by themselves after their number of days. A few days before, the poster gets
+A classified ad, a featured job post, a business's featured upgrade and a
+deal end by themselves (a deal on its last day). A few days before, the poster gets
 one email with a link to that private page, where **Renew** pays the same
-price again through PayPal for as many days more (see
+price again through PayPal for as many days more (a deal: one week; see
 [Renewal reminders](settings.md#renewal-reminders)). A business that booked
 an ad on the Advertise page gets the same kind of email, and its booking's
 page has a **Run this ad again** form.

@@ -39,14 +39,23 @@
 {#- The edition's time, not the story's: the stories are new to the email
     service when the edition is made. #}
 <pubDate>{{ formed }}</pubDate>
+{%- if item.sponsored %}
+{#- A paid press release (listings.py), marked as such. #}
+<description>Sponsored, from {{ item.source }}{% if item.summary %}: {{ item.summary }}{% endif %}</description>
+{%- else %}
 <description>{{ item.source }}{% if item.summary %}: {{ item.summary }}{% endif %}</description>
+{%- endif %}
 {%- if item.source_homepage %}
 <source url="{{ item.source_homepage }}">{{ item.source }}</source>
 {%- endif %}
 <content:encoded>{% filter forceescape %}
 {%- if item.photo %}<p><a href="{{ item.link }}"><img src="{{ item.photo }}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0"></a></p>{% endif -%}
 {%- if item.summary %}<p>{{ item.summary }}</p>{% endif -%}
+{%- if item.sponsored %}
+<p><strong>Sponsored press release from {{ item.source }}</strong> · <a href="{{ item.link }}">Read it on {{ settings.site_name }}</a></p>
+{%- else %}
 <p><strong>{{ item.source }}</strong> · <a href="{{ item.link }}">Read the full story at {{ item.domain }}</a></p>
+{%- endif %}
 {%- endfilter %}</content:encoded>
 {%- if item.photo %}
 <media:content url="{{ item.photo }}" medium="image"{% if item.photo_type %} type="{{ item.photo_type }}"{% endif %}{% if item.width %} width="{{ item.width }}" height="{{ item.height }}"{% endif %}/>

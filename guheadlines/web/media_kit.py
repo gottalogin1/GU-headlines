@@ -29,8 +29,14 @@ WELL = (235, 231, 222)
 ACCENT = (47, 82, 119)
 WHITE = (255, 255, 255)
 
-# Rows in the two small tables, so that everything fits on one page.
-TOP_ROWS = 6
+# The chart's height and the rows in the two small tables. With many prices
+# for sale, the page takes the next, smaller layout, so that everything fits
+# on one page above the booking box.
+LAYOUTS = ((72, 6), (56, 6), (48, 5), (40, 4), (32, 3))
+# The bottom of the prices: the booking box and the footnote are below it.
+PRICES_END = HEIGHT - 132
+# Where the price and the words of each price start.
+PRICE_X, WHAT_X = 124, 226
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,24 @@ class _Page(FPDF):
 
 def pdf(kit: Kit) -> bytes:
     """The media kit, one Letter page, as the bytes of a PDF file."""
+    page, y = _fit(kit)
+    _bottom(page, kit, y)
+    return bytes(page.output())
+
+
+def _fit(kit: Kit) -> tuple[_Page, float]:
+    """The top of the page in the first layout that leaves room for the
+    booking box (or in the smallest one), and where it ends."""
+    for chart, rows in LAYOUTS:
+        page, y = _top(kit, chart, rows)
+        if y <= PRICES_END:
+            break
+    return page, y
+
+
+def _top(kit: Kit, chart: int, rows: int) -> tuple[_Page, float]:
+    """Everything above the booking box, with a chart `chart` points high and
+    `rows` rows in each small table. Returns the page and where it ends."""
     page = _Page(unit="pt", format="letter")
     page.core_fonts_encoding = "windows-1252"
     page.set_auto_page_break(False)
@@ -163,7 +187,7 @@ def pdf(kit: Kit) -> bytes:
     if peak:
         page.write_at(MARGIN, y, "Page views per day", 9, "B", SOFT)
         page.write_right(WIDTH - MARGIN, y, f"Highest: {peak:,}", 9, color=MUTED)
-        top, height = y + 16, 72
+        top, height = y + 16, chart
         slot = INNER / len(kit.daily)
         page.set_fill_color(*ACCENT)
         for n, views in enumerate(kit.daily):
@@ -178,11 +202,11 @@ def pdf(kit: Kit) -> bytes:
 
     # Where the readers go, and where they come from.
     half = (INNER - 28) / 2
-    sections = [(name, f"{views:,}") for name, views in kit.sections if views][:TOP_ROWS]
+    sections = [(name, f"{views:,}") for name, views in kit.sections if views][:rows]
     visits = sum(n for _, n in kit.referrers)
     came = [
         (site or "Typed in, bookmarks and apps", f"{round(n * 100 / visits)}%")
-        for site, n in kit.referrers[:TOP_ROWS]
+        for site, n in kit.referrers[:rows]
         if visits
     ]
     bottom = y
@@ -200,14 +224,17 @@ def pdf(kit: Kit) -> bytes:
             page.set_draw_color(*LINE)
             page.line(MARGIN, y - 4, WIDTH - MARGIN, y - 4)
             page.write_at(MARGIN, y, name, 10, "B")
-            page.write_at(MARGIN + 150, y, price, 10, "B", ACCENT)
-            page.set_xy(MARGIN + 262, y)
+            page.write_at(MARGIN + PRICE_X, y, price, 10, "B", ACCENT)
+            page.set_xy(MARGIN + WHAT_X, y)
             page.set_font("Helvetica", "", 9)
             page.set_text_color(*SOFT)
-            page.multi_cell(INNER - 262, 11.5, page.text_in(what), align="L")
-            y = max(y + 18, page.get_y() + 6)
+            page.multi_cell(INNER - WHAT_X, 11.5, page.text_in(what), align="L")
+            y = max(y + 18, page.get_y() + 4)
+    return page, y
 
-    # How to book.
+
+def _bottom(page: _Page, kit: Kit, y: float) -> None:
+    """How to book, and where the numbers come from, at the bottom of the page."""
     y = max(y + 4, HEIGHT - 128)
     page.set_fill_color(*WELL)
     page.rect(MARGIN, y, INNER, 52, style="F", round_corners=True, corner_radius=8)
@@ -233,4 +260,3 @@ def pdf(kit: Kit) -> bytes:
         ),
         align="L",
     )
-    return bytes(page.output())

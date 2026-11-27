@@ -943,6 +943,33 @@ def _pdf_text(data: bytes) -> str:
     return " ".join(w.replace("\\(", "(").replace("\\)", ")") for w in words)
 
 
+def test_the_media_kit_fits_on_one_page_with_every_price():
+    from guheadlines.web import media_kit
+
+    kit = media_kit.Kit(
+        site_name="GU Headlines",
+        tagline="Guam news",
+        address="guamheadlines.com",
+        made=date(2026, 11, 27),
+        days=30,
+        daily=[100] * 30,
+        views=3000,
+        per_day=100,
+        per_week=700,
+        sponsor_clicks=5,
+        newsletter_clicks=5,
+        stories=900,
+        sources=14,
+        sections=[(f"Section {n}", 100 - n) for n in range(8)],
+        referrers=[(f"site{n}.com", 100 - n) for n in range(8)],
+        # Nine things for sale (three ads, six kinds of listings), two lines each.
+        prices=[("Directory upgrade", "$20.00 for 365 days", "Words about it. " * 7)] * 9,
+    )
+    _, end = media_kit._fit(kit)
+    assert end <= media_kit.PRICES_END  # above the booking box and the footnote
+    assert media_kit.pdf(kit).count(b"/Type /Page\n") == 1
+
+
 def test_the_media_kit(site, monkeypatch):
     assert site.get("/advertise/media-kit.pdf").status_code == 200
     _set(monkeypatch, **{**ON, "sponsor_week_price_cents": 0, "newsletter_sponsor_price_cents": 0})
@@ -985,6 +1012,9 @@ def test_the_media_kit(site, monkeypatch):
         "$15 a week",
         "Newsletter sponsor",
         "$15 an edition",
+        "Press release",  # paid listings are for sale too (PayPal and the password are set)
+        "Your news on a page of its own",
+        "Deal",
         "Book and pay online: testserver/advertise",
     ):
         assert words in text, words

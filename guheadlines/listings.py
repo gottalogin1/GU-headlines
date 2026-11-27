@@ -1,5 +1,6 @@
 """Paid listings that people post on the site themselves: classified ads,
-featured job posts, featured events, and businesses in the directory.
+featured job posts, featured events, businesses in the directory, press
+releases and deals.
 
 There are no user accounts. A listing goes so:
 
@@ -16,11 +17,15 @@ There are no user accounts. A listing goes so:
    event until it is over (it is copied to the events calendar
    FEATURED_CALENDAR, so it is on the Events page, its month calendar, the
    event's own page and the calendar feed), and a business without end (its
-   upgrade for so many days).
-4. Before a classified ad, a job post or a business's upgrade ends, the
-   poster gets an email (renewals.py). On the poster's own page, the poster
-   can pay again through PayPal for as many days more. A renewal needs no
-   new review: the listing does not change.
+   upgrade for so many days). A press release stays on the Press releases
+   page, with a page of its own, and goes once into the newsletter (the
+   next edition after it is approved). A deal shows on the Deals page and on
+   the home page until the last day that its business picked; it costs
+   DEAL_WEEK_PRICE for each week (or part of a week) from the day it is sent.
+4. Before a classified ad, a job post, a business's upgrade or a deal ends,
+   the poster gets an email (renewals.py). On the poster's own page, the
+   poster can pay again through PayPal for as many days more (a deal: one
+   week more). A renewal needs no new review: the listing does not change.
 
 Listings are on while PayPal (PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET) and
 STATS_PASSWORD are set. A kind whose price is 0 is off.
@@ -70,6 +75,12 @@ UNPAID_DAYS = 7
 # MAX_EVENT_DAYS (the Events page shows the next 90 days).
 EVENT_DAYS_AHEAD = 90
 MAX_EVENT_DAYS = 14
+# A deal can run for at most this many weeks from the day it is sent; a
+# renewal adds DEAL_RENEW_DAYS.
+MAX_DEAL_WEEKS = 8
+DEAL_RENEW_DAYS = 7
+# The longest press release, in characters (about 1,000 words).
+MAX_PRESS_TEXT = 6000
 # The largest form (with its photo) that the site accepts.
 MAX_BODY = 8 * 1024 * 1024
 MAX_PHOTO = 6 * 1024 * 1024
@@ -92,27 +103,58 @@ KINDS = {
     "job": Kind("job", "Featured job post", "/jobs"),
     "event": Kind("event", "Featured event", "/events"),
     "business": Kind("business", "Business directory listing", "/directory", photo=True),
+    "press": Kind("press", "Press release", "/press", photo=True),
+    "deal": Kind("deal", "Deal", "/deals", photo=True),
 }
 
 
 def price_cents(settings: Settings, kind: str, featured: bool = False) -> int:
-    """What a listing costs, in US cents. A business costs nothing without the upgrade."""
+    """What a listing costs, in US cents. A business costs nothing without the
+    upgrade. For a deal: the price of one week (see deal_price_cents)."""
     if kind == "classified":
         return settings.classified_price_cents
     if kind == "job":
         return settings.featured_job_price_cents
     if kind == "event":
         return settings.featured_event_price_cents
+    if kind == "press":
+        return settings.press_release_price_cents
+    if kind == "deal":
+        return settings.deal_week_price_cents
     return settings.business_upgrade_price_cents if featured else 0
 
 
+def deal_weeks(last_day: date, today: date) -> int:
+    """The weeks a deal is paid for: each week, or part of a week, from today
+    to its last day. To the same weekday next week is one week."""
+    return max(1, -(-(last_day - today).days // 7))
+
+
+def paid_weeks(listing: Listing) -> int:
+    """The weeks that a deal was (or is to be) paid for when it was sent."""
+    sent = (listing.created_at or datetime.now(GUAM_TZ)).astimezone(GUAM_TZ).date()
+    last = deal_last_day(listing)
+    return deal_weeks(last, sent) if last else 1
+
+
+def deal_last_day(listing: Listing) -> date | None:
+    """The last day that a deal shows, in Guam time."""
+    end = listing.live_until or listing.ends_at
+    if end is None:
+        return None
+    return (end.astimezone(GUAM_TZ) - timedelta(microseconds=1)).date()
+
+
 def days(settings: Settings, kind: str) -> int | None:
-    """How many days a listing (or a business's upgrade) shows once approved.
-    None for a featured event, which shows until it is over."""
+    """How many days a listing (or a business's upgrade) shows once approved,
+    and what a renewal adds. None for a featured event, which shows until it
+    is over, and for a press release, which stays. A deal shows until its
+    last day; a renewal adds a week."""
     return {
         "classified": settings.classified_days,
         "job": settings.featured_job_days,
         "business": settings.business_upgrade_days,
+        "deal": DEAL_RENEW_DAYS,
     }.get(kind)
 
 
@@ -211,7 +253,7 @@ def check(
     """The listing's values from its form, and the problems to show beside
     the fields ({field: message}); no problems means it can be saved."""
     errors: dict[str, str] = {}
-    values: dict = {"title": _text(fields.get("title"), 100)}
+    values: dict = {"title": _text(fields.get("title"), 140 if kind == "press" else 100)}
     if len(values["title"]) < 3:
         errors["title"] = "Please give a title of at least 3 letters."
 
@@ -250,12 +292,41 @@ def check(
             errors["category"] = "Please pick a category."
         if not values["location"]:
             errors["location"] = "Please give the village or the address."
+    elif kind == "press":
+        values["name"] = _text(fields.get("name"), 100)
+        values["description"] = _block(fields.get("description"), MAX_PRESS_TEXT)
+        values["contact"] = _text(fields.get("contact"), 200) or None
+        if not values["name"]:
+            errors["name"] = "Please give the name of the business or group."
+        if len(values["description"]) < 50:
+            errors["description"] = "Please write the release (at least 50 letters)."
+    elif kind == "deal":
+        values["name"] = _text(fields.get("name"), 100)
+        values["category"] = fields.get("category", "")
+        # The coupon code, if the deal has one, is kept as its "price".
+        values["price"] = _text(fields.get("price"), 40) or None
+        values["location"] = _text(fields.get("location"), 120) or None
+        values["description"] = _block(fields.get("description"), 600)
+        values["contact"] = _text(fields.get("contact"), 60) or None
+        if not values["name"]:
+            errors["name"] = "Please give the business's name."
+        if values["category"] not in BUSINESS_CATEGORIES:
+            errors["category"] = "Please pick a category."
+        last = _day(fields.get("end_date", ""))
+        if last is None or not today <= last <= today + timedelta(weeks=MAX_DEAL_WEEKS):
+            errors["end_date"] = f"Please pick a day from today to {MAX_DEAL_WEEKS} weeks from now."
+        else:
+            # It shows until the end of its last day, Guam time.
+            values["ends_at"] = datetime.combine(last + timedelta(days=1), time(0), tzinfo=GUAM_TZ)
 
-    if kind in ("classified", "job", "business") and len(values.get("description") or "") < 10:
+    if (
+        kind in ("classified", "job", "business", "deal")
+        and len(values.get("description") or "") < 10
+    ):
         errors["description"] = "Please write a few words about it (at least 10 letters)."
     if kind == "classified" and len(values["contact"]) < 5:
         errors["contact"] = "Please give a phone number or an email address."
-    if kind in ("job", "event", "business"):
+    if kind in ("job", "event", "business", "press", "deal"):
         raw = fields.get("link", "")
         values["link"] = _web_link(raw)
         if raw.strip() and values["link"] is None:
@@ -332,6 +403,9 @@ def create(
 ) -> Listing:
     """Save a new listing: unpaid, or waiting for review when it is free."""
     amount = price_cents(settings, kind, values.get("featured", False))
+    if kind == "deal":
+        last = (values["ends_at"] - timedelta(days=1)).date()
+        amount *= deal_weeks(last, datetime.now(GUAM_TZ).date())
     listing = Listing(
         kind=kind,
         status=UNPAID if amount else REVIEW,
@@ -457,6 +531,10 @@ def approve(session: Session, settings: Settings, listing_id: int, now: datetime
         session.flush()
         listing.event_id = event.id
         listing.live_until = listing.ends_at or listing.starts_at + timedelta(days=1)
+    elif listing.kind == "deal":
+        listing.live_until = listing.ends_at
+    elif listing.kind == "press":
+        listing.live_until = None  # it stays on the site
     elif listing.kind != "business" or listing.featured:
         length = days(settings, listing.kind)
         listing.live_until = now + timedelta(days=length)
@@ -504,9 +582,9 @@ def upgraded(listing: Listing, now: datetime) -> bool:
 
 def renewable(settings: Settings, listing: Listing) -> bool:
     """A live listing that its poster can pay to keep on the site for more
-    days, also after it has ended: a classified ad, a job post, or a
-    business's upgrade. (A featured event shows until it is over.) Only
-    while that kind is for sale."""
+    days, also after it has ended: a classified ad, a job post, a business's
+    upgrade or a deal. (A featured event shows until it is over, and a press
+    release stays.) Only while that kind is for sale."""
     if listing.status != LIVE or days(settings, listing.kind) is None:
         return False
     return is_on(settings, listing.kind) and (listing.kind != "business" or listing.featured)
@@ -551,6 +629,8 @@ def record_renewal(
         return "gone"
     start = max(listing.live_until or now, now)
     listing.live_until = start + timedelta(days=renewal.days)
+    if listing.kind == "deal":
+        listing.ends_at = listing.live_until  # the last day that the page shows
     listing.reminded_at = None
     listing.email = capture.payer_email or listing.email
     renewal.capture_id, renewal.paid_at = capture.capture_id, now

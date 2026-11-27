@@ -85,11 +85,67 @@
 </article>
 {% endmacro %}
 
+{# A press release on the Press releases page: the start of its text, and a
+   link to its own page (press_release.html), once it is on the site. #}
+{% macro press(l) %}
+{% set live = l.status == "live" %}
+<article class="story listing{% if not l.photo %} no-photo{% endif %}" id="press-{{ l.id }}">
+  {{ photo(l) }}
+  <div class="story-body">
+    <div class="tags"><span class="tag tag-featured">Sponsored</span><span class="tag">Press release</span></div>
+    <h3 class="headline">{% if live %}<a href="/press/{{ l.id }}">{{ l.title }}</a>{% else %}{{ l.title }}{% endif %}</h3>
+    <p class="job-employer"><strong>{{ l.name }}</strong>{% if l.reviewed_at %} · {{ l.reviewed_at|fmt_day }}{% endif %}</p>
+    <p class="intro">{{ l.description|truncate(300) }}</p>
+    {% if live %}<p class="job-links"><a class="read-link" href="/press/{{ l.id }}">Read the press release</a></p>{% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{# A deal: the offer, the business, the coupon code and the last day. #}
+{% macro deal(l) %}
+{% set last = deal_last_day(l) %}
+<article class="story listing featured{% if not l.photo %} no-photo{% endif %}" id="deal-{{ l.id }}">
+  {{ photo(l) }}
+  <div class="story-body">
+    <div class="tags"><span class="tag tag-featured">Deal</span><a class="tag" href="/deals?category={{ l.category|urlencode }}">{{ l.category }}</a></div>
+    <h3 class="headline">{% if l.link %}<a href="{{ l.link|safe_url }}" target="_blank" rel="sponsored noopener">{{ l.title }}</a>{% else %}{{ l.title }}{% endif %}</h3>
+    <p class="job-employer"><strong>{{ l.name }}</strong></p>
+    {% if l.price %}<p class="deal-code">Code <strong>{{ l.price }}</strong></p>{% endif %}
+    <dl class="job-facts">
+      {% if last %}<div><dt>Ends</dt><dd>{{ last|fmt_day }}</dd></div>{% endif %}
+      {% if l.location %}<div><dt>Where</dt><dd>{{ l.location }}</dd></div>{% endif %}
+      {% if l.contact %}<div><dt>Phone</dt><dd>{{ l.contact }}</dd></div>{% endif %}
+    </dl>
+    <p class="intro job-description">{{ l.description }}</p>
+    {% if l.link %}
+    <p class="job-links"><a class="read-link" href="{{ l.link|safe_url }}" target="_blank" rel="sponsored noopener">Details at <span class="read-domain">{{ l.link|domain }}</span> {{ arrow() }}</a></p>
+    {% endif %}
+  </div>
+</article>
+{% endmacro %}
+
 {% macro card(l, now) %}
 {% if l.kind == "classified" %}{{ classified(l) }}
 {% elif l.kind == "business" %}{{ business(l, now) }}
 {% elif l.kind == "job" %}{{ job(l) }}
+{% elif l.kind == "press" %}{{ press(l) }}
+{% elif l.kind == "deal" %}{{ deal(l) }}
 {% else %}{{ event(l) }}{% endif %}
+{% endmacro %}
+
+{# A few of the deals, on the home page (current_deals() in app.py). #}
+{% macro deals_panel(deals) %}
+{% if deals and deals["items"] %}
+<section class="panel featured-events deals-panel" aria-labelledby="deals-title">
+  <h2 id="deals-title" class="featured-title">Deals and offers</h2>
+  <ul class="featured-list">
+    {% for l in deals["items"] %}{% set last = deal_last_day(l) %}
+    <li><a href="/deals#deal-{{ l.id }}">{{ l.title }}</a> <span class="muted small">{{ l.name }}{% if l.price %} · code {{ l.price }}{% endif %}{% if last %} · until {{ last|fmt_day }}{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  <p class="muted small featured-offer">Paid listings. <a href="/deals">{% if deals.total > deals["items"]|length %}See all {{ deals.total }} deals{% else %}See the deals{% endif %}</a>{% if offers.deal %} · <a href="/post/deal">Post your deal</a>{% endif %}</p>
+</section>
+{% endif %}
 {% endmacro %}
 
 {# The next featured events, on the home page and the Events page. #}

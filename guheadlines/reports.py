@@ -75,6 +75,8 @@ LISTING_LABELS = {
     "job": "Featured job posts",
     "event": "Featured events",
     "business": "Business directory upgrades",
+    "press": "Press releases",
+    "deal": "Deals",
 }
 AD_LABELS = {
     ads.SITE: "Sponsor spot",
