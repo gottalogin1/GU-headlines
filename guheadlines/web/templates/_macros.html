@@ -32,6 +32,10 @@
     {% elif a.intro %}
       {% for p in a.intro|paragraphs %}<p class="intro">{{ p }}</p>{% endfor %}
     {% endif %}
+    {% if item.on_calendar %}{% set ev = item.on_calendar.event %}
+    {# The story is a post about an event that is on the Events page. #}
+    <p class="on-calendar"><span class="cal-dot{% if item.on_calendar.color %} cal-{{ item.on_calendar.color }}{% endif %}" aria-hidden="true"></span><a href="/events/{{ ev.id }}">On our events calendar: <time datetime="{{ (ev.starts_at|to_local).isoformat() }}">{{ ev|event_when }}</time></a></p>
+    {% endif %}
     <p class="meta">
       {% if item.source_homepage %}
       <a class="source" href="{{ item.source_homepage|safe_url }}" target="_blank" rel="noopener" title="{{ item.source_homepage|domain }}">{{ item.source_name }}</a>
@@ -44,6 +48,29 @@
       Read the full story at <span class="read-domain">{{ a.url|domain }}</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
     </a>
+  </div>
+</article>
+{% endmacro %}
+
+{# An upcoming event in the news feed (calendars with news_feed: true in
+   events.yaml), linked to its page on this site. #}
+{% macro event_card(item) %}
+{% set e = item.event %}
+<article class="story no-photo feed-event">
+  <div class="story-body">
+    <p class="feed-event-kicker"><span class="cal-dot{% if item.color %} cal-{{ item.color }}{% endif %}" aria-hidden="true"></span>Event · {{ e|coming_up }}</p>
+    <h3 class="headline"><a href="/events/{{ e.id }}">{{ e.title }}</a></h3>
+    <dl class="job-facts event-facts">
+      <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
+      {% if e.location %}<div><dt>Where</dt><dd>{{ e.location }}</dd></div>{% endif %}
+    </dl>
+    {% if e.description %}<p class="intro">{{ e.description|truncate(300) }}</p>{% endif %}
+    <p class="meta">
+      <a class="source" href="/events?calendar={{ item.calendar_slug }}">{{ item.calendar_name }}</a>
+      <span aria-hidden="true">·</span>
+      <a href="/events">All events</a>
+    </p>
+    <a class="read-link" href="/events/{{ e.id }}">See the event and add it to your calendar</a>
   </div>
 </article>
 {% endmacro %}

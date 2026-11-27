@@ -1,7 +1,7 @@
 """Reading each kind of calendar input in config/events.yaml.
 
 Every reader returns CalendarEvents. An event's uid starts with its input
-kind ("g:", "ical:", "mc:", "agenda:", "notice:", "page:"), so two inputs of one
+kind ("g:", "ical:", "mc:", "post:", "agenda:", "notice:", "page:"), so two inputs of one
 calendar never mix up their events.
 """
 
@@ -9,15 +9,17 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime, time, timedelta, tzinfo
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from urllib.parse import quote, urlencode, urljoin
 
+import feedparser
 from bs4 import BeautifulSoup, Tag
 from dateutil import tz
 from lxml import etree
 
 from ..scraper.http import FetchResult, HttpClient
 from ..scraper.text import GUAM_TZ, clean_text, truncate
+from ..scraper.urls import normalize_url
 from .ical import CalendarError, CalendarEvent, read_calendar, tidy_description
 
 DAY = timedelta(days=1)
@@ -36,19 +38,64 @@ _DATE = (
     rf"|(?P<mon>{_MONTHS})\.?\s+(?P<md>\d{{1,2}})(?:st|nd|rd|th)?,?\s+(?P<my>\d{{4}})"
     r"|(?P<iy>\d{4})-(?P<im>\d{2})-(?P<id>\d{2})"
 )
+# A date without a year, as posts write it: "Saturday, December 12th". Only
+# read when the text has a date to count from (parse_when's `after`).
+_WEEKDAYS = ("mon", "tues", "wednes", "thurs", "fri", "satur", "sun")
+_YEARLESS = (
+    rf"(?:(?P<wd>{'|'.join(_WEEKDAYS)})day,?\s+)?"
+    rf"(?P<ymon>{_MONTHS})\.?\s+(?P<ymd>\d{{1,2}})(?:st|nd|rd|th)?\b(?!,?\s*\d{{4}})"
+)
 _TIME = r"(?P<h>\d{1,2})(?::(?P<min>\d{2}))?\s*(?P<ap>[ap])\.?\s?m\b\.?|(?P<noon>\bnoon\b)"
 _TOKEN_RE = re.compile(rf"\b(?P<date>{_DATE})|(?P<time>{_TIME})", re.IGNORECASE)
+# The same, with dates without a year too (bids.readers uses _TOKEN_RE alone).
+_POST_TOKEN_RE = re.compile(rf"\b(?P<date>{_DATE}|{_YEARLESS})|(?P<time>{_TIME})", re.IGNORECASE)
+# A post can be written a few days after the event it is about: a date without
+# a year this many days before the post is still read as that day (and then
+# left out as over), not as the same day next year.
+YEARLESS_SLACK = timedelta(days=7)
 
 
-def _token_date(match: re.Match) -> date | None:
+def _month(name: str) -> int:
+    return datetime.strptime(name[:3].title(), "%b").month
+
+
+def _yearless_date(month: int, day: int, after: date, weekday: int | None) -> date | None:
+    """The year of "December 12th" in a post written on `after`: the next
+    December 12 (or one within YEARLESS_SLACK before it). When the text names
+    the weekday ("Saturday, December 12th"), the nearest year whose December 12
+    is that weekday wins."""
+    options = []
+    for year in (after.year - 1, after.year, after.year + 1):
+        try:
+            options.append(date(year, month, day))
+        except ValueError:  # February 29
+            continue
+    if weekday is not None:
+        matching = [d for d in options if d.weekday() == weekday]
+        if matching:
+            return min(matching, key=lambda d: abs(d - after))
+    later = [d for d in options if d >= after - YEARLESS_SLACK]
+    return min(later) if later else None
+
+
+def _token_date(match: re.Match, after: date | None = None) -> date | None:
     try:
         if match.group("m"):
             year = int(match.group("y"))
             year += 2000 if year < 100 else 0
             return date(year, int(match.group("m")), int(match.group("d")))
         if match.group("mon"):
-            month = datetime.strptime(match.group("mon")[:3].title(), "%b").month
-            return date(int(match.group("my")), month, int(match.group("md")))
+            return date(int(match.group("my")), _month(match.group("mon")), int(match.group("md")))
+        if match.re is _POST_TOKEN_RE and match.group("ymon"):
+            if after is None:
+                return None
+            weekday = match.group("wd")
+            return _yearless_date(
+                _month(match.group("ymon")),
+                int(match.group("ymd")),
+                after,
+                _WEEKDAYS.index(weekday.lower()) if weekday else None,
+            )
         return date(int(match.group("iy")), int(match.group("im")), int(match.group("id")))
     except ValueError:
         return None
@@ -68,14 +115,17 @@ def _token_time(match: re.Match) -> time | None:
 
 
 def parse_when(
-    text: str | None, zone: tzinfo = GUAM_TZ
+    text: str | None, zone: tzinfo = GUAM_TZ, *, after: date | None = None
 ) -> tuple[datetime, datetime | None, bool] | None:
     """(start, end, all_day) from text such as "12/21/2026 - 08:00 AM -
     12/23/2026 - 04:00 PM", "Thursday, November 19, 2026, at 2:00 p.m." or
-    "11/24/2026 10:00 AM - 11:00 AM". Times are Guam time. None without a date."""
+    "11/24/2026 10:00 AM - 11:00 AM". Times are Guam time. None without a date.
+    With `after` (the day the text was written), dates without a year count
+    too ("Saturday, December 12th"; see _yearless_date)."""
     tokens: list[tuple[str, date | time]] = []
-    for match in _TOKEN_RE.finditer(text or ""):
-        value = _token_date(match) if match.group("date") else _token_time(match)
+    tokens_re = _TOKEN_RE if after is None else _POST_TOKEN_RE
+    for match in tokens_re.finditer(text or ""):
+        value = _token_date(match, after) if match.group("date") else _token_time(match)
         if value is not None:
             tokens.append(("date" if match.group("date") else "time", value))
     while tokens and tokens[0][0] != "date":
@@ -288,6 +338,105 @@ def read_moderncampus(
 ) -> list[CalendarEvent]:
     result = client.get(url, accept="application/rss+xml, application/xml;q=0.9, */*;q=0.5")
     return [e for e in parse_moderncampus(result) if _in_window(e, start, end)]
+
+
+# ------------------------------------------------------------------- posts
+
+
+def _entry_day(entry) -> date | None:
+    """The Guam day a feed entry was posted on (feedparser gives it in UTC)."""
+    parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not parsed:
+        return None
+    return datetime(*parsed[:6], tzinfo=timezone.utc).astimezone(GUAM_TZ).date()
+
+
+def parse_posts(result: FetchResult, today: date | None = None) -> list[CalendarEvent]:
+    """Events from the RSS feed of a site's posts (news or announcements), such
+    as a church's "Events & Announcements" blog: each post whose title or text
+    gives a date, such as "on Saturday, December 12th, starting at 10:00 AM".
+    The first date in a post is its event's date, and a date written without
+    its year is the next one after the day of the post. Posts without a date
+    (a call for volunteers, say) are not events and are skipped."""
+    parsed = feedparser.parse(result.content)
+    if parsed.bozo and not parsed.entries:
+        raise CalendarError(f"{result.url} is not an RSS or Atom feed")
+    events: list[CalendarEvent] = []
+    for entry in parsed.entries:
+        title = clean_text(entry.get("title"))
+        if not title:
+            continue
+        posted = _entry_day(entry) or today or datetime.now(GUAM_TZ).date()
+        summary = entry.get("summary") or ""
+        if entry.get("content"):
+            summary = entry["content"][0].get("value") or summary
+        text = clean_text(BeautifulSoup(summary, "lxml").get_text(" ")) if summary else ""
+        when = parse_when(f"{title}. {text}", after=posted)
+        if when is None:
+            continue
+        # Written like the story's address (urls.normalize_url), so a story
+        # made from the same post (a news source reading this feed) and its
+        # event can be matched up (see the home page's story cards).
+        link = normalize_url(entry.get("link") or "", base=result.url)
+        guid = entry.get("id") or link or title
+        events.append(
+            CalendarEvent(
+                uid=f"post:{guid}"[:500],
+                # Posts often write their title in capitals.
+                title=truncate(tidy_name(title) or title, 300),
+                starts_at=when[0],
+                ends_at=when[1],
+                all_day=when[2],
+                description=tidy_description(text),
+                url=link,
+            )
+        )
+    return events
+
+
+def read_posts(client: HttpClient, url: str, start: datetime, end: datetime) -> list[CalendarEvent]:
+    result = client.get(url, accept="application/rss+xml, application/xml;q=0.9, */*;q=0.5")
+    return [e for e in parse_posts(result) if _in_window(e, start, end)]
+
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+_SMALL = {"and", "the", "for", "with", "our", "you", "your", "all", "join", "come"}
+
+
+def _title_words(title: str) -> set[str]:
+    words = _WORD_RE.findall(title.lower().replace("’", "'").replace("'", ""))
+    return {w for w in words if len(w) > 2 and w not in _SMALL}
+
+
+def merge_posts(events: list[CalendarEvent]) -> list[CalendarEvent]:
+    """A post about an event that the calendar also lists ("Women's Christmas
+    Brunch" on the calendar, a post "Women's Christmas Brunch and Cookie Swap"
+    on the same day) is not listed twice: the calendar's entry stays, and
+    links to the post (which says more than a calendar entry)."""
+    entries = [e for e in events if not e.uid.startswith("post:")]
+    merged = []
+    for event in events:
+        if not event.uid.startswith("post:"):
+            merged.append(event)
+            continue
+        day = event.starts_at.astimezone(GUAM_TZ).date()
+        words = _title_words(event.title)
+        twin = next(
+            (
+                e
+                for e in entries
+                if e.starts_at.astimezone(GUAM_TZ).date() == day
+                and (shared := words & _title_words(e.title))
+                and (len(shared) >= 2 or shared == _title_words(e.title))
+            ),
+            None,
+        )
+        if twin is None:
+            merged.append(event)
+            continue
+        twin.url = event.url or twin.url
+        twin.description = twin.description or event.description
+    return merged
 
 
 # ------------------------------------------------------------------ agendas

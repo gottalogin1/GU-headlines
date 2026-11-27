@@ -204,6 +204,18 @@ def list_articles(session: Session, f: Filters, page: int, per_page: int) -> Pag
     return Page(_rows(session, stmt), total, page, per_page)
 
 
+def published_before_page(session: Session, f: Filters, page: int, per_page: int):
+    """When the last story of the page before `page` was published (the
+    upper end of what `page` covers), None on the first page."""
+    if page <= 1:
+        return None
+    stmt = _apply_filters(
+        select(Article.published_at).join(Source, Source.id == Article.source_id), f
+    )
+    stmt = stmt.order_by(Article.published_at.desc(), Article.id.desc())
+    return session.scalar(stmt.limit(1).offset((page - 1) * per_page - 1))
+
+
 def search_articles(session: Session, f: Filters, page: int, per_page: int) -> tuple[Page, bool]:
     """Full-text search. Returns (page, fuzzy) where fuzzy=True means no exact
     matches were found and similar headlines are shown instead."""
@@ -606,6 +618,50 @@ def upcoming_event_ids(session: Session, since: datetime) -> list[int]:
             .order_by(Event.starts_at, Event.id)
         )
     )
+
+
+def news_feed_events(session: Session, slugs: list[str], since: datetime) -> list[dict]:
+    """The upcoming events of these calendars (those with news_feed: true in
+    events.yaml), for the home page's news feed."""
+    if not slugs:
+        return []
+    rows = session.execute(
+        select(
+            Event,
+            EventCalendar.slug.label("slug"),
+            EventCalendar.name.label("calendar_name"),
+            EventCalendar.homepage.label("homepage"),
+        )
+        .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+        .where(_upcoming_events(since), EventCalendar.slug.in_(slugs))
+        .order_by(Event.starts_at, Event.id)
+    )
+    return [
+        {
+            "event": row[0],
+            "calendar_slug": row.slug,
+            "calendar_name": row.calendar_name,
+            "calendar_homepage": row.homepage,
+        }
+        for row in rows
+    ]
+
+
+def events_at(session: Session, urls: list[str], since: datetime) -> dict[str, dict]:
+    """The upcoming event that each of these addresses is about (a story made
+    from a post that is also an event), by address."""
+    if not urls:
+        return {}
+    found: dict[str, dict] = {}
+    rows = session.execute(
+        select(Event, EventCalendar.slug.label("slug"))
+        .join(EventCalendar, EventCalendar.id == Event.calendar_id)
+        .where(_upcoming_events(since), Event.url.in_(urls))
+        .order_by(Event.starts_at, Event.id)
+    )
+    for row in rows:
+        found.setdefault(row[0].url, {"event": row[0], "calendar_slug": row.slug})
+    return found
 
 
 def event_calendars(session: Session, since: datetime) -> list[dict]:

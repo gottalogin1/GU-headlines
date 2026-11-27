@@ -17,13 +17,15 @@ Events leave the page once they are over, or when their calendar stops
 listing them. Events whose title says they were cancelled or postponed are
 left out. You can search the events by word and narrow them to one calendar.
 Visitors can [add the events to their own calendar app](#adding-the-events-to-a-calendar-app),
-on their phone or computer.
+on their phone or computer. Some calendars' events also show up
+[in the home page's news feed](#in-the-home-page-news-feed).
 
 **Contents**
 
 - [The month calendar](#the-month-calendar)
 - [Each event's page](#each-events-page)
 - [Adding the events to a calendar app](#adding-the-events-to-a-calendar-app)
+- [In the home page's news feed](#in-the-home-page-news-feed)
 - [The calendars](#the-calendars)
 - [How often they are read](#how-often-they-are-read)
 - [Google Calendar key](#google-calendar-key)
@@ -61,9 +63,10 @@ event instead.
 
 **Colors.** Each calendar's `color` option gives its events a color on the
 month calendar and a matching mark in the list: green for the University of
-Guam, red for the Guam Legislature, blue for Guam Community College. The
-others are gray. The colors are muted shades that suit both the light and the
-dark look; the legend under the calendar names them.
+Guam, red for the Guam Legislature, blue for Guam Community College, purple
+for Life in the Son Christian Fellowship. The others are gray. The colors
+are muted shades that suit both the light and the dark look; the legend
+under the calendar names them.
 
 ## Each event's page
 
@@ -124,6 +127,27 @@ to about once a day (Google Calendar). The feed asks for a check every
 `EVENTS_INTERVAL_HOURS` hours, and some apps follow that. The address is not
 in the sitemap, and search engines are asked not to list it.
 
+## In the home page's news feed
+
+A calendar with `news_feed: true` in `config/events.yaml` also puts its
+events in the news feed on the home page, among the stories, out of the box
+only Life in the Son Christian Fellowship's. Each event appears there:
+
+- from 6 in the morning (Guam time) the day before it, or from when it was
+  first found if that's later, and it takes its place in the list at that
+  time, like a story published then;
+- until its day is over;
+- as an item marked **Event · Tomorrow** (or Today, or On now) with the
+  calendar's color, its name (linked to [its own page](#each-events-page),
+  where visitors can add it to their calendar), when and where it is, and
+  the start of its description.
+
+Only main events (see `main_events` above) go in. When a news story is about
+the event (the church's own announcement, say, collected from its blog), the
+story stays and gets a line, "On our events calendar", linking to the event's
+page, so the event isn't listed twice. Topic, site and search pages show
+stories only.
+
 ## The calendars
 
 They are listed in `config/events.yaml`. Out of the box:
@@ -133,6 +157,7 @@ They are listed in `config/events.yaml`. Out of the box:
 | Guam Legislature | Sessions, public hearings and committee meetings from the Legislature's Google Calendar (the one on guamlegislature.gov/calendar), with each session's agenda from the Agendas page. Needs a free Google key (see [Google Calendar key](#google-calendar-key)); without it, only the sessions on the Agendas page are listed. |
 | GovGuam public meetings | Board, commission and agency meetings from the government's official notices site, notices.guam.gov (the newest few pages of meeting notices). |
 | Guam Community College | Events from the college's events list. |
+| Life in the Son Christian Fellowship | Events of the church in Tamuning (lifeinthesonguam.org/events), from the Google Calendar on its Events page, plus the events announced in the posts on its blog that give a date. Needs the same free Google key as the Legislature for the calendar; without it, only the blog posts are read. A post about an event that is on the calendar on the same day is merged into it, and the event links to the post. Also in the [home page's news feed](#in-the-home-page-news-feed), and its blog posts are also collected as news. |
 | University of Guam | Events, academic dates and holidays from the university's events calendar (uog.edu/calendar), read from its RSS feed (the "Add to RSS" link). The calendar's "Outlook/iCAL" link gives the same events, but it also holds every past event since 2023 (2.5 MB, against 100 KB for the feed), so the feed is read instead. |
 
 Some things are left out by default:
@@ -171,7 +196,8 @@ calendar).
 
 ## Google Calendar key
 
-The calendar on guamlegislature.gov is a Google Calendar. Google's own
+The calendar on guamlegislature.gov is a Google Calendar, and so is the one
+on Life in the Son Christian Fellowship's Events page. Google's own
 calendar file for it is too large to download, and Google asks robots not to
 read it, so GU Headlines reads it through Google's Calendar API instead. That
 needs a free key from Google; there is no charge for this use, and Google
@@ -198,9 +224,9 @@ a web address or a log. The live check on GitHub (see
 secret named `GOOGLE_CALENDAR_API_KEY` (Settings → Secrets and variables →
 Actions).
 
-Until the key is added, the Legislature's entry in the Events page sidebar
-shows that it needs a key, and only the sessions from its Agendas page are
-listed.
+Until the key is added, the Legislature's and the church's entries in the
+Events page sidebar show that they need a key; only the sessions from the
+Legislature's Agendas page and the church's dated blog posts are listed.
 
 ## When a calendar can't be read
 
@@ -221,6 +247,7 @@ Changes take effect at the next check; no rebuild needed.
 | `google_calendar` | A public Google Calendar's ID (it looks like an email address). Needs `GOOGLE_CALENDAR_API_KEY`. |
 | `ical` | An iCal (`.ics`) address, the format calendar apps share calendars in ("Subscribe", "Export" or "iCal feed" links). Repeating events are expanded. |
 | `moderncampus` | The RSS feed of a calendar built with Modern Campus (its "Add to RSS" link), like the University of Guam's. |
+| `posts` | The RSS feed of a blog or news page whose posts announce events, like Life in the Son's. Posts whose title or text gives a date (and a time, if it says one) become events on that date; the rest are skipped. A date without a year, like "Saturday, December 12th", is taken as the next one after the post was written. |
 | `agendas` | A page that lists meeting agendas (PDFs) under dated headings, like the Legislature's Agendas page. |
 | `notices` | A notices.guam.gov listing. |
 | `pages` | A web page that lists events. Needs CSS selectors: `item` (each event), `title` (its name and link), `when` (its date and time) and optionally `description`. |
@@ -228,7 +255,9 @@ Changes take effect at the next check; no rebuild needed.
 Other options per calendar: `homepage` (linked from the Events page),
 `location` and `organizer` (used when an event doesn't say), `exclude` (leave
 out events whose title or organizer matches one of these patterns),
-`main_events` and `color` (see [The month calendar](#the-month-calendar)),
+`main_events` and `color` (`green`, `red`, `blue` or `purple`; see
+[The month calendar](#the-month-calendar)), `news_feed: true` (see
+[In the home page's news feed](#in-the-home-page-news-feed)),
 `request_delay`, `ignore_robots`, `enabled: false` to pause a calendar, and
 `cannot_scrape: <reason>` to keep a calendar in the file without reading it
 (it isn't shown on the site). Try a calendar first, without saving anything,

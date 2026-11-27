@@ -6,6 +6,22 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Life in the Son Christian Fellowship's events.** The church's events
+  (lifeinthesonguam.org/events) are on the Events page, in purple on the
+  month calendar, each with its own page and in the calendar app feed. They
+  come from the Google Calendar on its Events page (the same
+  `GOOGLE_CALENDAR_API_KEY` as the Legislature's) and from the posts on its
+  blog that give a date, such as "Saturday, December 12th at 10 AM"; a post
+  about an event already on the calendar is merged into it. Its blog posts
+  are also collected as news (source `lits`).
+  **Events in the home page news feed:** a calendar with `news_feed: true` in
+  `config/events.yaml` (out of the box, only the church's) also puts each of
+  its events among the stories on the home page, from 6 AM the day before
+  until its day is over, marked "Event · Tomorrow" and linked to the event's
+  page. A story about an upcoming event says "On our events calendar" with a
+  link to it. New `posts` input for calendars (dated blog posts become
+  events) and a new calendar color, `purple`. No new settings, no database
+  change. How-to: `docs/events.md`.
 - **Found more easily in Google, Bing and AI assistants.** Every page's
   title, summary and heading now use the words people search for ("Guam
   news today", "Guam weather today: forecast, typhoons, tides and surf",
