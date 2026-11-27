@@ -72,6 +72,10 @@ jobs:
           URLS: ${{ inputs.urls }}
           OUTLINE: ${{ inputs.outline }}
         run: |
+          for url in $URLS; do
+            echo "### TEMP grep of $url"
+            curl -sSL -m 20 "$url" | grep -oiE '.{0,160}(event calendar|calendar|iframe|appDefinitionName|googleapis|boom|inffuse|\.ics)[^<]{0,200}' | cut -c1-400 | sort -u | head -80 || true
+          done
           if [ "$OUTLINE" = "true" ]; then
             # shellcheck disable=SC2086
             guheadlines probe --outline $URLS
