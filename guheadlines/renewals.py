@@ -206,6 +206,11 @@ def booking_email(
         first = f"Your ad for {booking.business} in the sponsor spot on {settings.site_name}"
         first += f" shows for the last time on {ends}."
         unit = "weeks"
+    elif slug := ads.section_slug(booking.kind):
+        title = f"Your section sponsor line ends on {ends}"
+        first = f"Your sponsor line for {booking.business} at the top of"
+        first += f" {settings.site_url}{ads.section_path(slug)} shows for the last time on {ends}."
+        unit = "weeks"
     else:
         title = f"Your last newsletter sponsor line goes out on {ends}"
         first = f"The last {settings.site_name} newsletter with your sponsor line for"
@@ -262,7 +267,9 @@ def due_bookings(session: Session, settings: Settings, now: datetime) -> list[Ad
     soon = now + timedelta(days=settings.renewal_reminder_days)
     due = []
     for booking in rows:
-        if booking.status != "approved" or booking.reminded_at or booking.kind not in on_sale:
+        if booking.status != "approved" or booking.reminded_at:
+            continue
+        if ads.offer_kind(booking.kind) not in on_sale:
             continue
         if not now < booking_end(booking) <= soon:
             continue

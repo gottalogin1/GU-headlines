@@ -1,8 +1,8 @@
 """Awarded government bids for the award history page: bid_awards, and when each
 bid source's award list was last read.
 
-Revision ID: 0017_bid_awards
-Revises: 0016_guides
+Revision ID: 0018_bid_awards
+Revises: 0017_guide_packs
 Create Date: 2026-11-27
 """
 
@@ -11,8 +11,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0017_bid_awards"
-down_revision = "0016_guides"
+revision = "0018_bid_awards"
+down_revision = "0017_guide_packs"
 branch_labels = None
 depends_on = None
 

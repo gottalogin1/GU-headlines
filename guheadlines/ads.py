@@ -2,11 +2,15 @@
 page (/advertise). No logins: a business fills in a form, pays through PayPal,
 and the site's owner approves the ad before it shows.
 
-Two things are for sale, each only while its price is set in .env:
+Three things are for sale, each only while its price is set in .env:
 
 - The sponsor spot (web/sponsor.py), by the week, Monday to Sunday in Guam
   time (SPONSOR_WEEK_PRICE). In a booked week the business's picture takes
   the place of SPONSOR_IMAGE.
+- A section sponsor, by the week (SECTION_SPONSOR_PRICE): "Weather is
+  brought to you by" the business, at the top of one section of the site (a
+  news topic, or a page such as Weather or Jobs). One business a section a
+  week.
 - A sponsor line at the top of a newsletter edition (newsletter.py), by the
   edition (NEWSLETTER_SPONSOR_PRICE).
 
@@ -30,7 +34,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -42,6 +46,9 @@ from .web.sponsor import make_copy
 
 SITE = "site"
 NEWSLETTER = "newsletter"
+# The bookings of a section sponsor have the kind "section:<the section's
+# slug>", such as "section:weather", so that each section has its own weeks.
+SECTION = "section"
 
 # How long the weeks of a booking that is not paid yet are kept for it.
 HOLD_MINUTES = 60
@@ -60,7 +67,17 @@ TALLEST = 2.0  # height / width, such as 300 x 600
 WIDEST = 0.25  # such as 600 x 150
 
 MAX_BUSINESS = 80
-MAX_WORDS = {SITE: 150, NEWSLETTER: 200}
+MAX_WORDS = {SITE: 150, NEWSLETTER: 200, SECTION: 100}
+
+# The sections that are not news topics: (slug, name, address). Each news
+# topic (/category/<slug>) is a section too.
+PAGES = (
+    ("jobs", "Jobs", "/jobs"),
+    ("events", "Events", "/events"),
+    ("bids", "Bids", "/bids"),
+    ("weather", "Weather", "/weather"),
+    ("outages", "Outages", "/outages"),
+)
 
 
 @dataclass(frozen=True)
@@ -77,6 +94,10 @@ def offers(settings: Settings) -> list[Offer]:
     found = []
     if settings.sponsor_week_price_cents:
         found.append(Offer(SITE, "Sponsor spot", settings.sponsor_week_price_cents, "week"))
+    if settings.section_sponsor_price_cents:
+        found.append(
+            Offer(SECTION, "Section sponsor", settings.section_sponsor_price_cents, "week")
+        )
     if settings.newsletter_sponsor_price_cents and settings.newsletter_days:
         found.append(
             Offer(
@@ -87,6 +108,53 @@ def offers(settings: Settings) -> list[Offer]:
             )
         )
     return found
+
+
+def offer_kind(kind: str) -> str:
+    """The thing that a booking's kind is: "section:weather" -> "section"."""
+    return kind.partition(":")[0]
+
+
+def weekly(kind: str) -> bool:
+    """True for the things that are booked by the week: all but the newsletter."""
+    return offer_kind(kind) != NEWSLETTER
+
+
+def section_slug(kind: str) -> str:
+    """ "section:weather" -> "weather"; "" for the other kinds."""
+    return kind.partition(":")[2] if offer_kind(kind) == SECTION else ""
+
+
+def section_path(slug: str) -> str:
+    """The address of a section's page: "/weather", or "/category/sports"."""
+    return next((path for page, _, path in PAGES if page == slug), f"/category/{slug}")
+
+
+@dataclass(frozen=True)
+class Section:
+    slug: str
+    name: str
+
+    @property
+    def kind(self) -> str:
+        return f"{SECTION}:{self.slug}"
+
+    @property
+    def path(self) -> str:
+        return section_path(self.slug)
+
+
+def sections(settings: Settings, topics) -> list[Section]:
+    """The sections that can have a sponsor: each news topic (from
+    categories.yaml, with its slug and name), then the other pages, the
+    Weather and Outages pages only while they are on."""
+    off = set()
+    if not settings.weather_interval_minutes:
+        off.add("weather")
+    if not settings.outages_interval_minutes:
+        off.add("outages")
+    found = [Section(topic.slug, topic.name) for topic in topics]
+    return found + [Section(slug, name) for slug, name, _ in PAGES if slug not in off]
 
 
 def money(cents: int) -> str:
@@ -122,7 +190,7 @@ def edition_choices(now: datetime, days: tuple[int, ...], at: time) -> list[date
 
 
 def choices(settings: Settings, kind: str, now: datetime) -> list[date]:
-    if kind == SITE:
+    if weekly(kind):
         return week_choices(now)
     return edition_choices(now, settings.newsletter_days, settings.newsletter_time)
 
@@ -130,7 +198,7 @@ def choices(settings: Settings, kind: str, now: datetime) -> list[date]:
 def run_days(booking: AdBooking) -> list[date]:
     """Every day the ad shows: all seven days of each booked week, or the
     day of each edition."""
-    if booking.kind != SITE:
+    if not weekly(booking.kind):
         return sorted(booking.days)
     return [monday + timedelta(days=n) for monday in sorted(booking.days) for n in range(7)]
 
@@ -329,6 +397,11 @@ def site_ad(session: Session, today: date) -> AdBooking | None:
     return _showing(session, SITE, week_start(today))
 
 
+def section_ad(session: Session, slug: str, today: date) -> AdBooking | None:
+    """The approved section sponsor of the section `slug` for the week of `today`."""
+    return _showing(session, f"{SECTION}:{slug}", week_start(today))
+
+
 def newsletter_ad(session: Session, day: date) -> AdBooking | None:
     """The approved newsletter booking for the edition made on `day`."""
     return _showing(session, NEWSLETTER, day)
@@ -346,10 +419,16 @@ def _sum_views(session: Session, *where) -> int:
     return session.scalar(select(func.coalesce(func.sum(PageViews.views), 0)).where(*where)) or 0
 
 
+def _in_section(path: str):
+    """The page views of a section: its page, and the pages under it (such as
+    an event's own page under /events)."""
+    return or_(PageViews.path == path, PageViews.path.startswith(path + "/", autoescape=True))
+
+
 def results(session: Session, booking: AdBooking, today: date) -> dict | None:
     """How the ad has done so far: the page views while it showed (the
-    sponsor spot is on every page) and the clicks on it. None before it has
-    started."""
+    sponsor spot is on every page, a section sponsor on its section's pages)
+    and the clicks on it. None before it has started."""
     shown = [d for d in run_days(booking) if d <= today]
     if not shown or booking.status != "approved":
         return None
@@ -358,6 +437,10 @@ def results(session: Session, booking: AdBooking, today: date) -> dict | None:
     if booking.kind == SITE:
         found["views"] = _sum_views(
             session, PageViews.path.startswith("/"), PageViews.day.in_(shown)
+        )
+    elif slug := section_slug(booking.kind):
+        found["views"] = _sum_views(
+            session, _in_section(section_path(slug)), PageViews.day.in_(shown)
         )
     return found
 
@@ -391,6 +474,26 @@ def audience(session: Session, today: date, days: int = 30) -> dict:
         "newsletter_clicks": _sum_views(
             session, PageViews.day >= since, PageViews.path == NEWSLETTER_CLICKS
         ),
+    }
+
+
+def section_views(
+    session: Session, found: list[Section], today: date, days: int = 30
+) -> dict[str, int]:
+    """The page views of each section (by slug) in the last `days` Guam days."""
+    if not found:
+        return {}
+    since = today - timedelta(days=days - 1)
+    rows = session.execute(
+        select(PageViews.path, func.sum(PageViews.views))
+        .where(PageViews.day >= since, or_(*(_in_section(s.path) for s in found)))
+        .group_by(PageViews.path)
+    ).all()
+    return {
+        s.slug: sum(
+            int(views) for path, views in rows if path == s.path or path.startswith(s.path + "/")
+        )
+        for s in found
     }
 
 

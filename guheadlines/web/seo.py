@@ -108,6 +108,10 @@ def guide_data(request: Request, guide) -> dict:
         data["datePublished"] = guide.published_at.isoformat(timespec="seconds")
     if guide.photo:
         data["image"] = absolute_url(request, guide.photo)
+    if guide.access == "paid":
+        # Only guide pack readers read it all (guide_packs.py); search
+        # engines see the opening, as every reader without a pack does.
+        data["isAccessibleForFree"] = False
     return data
 
 

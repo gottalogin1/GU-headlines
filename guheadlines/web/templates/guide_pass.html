@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{# A buyer's own page of a guide pack (/guides/pass/<token>, guide_packs.py):
+   its guides, and the private link that opens them on other devices.
+   Opening it keeps the pass in this browser. #}
+
+{% block main %}
+{% if new %}<p class="signup-result" role="status">Thank you, your payment went through. Your guides are open below, in full{% if emailed %}, and the link to this page is on its way to the email address you paid with{% endif %}.</p>{% endif %}
+
+<header class="page-head">
+  <p class="crumbs"><a href="/guides">Visitor guides</a> · Your guides</p>
+  <h1>{{ pack.title }}</h1>
+  {% if readable %}<p class="muted">Bought {{ guide_pass.created_at|fmt_day }}. These guides now open in full in this browser.</p>{% endif %}
+</header>
+
+{% if not readable %}
+<section class="panel listing-status">
+  <h2>This link is turned off</h2>
+  <p>{% if guide_pass.status == "refunded" %}The payment for this pack was given back, so the link no longer opens the guides.{% else %}This link no longer opens the guides.{% endif %} You can still read the opening of each guide, and buy the pack again on <a href="/guides">the guides page</a>.</p>
+</section>
+{% else %}
+<section class="panel listing-status pass-key">
+  <h2>Keep this link</h2>
+  <p>This page's address is your key to the guides. Bookmark it{% if emailed %} or keep the email{% endif %}, and open it once on each phone, tablet or computer you want to read on. There is no account and no password. Please don't share it.</p>
+  <p class="pass-link"><code>{{ link }}</code></p>
+</section>
+
+<h2 class="section-title">Your guides</h2>
+<ul class="guide-grid">
+  {% for g in inside %}
+  <li class="guide-card{% if not g.photo %} no-photo{% endif %}">
+    {% if g.photo %}
+    {% set size = guide_photo_size(g.photo) %}
+    {% set srcset = guide_srcset(g.photo) %}
+    <img src="{{ g.photo }}"{% if srcset %} srcset="{{ srcset }}" sizes="(max-width: 640px) calc(100vw - 32px), 340px"{% endif %}
+         width="{{ size[0] }}" height="{{ size[1] }}" alt="" loading="lazy" decoding="async">
+    {% endif %}
+    <div class="guide-card-body">
+      <h3 class="headline"><a href="/guides/{{ g.slug }}">{{ g.title }}</a></h3>
+      <p class="guide-card-summary">{{ g.summary }}</p>
+      <p class="muted small">{{ guide_minutes(g) }} min read</p>
+    </div>
+  </li>
+  {% else %}
+  <li class="muted">The guides of this pack are being updated. Please come back soon.</li>
+  {% endfor %}
+</ul>
+<p class="muted small section-note">Guides added to this pack later are yours too. Free guides are on <a href="/guides">the guides page</a>.</p>
+{% endif %}
+{% endblock %}

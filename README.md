@@ -121,8 +121,10 @@ that is always on can do this by itself after each change; see
   who won past bids and for how much; bid alert subscribers see all of it.
   See [Bids and RFPs](docs/bids.md).
 - **Visitor guides** (`/guides`) that you write and keep up to date in your
-  browser, with photos, ads and a sponsor for each guide. Twenty starter
-  guides come with the site. See [docs/guides.md](docs/guides.md).
+  browser, with photos, ads and a sponsor for each guide, and **guide packs**
+  that readers buy through PayPal (such as a PCS move pack for military
+  families). Thirty starter guides and three starter packs come with the site.
+  See [docs/guides.md](docs/guides.md).
 - **Sources page** shows, for each news site, when it was last checked and
   whether anything went wrong, and lists the sites that can't be collected.
 - **Private visitor stats** (optional): page views, story clicks, the top

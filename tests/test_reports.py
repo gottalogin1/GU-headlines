@@ -484,3 +484,14 @@ def test_paypal_transactions_reads_every_page():
         _settings(), start, start + timedelta(days=1), httpx.MockTransport(handle)
     )
     assert [(p.id, p.done, p.amount_cents) for p in found] == [("A", True, 100), ("B", False, 200)]
+
+
+def test_section_sponsors_are_one_line_in_the_money_summary(clean_db):
+    # Each section has its own kind ("section:weather"); the summary adds them up.
+    with session_scope() as session:
+        _booking(session, "site", 3000, capture="CAP-F")
+        _booking(session, "section:weather", 1500, capture="CAP-W")
+        _booking(session, "section:sports", 1500, capture="CAP-S")
+    start = datetime(2026, 11, 25, tzinfo=GUAM_TZ)
+    found = reports.money(_settings(), start, start + timedelta(days=1), Fake().transport())
+    assert found.text()[:2] == ["• Sponsor spot: 1, $30", "• Section sponsors: 2, $30"]

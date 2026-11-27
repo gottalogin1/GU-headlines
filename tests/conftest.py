@@ -103,7 +103,8 @@ def clean_db(database):
                 "TRUNCATE articles, seen_urls, ignored_images, http_cache, scrape_runs, sources, "
                 "jobs, job_sources, events, event_calendars, alerts, weather, page_views, "
                 "story_clicks, referrers, newsletter_editions, keyword_alerts, bids, bid_sources, "
-                "listings, ad_bookings, ad_slots, bid_alert_subscribers, bid_alert_plans, guides "
+                "listings, ad_bookings, ad_slots, bid_alert_subscribers, bid_alert_plans, guides, "
+                "guide_packs, guide_pack_guides, guide_passes "
                 "RESTART IDENTITY CASCADE"
             )
         )
