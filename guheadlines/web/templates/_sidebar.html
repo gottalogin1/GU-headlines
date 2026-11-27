@@ -45,7 +45,7 @@
   </ul>
 </section>
 
-{% if offers.classified or offers.business %}
+{% if offers.classified or offers.business or offers.deal or offers.press %}
 {# Paid listings (listings.py). Here and in the footer, not the top bar,
    which is full. #}
 <section class="panel">
@@ -53,6 +53,8 @@
   <ul class="facets">
     {% if offers.classified %}<li><span class="facet-name"><a href="/classifieds">Classifieds</a><span class="site-link">For sale, cars, housing and services</span></span></li>{% endif %}
     {% if offers.business %}<li><span class="facet-name"><a href="/directory">Business directory</a><span class="site-link">Guam businesses by category and village</span></span></li>{% endif %}
+    {% if offers.deal %}<li><span class="facet-name"><a href="/deals">Deals and offers</a><span class="site-link">Coupons and specials from local businesses</span></span></li>{% endif %}
+    {% if offers.press %}<li><span class="facet-name"><a href="/press">Press releases</a><span class="site-link">News from Guam businesses and groups</span></span></li>{% endif %}
   </ul>
 </section>
 
