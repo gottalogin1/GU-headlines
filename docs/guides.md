@@ -17,7 +17,7 @@ site: **/admin/guides**. No file to edit, no command to run, no restart.
 - [Drafts, previews and publishing](#drafts-previews-and-publishing)
 - [Ads in the guides](#ads-in-the-guides)
 - [Selling a sponsorship of a guide](#selling-a-sponsorship-of-a-guide)
-- [Selling guides (later)](#selling-guides)
+- [Selling guides: guide packs](#selling-guides)
 - [Where the guides are kept](#where-the-guides-are-kept)
 
 ## Before you start
@@ -36,12 +36,18 @@ protected on its way.
 
 ## Your first guides: the starter guides
 
-The site comes with twenty starter guides, written for this site:
+The site comes with thirty starter guides, written for this site. The ten
+marked *pack* are for paying readers and come with the starter guide packs
+(see [Selling guides](#selling-guides)):
 
 | Guide | Section |
 |---|---|
 | Your first day on Guam | Start here |
 | Getting around Guam | Start here |
+| Your first week on Guam, day by day (*pack*) | Your first week |
+| Three or four days on Guam (*pack*) | Your first week |
+| Guam on a budget (*pack*) | Your first week |
+| Before you fly: papers, money and packing (*pack*) | Your first week |
 | Weather and the best time to visit | Plan your trip |
 | Guam with kids | Plan your trip |
 | What to do on a rainy day | Plan your trip |
@@ -60,6 +66,12 @@ The site comes with twenty starter guides, written for this site:
 | Local food to try | Food and culture |
 | Fiestas and festivals through the year | Food and culture |
 | Local customs and being a good guest | Food and culture |
+| PCS to Guam: the move checklist (*pack*) | Moving to Guam |
+| Finding a home on Guam: on base and off (*pack*) | Moving to Guam |
+| Bringing your pets to Guam (*pack*) | Moving to Guam |
+| Cars and driving on Guam (*pack*) | Moving to Guam |
+| Schools and child care for military families (*pack*) | Moving to Guam |
+| Getting your home ready for typhoon season (*pack*) | Moving to Guam |
 
 On `/admin/guides`, the **Starter guides** box lists the ones you don't have
 yet, each with a tick. Untick any you don't want and press **Add the ticked
@@ -93,6 +105,8 @@ Press **New guide** on `/admin/guides`. The form has:
 - **Order**: lower numbers are listed first. Use 10, 20, 30 and so on, so a
   new guide fits in between (25) without changing the others.
 - **Who can see it**: *Draft* (only you) or *Published* (everyone).
+- **Who can read it all**: *Free* (everyone), or *Guide pack readers* (see
+  [Selling guides](#selling-guides)).
 - **Summary**: one or two sentences, shown under the title on `/guides` and in
   search results (Google shows about 150 characters).
 - **Text**: the guide itself, in Markdown (next part).
@@ -229,13 +243,115 @@ sponsors a guide.
 ## Selling guides
 
 <a id="selling-guides"></a>
-Selling access to guides (for example a guide pass bought through PayPal, with
-a private link instead of a login) is **not built yet**. The site is ready for
-it: every guide already has a free/paid setting in the database (all guides
-are free for now), and a guide's text is already split into parts at its main
-headings, so a paid guide could show its opening part to everyone and the
-rest to readers with a pass. When you want it, ask for it to be added; your
-guides and their addresses stay as they are.
+You can sell guides in **guide packs**: a few guides sold together for one
+price, such as a *PCS move pack* for military families or a *First week on
+Guam pack* for visitors. Readers pay once through PayPal and read the guides
+on all their devices. There are no accounts and no passwords.
+
+### What readers see
+
+- A guide set to **Guide pack readers** shows everyone its opening (the text
+  before its first `##` heading), then the list of its parts and the packs
+  that hold it, with their prices. Write a good opening: it is what makes
+  people want the rest. A guide with no text before its first heading shows
+  only its summary and the list of its parts.
+- `/guides` lists the packs for sale at the top, and marks paid guides
+  **Guide pack**.
+- Each pack has its own page, `/guides/packs/<address>`, with what is in it,
+  your "About the pack" text and a **Buy with PayPal** button.
+- After paying, the buyer lands on their own page with their guides and a
+  private link. That link is their key: opening it keeps their pass in that
+  browser (in one cookie, used only on the guide pages), so the guides open
+  in full there. On another phone or computer they open the link once.
+- With email set up (see "Sending email" in `.env.example`), the link is also
+  emailed to the address they paid with, and each pack page has a "Bought
+  this before?" form that emails it again.
+- Readers with a pack see no AdSense ads on its guides. A guide's own sponsor
+  still shows.
+- Search engines see the opening, like any reader without a pack, and are
+  told the guide is for paying readers, as Google asks.
+
+### What you need
+
+- **PayPal**, set up as for the other sales (`PAYPAL_CLIENT_ID`,
+  `PAYPAL_CLIENT_SECRET`, and `PAYPAL_MODE`; see the steps in
+  `.env.example`). Until then, `/admin/guides` warns you, and paid guides show
+  only their opening.
+- **`STATS_PASSWORD`**, which you already use for `/admin/guides`.
+- **Email** (optional but recommended), so buyers get their link by email.
+
+No other setting: you make the packs and set their prices on
+`/admin/guides`.
+
+### The starter packs
+
+`/admin/guides` has a **Starter guide packs** box with three packs written for
+this site:
+
+| Pack | Suggested price | Guides |
+|---|---|---|
+| PCS move pack for military families | $12 | The move checklist, finding a home, pets, cars and driving, schools and child care, typhoon season |
+| First week on Guam pack | $5 | A seven-day plan, three or four days, Guam on a budget, before you fly |
+| Every guide pack | $15 | Every guide for pack readers, also ones you add later |
+
+Tick the ones you want and press **Add the ticked packs**. Each pack is added
+**not for sale**, and its guides are added as drafts, set to *Guide pack
+readers*. Then:
+
+1. Open each new guide, read it, and change anything you know better. These
+   guides give general advice and avoid prices and rules that change often,
+   but check every fact you are not sure of (for example the pet import rules
+   and the allowances for military housing) before you publish. The housing
+   guide has a part about working with a local real estate agent; add your
+   own details there if you like.
+2. Publish the guides.
+3. Open the pack (in the **Guide packs** list), check the price and the text,
+   choose **For sale** and press **Save**.
+
+### Making your own pack
+
+Press **New guide pack** under **Guide packs** on `/admin/guides`:
+
+- **Name**, **Address** (`/guides/packs/<address>`), **Price** in US dollars
+  (from $1), **Order**, **For sale?**, **Summary**, and **About the pack** (in
+  Markdown, like the guides).
+- **Guides in this pack**: tick them, or tick **Every guide pack guide** for a
+  pack that holds every paid guide, also the ones you add later.
+
+Good to know:
+
+- Readers see only the published guides of a pack. A pack whose guides are
+  all drafts is not shown.
+- Buyers read what the pack holds now: a guide you add later is theirs too,
+  and a guide you take out is no longer theirs. So add, don't take out.
+- A free guide can be in a pack (as a bonus); it stays free for everyone.
+- A new price applies to new buyers only.
+- To stop selling a pack, choose **Not for sale**. Its buyers keep their
+  guides. A pack that was bought can't be deleted, so their links keep
+  working.
+
+### Sales, refunds and shared links
+
+The **Guide pack sales** list on `/admin/guides` shows each sale: the day,
+the pack, the price, the buyer's PayPal email address, how many times their
+link was opened, and its state.
+
+- **Turn off** a pass whose link was shared in public (a link opened very
+  many times is a hint). Its guides stop opening with that link. **Turn on
+  again** undoes it.
+- **Refund** gives all the money back through PayPal and turns the pass off.
+  Tick the box first.
+- New sales are posted quietly in Discord (if the alerts are on) and counted
+  in the daily money report as "Guide packs".
+
+### Testing it
+
+Test with `PAYPAL_MODE=sandbox` first, as for the paid listings: put a pack on
+sale, buy it on its page with PayPal's test buyer (step 8 of the PayPal steps in
+`.env.example`), and check that you land on your guides page, that
+the guides open in full, and that the email arrives. Then, in another browser
+(or a private window), check that the same guides show only their opening.
+When it all works, switch to `PAYPAL_MODE=live`.
 
 ## Where the guides are kept
 

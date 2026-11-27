@@ -31,13 +31,25 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .. import ads, alerts, gas, guides, health, listings, mail, paypal, renewals, sendfox
+from .. import (
+    ads,
+    alerts,
+    gas,
+    guide_packs,
+    guides,
+    health,
+    listings,
+    mail,
+    paypal,
+    renewals,
+    sendfox,
+)
 from ..bids import alerts as bid_alerts
 from ..config import (
     AppConfig,
@@ -57,6 +69,8 @@ from ..models import (
     AdBooking,
     Article,
     Guide,
+    GuidePack,
+    GuidePass,
     Listing,
     Source,
 )
@@ -692,6 +706,9 @@ templates.env.globals.update(
     guide_srcset=guides.photo_srcset,
     guide_photo_size=guides.photo_size,
     guide_photo_sizes=guides.PHOTO_SIZES,
+    guide_pack_money=guide_packs.money,
+    # Email is set up (mail.py): the "lost your link?" form of the guide packs.
+    mail_on=lambda: mail.enabled(settings),
 )
 
 
@@ -1214,6 +1231,7 @@ def status(request: Request):
         uncollectable=config.uncollectable_sources,
         runs=runs,
         affiliate_links=bool(travel_links()),
+        guide_packs_on=bool(packs_on_sale()),
         title="Sources",
         active_nav="status",
         canonical={},
@@ -1989,6 +2007,9 @@ def robots(request: Request):
         # A booking's own page and the owner's review page (the Advertise page
         # itself, /advertise, is for everyone).
         "Disallow: /advertise/\n"
+        # The PayPal link of a guide pack, and each buyer's private page.
+        "Disallow: /guides/buy/\n"
+        "Disallow: /guides/pass/\n"
         "\n"
         f"Sitemap: {seo.absolute_url(request, '/sitemap.xml')}\n"
     )
@@ -2048,7 +2069,8 @@ def sitemap(request: Request):
         ]
         + [f"/press/{listing_id}" for listing_id in found["press"]],
         advertise=bool(advertising()),
-        guides=[(g.slug, g.updated_at) for g in published_guides()],
+        guides=[(g.slug, g.updated_at) for g in published_guides()]
+        + [(f"packs/{p['pack'].slug}", p["pack"].updated_at) for p in packs_on_sale()],
     )
     return Response(
         seo.sitemap_xml(entries),
@@ -2896,6 +2918,35 @@ def published_guides() -> list[Guide]:
     return guide_cache.get("published", find)
 
 
+def packs_on_sale() -> list[dict]:
+    """The guide packs for sale that hold a published guide, each with its
+    number of guides ({"pack", "count"}), kept with the guides for a minute."""
+
+    def find() -> list[dict]:
+        if not guide_packs.on(settings):
+            return []
+        with session_scope() as session:
+            found = [
+                (p, len(guide_packs.contents(session, p))) for p in guide_packs.on_sale(session)
+            ]
+        return [{"pack": p, "count": n} for p, n in found if n]
+
+    return guide_cache.get("packs", find)
+
+
+def _reader_tokens(request: Request) -> list[str]:
+    """The tokens of the guide packs bought in this browser (guide_packs.COOKIE)."""
+    return guide_packs.cookie_tokens(request.cookies.get(guide_packs.COOKIE))
+
+
+def _varies(response: Response) -> Response:
+    """For a page that shows more to a reader with a guide pack: never kept
+    for another reader, nor shown from the browser's copy after a purchase."""
+    response.headers["Cache-Control"] = "private, no-cache"
+    response.headers["Vary"] = "Cookie"
+    return response
+
+
 @app.get("/guides", response_class=HTMLResponse)
 def guides_index(request: Request):
     found = published_guides()
@@ -2909,6 +2960,7 @@ def guides_index(request: Request):
         request,
         "guides.html",
         sections=list(sections.items()),
+        packs=packs_on_sale(),
         title="Visitor guides",
         description=(
             f"Guides for visiting Guam from {settings.site_name}: getting around, the weather,"
@@ -2939,11 +2991,27 @@ def _guide_page(request: Request, guide: Guide, preview: bool = False) -> HTMLRe
     listed = published_guides()
     others = [g for g in listed if g.id != guide.id]
     others.sort(key=lambda g: g.section != guide.section)  # the same section first
-    return render(
+    text = guides.unlink_unpublished(guides.render(guide.body), {g.slug for g in listed})
+    paid = guide.access == guides.PAID
+    # A paid guide: in full for a reader whose guide pack holds it (and in
+    # the owner's preview); else its opening, and the packs that hold it.
+    reading_with, offers = None, []
+    if paid and not preview:
+        with session_scope() as session:
+            reading_with = guide_packs.unlocking(session, _reader_tokens(request), guide)
+            if reading_with is None and guide_packs.on(settings):
+                offers = guide_packs.packs_for(session, guide)
+    locked = paid and not preview and reading_with is None
+    response = render(
         request,
         "guide.html",
         guide=guide,
-        text=guides.unlink_unpublished(guides.render(guide.body), {g.slug for g in listed}),
+        text=guides.opening(text) if locked else text,
+        # Where readers without a pack stop, for the owner's preview.
+        free_parts=len(guides.opening(text).parts) if paid else None,
+        locked=locked,
+        offers=offers,
+        reading_with=reading_with,
         others=others[:6],
         guide_sponsor=sponsor_box,
         preview=preview,
@@ -2954,11 +3022,13 @@ def _guide_page(request: Request, guide: Guide, preview: bool = False) -> HTMLRe
         robots="noindex, nofollow" if preview else None,
         breadcrumbs=[("Visitor guides", "/guides"), (guide.title, None)],
         structured=None if preview else [seo.guide_data(request, guide)],
-        show_ad=not preview,
+        # No ads for readers who paid for the guide.
+        show_ad=not preview and reading_with is None,
         show_travel=True,
         show_signup=not preview,
         count_view=not preview,
     )
+    return _varies(response) if paid else response
 
 
 @app.get("/guides/{slug}", response_class=HTMLResponse)
@@ -2993,6 +3063,17 @@ GUIDE_RESULTS = {
     "none": "Tick the starter guides you want first.",
     "confirm": "To delete the guide, tick the box beside the Delete button first.",
     "gone": "That guide is not there any more.",
+    "packs": "The starter packs you ticked are added, not for sale yet, with their guides as"
+    " drafts. Read and publish the guides, then open each pack and put it on sale.",
+    "packs-none": "Tick the starter packs you want first.",
+    "pack-deleted": "The guide pack is deleted.",
+    "pass-off": "That pass is turned off: its link no longer opens the guides.",
+    "pass-on": "That pass is turned on again.",
+    "refunded": "The money is given back through PayPal, and the pass is turned off.",
+    "refund-confirm": "To give the money back, tick the box beside the Refund button first.",
+    "refund-failed": "PayPal could not give the money back, so nothing changed. See the web"
+    " log for PayPal's reason, or refund it on paypal.com.",
+    "pass-gone": "That pass was not in that state any more. Nothing changed.",
 }
 
 
@@ -3010,10 +3091,23 @@ def admin_guides(request: Request, done: str = Query("", max_length=20)):
     if (answer := _owner_check(request)) is not None:
         return answer
     today = datetime.now(GUAM_TZ).date()
+    month_ago = datetime.now(timezone.utc) - timedelta(days=30)
     with session_scope() as session:
         found = guides.everything(session)
         counts = guides.numbers(session, found, today - timedelta(days=29))
         starters = guides.missing_starters(session)
+        packs = [
+            {
+                "pack": p,
+                "count": len(guide_packs.contents(session, p, published_only=False)),
+                "published": len(guide_packs.contents(session, p)),
+                "sold": guide_packs.sold(session, p.id),
+            }
+            for p in guide_packs.everything(session)
+        ]
+        month = guide_packs.sales(session, month_ago)
+        starter_packs = guide_packs.missing_starters(session)
+        passes = guide_packs.recent_passes(session)
     response = render(
         request,
         "admin_guides.html",
@@ -3026,6 +3120,14 @@ def admin_guides(request: Request, done: str = Query("", max_length=20)):
         starters=starters,
         today=today,
         message=GUIDE_RESULTS.get(done),
+        packs=packs,
+        month=month,
+        month_total=sum(cents for _, cents in month.values()),
+        starter_packs=starter_packs,
+        passes=passes,
+        sales_on=guide_packs.on(settings),
+        paid_guides=sum(1 for g in found if g.access == guides.PAID),
+        money=guide_packs.money,
     )
     return _no_store(response)
 
@@ -3040,6 +3142,7 @@ def _guide_values(guide: Guide) -> dict:
         "body": guide.body,
         "position": str(guide.position),
         "status": guide.status,
+        "access": guide.access,
         "photo_alt": guide.photo_alt,
         "sponsor_name": guide.sponsor_name,
         "sponsor_link": guide.sponsor_link,
@@ -3072,6 +3175,7 @@ def _guide_form(
         message=message,
         sections=sections,
         limits=guides,
+        sales_on=guide_packs.on(settings),
     )
     return _no_store(response)
 
@@ -3080,7 +3184,9 @@ def _guide_form(
 def admin_guide_new(request: Request):
     if (answer := _owner_check(request)) is not None:
         return answer
-    return _guide_form(request, None, {"position": "100", "status": guides.DRAFT}, {})
+    return _guide_form(
+        request, None, {"position": "100", "status": guides.DRAFT, "access": guides.FREE}, {}
+    )
 
 
 @app.get("/admin/guides/{guide_id:int}", response_class=HTMLResponse)
@@ -3251,6 +3357,474 @@ async def admin_guide_starters(request: Request):
         status_code=303,
         headers={"Cache-Control": "no-store"},
     )
+
+
+# ------------------------------------------------------------- guide packs
+# Visitor guides sold together through PayPal, read with a private link
+# instead of an account (guide_packs.py). The owner makes the packs on
+# /admin/guides; readers buy them on /guides/packs/<slug>.
+
+guide_buy_limit = SignupLimit(per_address=10, total=100)
+guide_link_limit = SignupLimit()
+# The pack form: its text and a tick for each guide.
+_MAX_PACK_BODY = 64 * 1024
+
+PACK_PAGE_RESULTS = {
+    "left": (False, "You left PayPal before the end, so nothing was paid. You can try again."),
+    "unfinished": (False, "The payment was not finished. Nothing was charged."),
+    "declined": PAYMENT_RESULTS["declined"],
+    "error": PAYMENT_RESULTS["error"],
+    "mismatch": (
+        False,
+        "Something did not match in this payment (the price may have just changed), so it was"
+        " not used. Please try again; if you were charged, the payment is given back.",
+    ),
+    "used": (
+        False,
+        "This payment was used already. The link to your guides was emailed to the address you"
+        " paid with; you can ask for it again below.",
+    ),
+    "busy": (False, "Too many tries in a short time. Please try again in an hour."),
+    "sent": (
+        True,
+        "If guide packs were bought with that address, the link is on its way. Look in your"
+        " inbox, and in your spam folder if it isn't there in a few minutes.",
+    ),
+    "invalid": (False, "That doesn't look like an email address. Please check it and try again."),
+    "mailerror": (False, "Sorry, the email could not be sent this time. Please try again later."),
+}
+
+
+def _pack_for_sale(slug: str) -> tuple[GuidePack, list[Guide]] | None:
+    """A pack that is for sale now, and its published guides (read fresh,
+    not from the cache: its price may have just changed)."""
+    if not guide_packs.on(settings) or not guides.SLUG.match(slug):
+        return None
+    with session_scope() as session:
+        pack = guide_packs.by_slug(session, slug)
+        if pack is None or pack.status != guide_packs.ON_SALE:
+            return None
+        inside = guide_packs.contents(session, pack)
+    return (pack, inside) if inside else None
+
+
+@app.get("/guides/packs/{slug}", response_class=HTMLResponse)
+def guide_pack_page(request: Request, slug: str, result: str = Query("", max_length=12)):
+    """A guide pack's page: what is in it, its price and the PayPal link."""
+    found = _pack_for_sale(slug)
+    if found is None:
+        raise HTTPException(404)
+    pack, inside = found
+    with session_scope() as session:
+        owned = guide_packs.owned(session, _reader_tokens(request))
+    shown = PACK_PAGE_RESULTS.get(result)
+    response = render(
+        request,
+        "guide_pack.html",
+        pack=pack,
+        inside=inside,
+        about=guides.render(pack.about) if pack.about else None,
+        price=guide_packs.money(pack.price_cents),
+        owned_token=owned.get(pack.id),
+        can_email=mail.enabled(settings),
+        result={"ok": shown[0], "text": shown[1]} if shown else None,
+        title=pack.title,
+        description=truncate(pack.summary, 160),
+        active_nav="guides",
+        canonical={},
+        robots="noindex, follow" if result else None,
+        breadcrumbs=[("Visitor guides", "/guides"), (pack.title, None)],
+        show_travel=True,
+    )
+    return _varies(response)
+
+
+@app.get("/guides/buy/{slug}")
+def guide_pack_buy(request: Request, slug: str):
+    """Make a PayPal order for a pack, and send the buyer to PayPal to pay
+    it. (A link, not a form: see paypal.py.) Nothing is stored until the
+    payment is made."""
+    found = _pack_for_sale(slug)
+    if found is None:
+        raise HTTPException(404)
+    pack = found[0]
+    page = f"/guides/packs/{pack.slug}"
+    if not guide_buy_limit.allow(request.client.host if request.client else ""):
+        log.warning("guide pack order refused: too many in the last hour")
+        return _see_other(f"{page}?result=busy")
+    try:
+        order = paypal.create_order(
+            settings,
+            amount_cents=pack.price_cents,
+            description=f"Guide pack: {pack.title}",
+            custom_id=guide_packs.order_name(pack),
+            return_url=seo.absolute_url(request, f"/guides/buy/{pack.slug}/paid"),
+            cancel_url=seo.absolute_url(request, f"{page}?result=left"),
+        )
+    except paypal.PayPalError as exc:
+        log.warning("PayPal order for guide pack %s failed: %s", pack.id, exc)
+        return _see_other(f"{page}?result=error")
+    return _see_other(order.approve_url)
+
+
+def _after_guide_sale(request: Request, guide_pass: GuidePass, pack: GuidePack) -> None:
+    """Email a new buyer their link, and tell the owner (Discord)."""
+    link = seo.absolute_url(request, f"/guides/pass/{guide_pass.token}")
+    if guide_pass.email and mail.enabled(settings):
+        with session_scope() as session:
+            titles = [g.title for g in guide_packs.contents(session, pack)]
+        try:
+            mail.send(
+                settings,
+                guide_pass.email,
+                *guide_packs.bought_email(settings, pack.title, link, titles),
+            )
+        except mail.MailError as exc:
+            log.warning("guide pack: the email to buyer %d failed: %s", guide_pass.id, exc)
+        else:
+            with session_scope() as session:
+                session.execute(
+                    update(GuidePass)
+                    .where(GuidePass.id == guide_pass.id)
+                    .values(emailed_at=datetime.now(timezone.utc))
+                )
+    if settings.discord_webhook_url:
+        alerts.send(
+            settings,
+            alerts.Alert(
+                title="Guide pack sold",
+                message=f"{pack.title}, {guide_packs.money(guide_pass.amount_cents)}",
+                emoji="📘",
+                quiet=True,
+            ),
+        )
+
+
+@app.get("/guides/buy/{slug}/paid")
+def guide_pack_paid(request: Request, slug: str, token: str = Query("", max_length=64)):
+    """Where PayPal sends the buyer back after approving the payment, with
+    ?token=<the order's ID>: take the money, make the pass, and open the
+    buyer's page."""
+    if not guides.SLUG.match(slug):
+        raise HTTPException(404)
+    with session_scope() as session:
+        pack = guide_packs.by_slug(session, slug)
+    if pack is None:
+        raise HTTPException(404)
+    page = f"/guides/packs/{pack.slug}"
+    if not re.fullmatch(r"[A-Za-z0-9-]{5,64}", token):
+        return _see_other(f"{page}?result=unfinished")
+    if not paypal.enabled(settings):
+        return _see_other(f"{page}?result=error")
+    bought = guide_packs.settle(settings, session_scope, pack, token, datetime.now(timezone.utc))
+    if bought.guide_pass is None:
+        return _see_other(f"{page}?result={bought.result}")
+    if bought.new:
+        log.info("guide pack %s sold (PayPal capture %s)", pack.id, bought.guide_pass.capture_id)
+        _after_guide_sale(request, bought.guide_pass, pack)
+    return _see_other(f"/guides/pass/{bought.guide_pass.token}?new=1")
+
+
+@app.get("/guides/pass/{token}", response_class=HTMLResponse)
+def guide_pass_page(request: Request, token: str, new: str = Query("", max_length=2)):
+    """A buyer's own page: the guides of their pack. Opening it keeps the
+    pass in this browser (a cookie for /guides pages only), so the guides
+    open in full here from then on."""
+    with session_scope() as session:
+        found = guide_packs.by_token(session, token)
+        if found is None:
+            raise HTTPException(404)
+        pack = session.get(GuidePack, found.pack_id)
+        inside = guide_packs.contents(session, pack)
+        readable = found.status in guide_packs.READABLE
+        if readable:
+            guide_packs.count_open(session, found.id)
+    response = render(
+        request,
+        "guide_pass.html",
+        guide_pass=found,
+        pack=pack,
+        inside=inside,
+        readable=readable,
+        new=new == "1" and readable,
+        emailed=bool(found.email) and mail.enabled(settings),
+        link=seo.absolute_url(request, f"/guides/pass/{found.token}"),
+        title=f"Your guides: {pack.title}",
+        robots="noindex, nofollow",
+        breadcrumbs=[("Visitor guides", "/guides"), ("Your guides", None)],
+        active_nav="guides",
+        count_view=False,
+        show_signup=False,
+    )
+    _private(response)
+    if readable:
+        response.set_cookie(
+            guide_packs.COOKIE,
+            guide_packs.with_token(request.cookies.get(guide_packs.COOKIE), found.token),
+            max_age=guide_packs.COOKIE_DAYS * 86400,
+            path=guide_packs.COOKIE_PATH,
+            secure=seo.base_url(request).startswith("https://"),
+            httponly=True,
+            samesite="lax",
+        )
+    return response
+
+
+@app.post("/guides/pass/link")
+async def guide_pass_link(request: Request):
+    """Email the links of the guide packs bought with an address again. The
+    answer is the same whether or not there are any, so the form tells no
+    one who bought what."""
+    if not guide_packs.on(settings) or not mail.enabled(settings):
+        raise HTTPException(404)
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the site.", status_code=403)
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
+    slug = _field(form, "pack")
+    back = f"/guides/packs/{slug}" if guides.SLUG.match(slug) else "/guides"
+    if _field(form, "website"):
+        return _see_other(f"{back}?result=sent#lost")  # the field only robots fill in
+    email = _field(form, "email")
+    if len(email) > 254 or not _EMAIL.fullmatch(email):
+        return _see_other(f"{back}?result=invalid#lost")
+    if not guide_link_limit.allow(request.client.host if request.client else ""):
+        return _see_other(f"{back}?result=busy#lost")
+
+    def send() -> None:
+        with session_scope() as session:
+            found = guide_packs.passes_of(session, email)
+        if not found:
+            return
+        links = [
+            (title, seo.absolute_url(request, f"/guides/pass/{p.token}")) for p, title in found
+        ]
+        mail.send(settings, found[0][0].email, *guide_packs.links_email(settings, links))
+
+    try:
+        await run_in_threadpool(send)
+    except mail.MailError as exc:
+        log.warning("guide packs: could not email a link: %s", exc)
+        return _see_other(f"{back}?result=mailerror#lost")
+    return _see_other(f"{back}?result=sent#lost")
+
+
+PACK_RESULTS = {
+    "saved": "Saved.",
+    "confirm": "To delete the pack, tick the box beside the Delete button first.",
+    "sold": "This pack has buyers, so it can't be deleted: their links would stop working."
+    " To stop selling it, choose Not for sale and save.",
+}
+
+
+def _pack_values(session, pack: GuidePack) -> dict:
+    """A pack's fields as the owner's form shows them."""
+    return {
+        "title": pack.title,
+        "slug": pack.slug,
+        "summary": pack.summary,
+        "about": pack.about,
+        "price": guide_packs.money(pack.price_cents).removeprefix("$"),
+        "position": str(pack.position),
+        "status": pack.status,
+        "every_paid": pack.every_paid,
+        "guide_ids": guide_packs.guide_ids(session, pack.id),
+    }
+
+
+def _pack_form(
+    request: Request,
+    pack: GuidePack | None,
+    values: dict,
+    errors: dict,
+    status_code: int = 200,
+    message: str | None = None,
+) -> HTMLResponse:
+    with session_scope() as session:
+        all_guides = guides.everything(session)
+        sold = guide_packs.sold(session, pack.id) if pack else 0
+    response = render(
+        request,
+        "guide_pack_form.html",
+        status_code=status_code,
+        title=f"Edit: {pack.title}" if pack else "New guide pack",
+        robots="noindex, nofollow",
+        count_view=False,
+        show_signup=False,
+        pack=pack,
+        values=values,
+        errors=errors,
+        message=message,
+        all_guides=all_guides,
+        sold=sold,
+        sales_on=guide_packs.on(settings),
+        limits=guide_packs,
+    )
+    return _no_store(response)
+
+
+def _find_pack(pack_id: int) -> tuple[GuidePack, dict]:
+    with session_scope() as session:
+        pack = session.get(GuidePack, pack_id) if 1 <= pack_id < 2**31 else None
+        if pack is None:
+            raise HTTPException(404)
+        return pack, _pack_values(session, pack)
+
+
+@app.get("/admin/guides/packs/new", response_class=HTMLResponse)
+def admin_pack_new(request: Request):
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    values = {"position": "100", "status": guide_packs.DRAFT, "guide_ids": set()}
+    return _pack_form(request, None, values, {})
+
+
+@app.get("/admin/guides/packs/{pack_id:int}", response_class=HTMLResponse)
+def admin_pack_edit(request: Request, pack_id: int, done: str = Query("", max_length=20)):
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    pack, values = _find_pack(pack_id)
+    return _pack_form(request, pack, values, {}, message=PACK_RESULTS.get(done))
+
+
+@app.post("/admin/guides/packs/new")
+@app.post("/admin/guides/packs/{pack_id:int}")
+async def admin_pack_save(request: Request, pack_id: int | None = None):
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the form on the pack's page.", status_code=403)
+    body = await _small_body(request, _MAX_PACK_BODY)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=400)
+    values, errors = guide_packs.check(form)
+
+    def save() -> tuple[GuidePack | None, dict]:
+        with session_scope() as session:
+            pack = session.get(GuidePack, pack_id) if pack_id is not None else None
+            if pack_id is not None and pack is None:
+                raise HTTPException(404)
+            if "slug" not in errors and guide_packs.slug_taken(session, values["slug"], pack_id):
+                errors["slug"] = "Another pack has this address. Please choose another."
+            if errors:
+                return pack, errors
+            now = datetime.now(timezone.utc)
+            if pack is None:
+                pack = GuidePack(created_at=now)
+                session.add(pack)
+            guide_packs.apply(session, pack, values, now)
+        guide_cache._data.clear()
+        sitemap_cache._data.clear()
+        return pack, {}
+
+    pack, errors = await run_in_threadpool(save)
+    if errors:
+        shown = {
+            **{k: (form.get(k) or [""])[0] for k in ("title", "slug", "summary", "about")},
+            **{k: (form.get(k) or [""])[0] for k in ("price", "position", "status")},
+            "every_paid": values["every_paid"],
+            "guide_ids": set(values["guide_ids"]),
+        }
+        return _pack_form(request, pack, shown, errors, status_code=400)
+    return _see_other(f"/admin/guides/packs/{pack.id}?done=saved")
+
+
+@app.post("/admin/guides/packs/{pack_id:int}/delete")
+async def admin_pack_delete(request: Request, pack_id: int):
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the button on the pack's page.", status_code=403)
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    if parse_qs(body.decode("utf-8", "replace")).get("confirm") != ["yes"]:
+        return _see_other(f"/admin/guides/packs/{pack_id}?done=confirm")
+
+    def delete() -> str:
+        with session_scope() as session:
+            pack = session.get(GuidePack, pack_id) if 1 <= pack_id < 2**31 else None
+            if pack is None:
+                return "gone"
+            if guide_packs.sold(session, pack_id):
+                return "sold"
+            session.delete(pack)
+        guide_cache._data.clear()
+        sitemap_cache._data.clear()
+        return "deleted"
+
+    done = await run_in_threadpool(delete)
+    if done == "sold":
+        return _see_other(f"/admin/guides/packs/{pack_id}?done=sold")
+    return _see_other(f"/admin/guides?done={'pack-deleted' if done == 'deleted' else 'gone'}")
+
+
+@app.post("/admin/guides/packs/starters")
+async def admin_pack_starters(request: Request):
+    """Add the starter packs the owner ticked (not for sale), with their guides."""
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the button on the guides page.", status_code=403)
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=50)
+
+    def add() -> int:
+        with session_scope() as session:
+            added = guide_packs.add_starters(
+                session, datetime.now(timezone.utc), form.get("pack", [])
+            )
+        guide_cache._data.clear()
+        return added
+
+    added = await run_in_threadpool(add)
+    return _see_other(f"/admin/guides?done={'packs' if added else 'packs-none'}#packs")
+
+
+@app.post("/admin/guides/passes/{pass_id:int}")
+async def admin_guide_pass(request: Request, pass_id: int):
+    """Turn a buyer's pass off or on, or give the money back (which turns it off)."""
+    if (answer := _owner_check(request)) is not None:
+        return answer
+    if not _from_this_site(request):
+        return PlainTextResponse("Please use the buttons on the guides page.", status_code=403)
+    body = await _small_body(request)
+    if body is None:
+        return PlainTextResponse("Too large", status_code=413)
+    form = parse_qs(body.decode("utf-8", "replace"), max_num_fields=10)
+    action = _field(form, "action")
+    now = datetime.now(timezone.utc)
+
+    def act() -> str:
+        if action in ("off", "on"):
+            status = guide_packs.OFF if action == "off" else guide_packs.PAID
+            with session_scope() as session:
+                done = guide_packs.set_status(session, pass_id, status, now)
+            return f"pass-{action}" if done else "pass-gone"
+        if action != "refund":
+            return "pass-gone"
+        if _field(form, "confirm") != "yes":
+            return "refund-confirm"
+        with session_scope() as session:
+            found = session.get(GuidePass, pass_id) if 1 <= pass_id < 2**31 else None
+        if found is None or found.status == guide_packs.REFUNDED or not found.capture_id:
+            return "pass-gone"
+        try:
+            paypal.refund_capture(settings, found.capture_id)
+        except paypal.PayPalError as exc:
+            log.warning("guide pass %s: PayPal refund failed: %s", pass_id, exc)
+            return "refund-failed"
+        with session_scope() as session:
+            guide_packs.set_status(session, pass_id, guide_packs.REFUNDED, now)
+        return "refunded"
+
+    done = await run_in_threadpool(act)
+    return _see_other(f"/admin/guides?done={done}#sales")
 
 
 # ------------------------------------------------------------ advertising

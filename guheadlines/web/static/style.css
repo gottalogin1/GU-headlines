@@ -1082,3 +1082,43 @@ a.btn:hover { filter: brightness(1.08); text-decoration: none; }
 .guide-starters label { align-items: flex-start; line-height: 1.35; padding: 4px 0; }
 .guide-starters input { flex: none; margin-top: 1px; }
 .guide-starters .muted { font-size: .85rem; white-space: nowrap; }
+
+/* ---------- guide packs (/guides/packs, guide_packs.py) ---------- */
+.pack-grid { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.pack-card { position: relative; padding: 14px 16px 12px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--tag-featured); border-radius: var(--r-xl); }
+.pack-card:hover { border-color: var(--line-strong); border-left-color: var(--tag-featured); }
+.pack-card .headline { margin-bottom: 4px; }
+.pack-card .headline a::after { content: ""; position: absolute; inset: 0; }
+.pack-card p { margin: 0 0 4px; }
+/* The end of a paid guide's opening. */
+.prose-opening { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 0; }
+.paywall {
+  padding: 18px 28px 20px; border-radius: 0 0 var(--r-xl) var(--r-xl);
+  background: var(--well); border: 1px solid var(--line); border-top: 3px solid var(--tag-featured);
+}
+.paywall:first-child, .guide-head + .paywall, .guide-cover + .paywall, .guide-sponsor + .paywall { border-radius: var(--r-xl); }
+.paywall h2 { margin: 0 0 6px; font-family: var(--serif); font-size: 1.35rem; color: var(--text); }
+.paywall p { margin: 8px 0; color: var(--text-soft); max-width: 70ch; }
+.paywall-parts { margin: 6px 0 10px; padding-left: 22px; columns: 2 220px; column-gap: 28px; color: var(--text-soft); }
+.paywall-parts li { padding: 2px 0; break-inside: avoid; }
+.pack-offers { list-style: none; margin: 10px 0; padding: 0; }
+.pack-offers li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.pack-offers li:first-child { border-top: 0; }
+.pack-offers .small { grid-column: 1 / -1; }
+.pack-offer-name { font-family: var(--serif); font-weight: 700; color: var(--text); }
+.pack-offer-price { font-weight: 750; color: var(--text); }
+.paywall-buy { margin-top: 14px; }
+.paywall-mark { max-width: none; margin: 22px 0; padding: 6px 0; border-top: 2px dashed var(--tag-featured); color: var(--muted); font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.pack-buy { padding: 16px 20px; margin-bottom: 16px; border-radius: var(--r-xl); border-left: 3px solid var(--tag-featured); }
+.pack-buy p { margin: 6px 0; }
+.pack-price { font-size: 1.6rem; font-weight: 750; font-family: var(--serif); color: var(--text); }
+.pack-price .small { font-family: var(--font); font-weight: 500; }
+.pack-points { color: var(--text-soft); }
+.pack-about { margin-bottom: 8px; }
+.pass-link code { display: block; overflow-wrap: anywhere; padding: 10px 12px; border-radius: var(--r-sm); background: var(--well); border: 1px solid var(--line); font-size: .9rem; }
+.pass-actions { margin-top: 4px; }
+.pass-actions summary { color: var(--link); cursor: pointer; }
+.pass-actions form { margin: 6px 0; }
+@media (max-width: 640px) {
+  .paywall { padding: 14px 16px 16px; }
+}

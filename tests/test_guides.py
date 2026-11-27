@@ -387,10 +387,12 @@ def test_the_starter_guides_are_added_as_drafts(client):
     with session_scope() as session:
         added = session.scalars(select(Guide)).all()
     assert sorted(g.slug for g in added) == sorted(slugs)
-    assert all(g.status == "draft" and g.access == "free" for g in added)
+    paid = {s.slug for s in guides.starters() if s.access == guides.PAID}
+    assert all(g.status == "draft" for g in added)
+    assert {g.slug for g in added if g.access == "paid"} == paid
     assert client.get("/guides").status_code == 404  # drafts until the owner publishes them
     listing = client.get("/admin/guides", headers=ADMIN).text
-    assert "Add the ticked" not in listing and "Your first day on Guam" in listing
+    assert "Add the ticked guide" not in listing and "Your first day on Guam" in listing
     # Pressed twice: nothing more.
     client.post("/admin/guides/starters", headers=OWNER, data={"slug": slugs})
     with session_scope() as session:

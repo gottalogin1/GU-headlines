@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {# One visitor guide (/guides/<slug>, guides.py). Its text is cut before each
    main heading (text.parts); the ad unit goes after the first main part.
-   `preview`: the owner's look from the editor (/admin/guides/<id>/view). #}
+   `preview`: the owner's look from the editor (/admin/guides/<id>/view).
+   A paid guide (guide_packs.py) is `locked` for readers without a pack that
+   holds it: they get its opening, the list of its parts, and `offers` (the
+   packs for sale that hold it). `reading_with`: the reader's pack. #}
 
 {% block main %}
 {% if preview %}
@@ -9,6 +12,7 @@
   {% if guide.status == "published" %}Preview: this guide is on the site at <a href="/guides/{{ guide.slug }}">/guides/{{ guide.slug }}</a>.
   {% else %}Preview of a draft: readers can't see this guide until you publish it.{% endif %}
   <a href="/admin/guides/{{ guide.id }}">Back to editing</a>
+  {% if guide.access == "paid" %}<br>This guide is for guide pack readers: {% if free_parts %}others read up to the line marked below{% else %}others see only its summary and the list of its parts, because it has no text before its first ## heading{% endif %}.{% endif %}
 </p>
 {% endif %}
 <article class="guide">
@@ -16,7 +20,8 @@
     <p class="crumbs"><a href="/guides">Visitor guides</a>{% if guide.section %} · {{ guide.section }}{% endif %}</p>
     <h1>{{ guide.title }}</h1>
     <p class="guide-summary">{{ guide.summary }}</p>
-    <p class="muted small">Updated {{ guide.updated_at|fmt_day }} · {{ guide_minutes(guide) }} min read</p>
+    <p class="muted small">Updated {{ guide.updated_at|fmt_day }} · {{ guide_minutes(guide) }} min read{% if guide.access == "paid" %} · <span class="tag tag-featured">Guide pack</span>{% endif %}</p>
+    {% if reading_with %}<p class="muted small">You're reading this with your {{ reading_with.title }}. Thank you!</p>{% endif %}
   </header>
 
   {% if guide_sponsor %}
@@ -36,6 +41,10 @@
        {% if size %}width="{{ size[0] }}" height="{{ size[1] }}"{% endif %} alt="{{ guide.photo_alt }}" fetchpriority="high" decoding="async">
   {% endif %}
 
+  {% if locked %}
+  {% if text.parts %}<div class="prose prose-opening">{{ text.parts[0] }}</div>{% endif %}
+  {% include "_paywall.html" %}
+  {% else %}
   {% if text.contents|length >= 3 %}
   <nav class="guide-contents" aria-labelledby="contents-title">
     <h2 id="contents-title">On this page</h2>
@@ -48,9 +57,11 @@
   <div class="prose">
     {% for part in text.parts %}
     {{ part }}
+    {% if preview and free_parts and loop.index == free_parts and not loop.last %}<p class="paywall-mark">Readers without a guide pack stop here</p>{% endif %}
     {% if loop.index == 2 and not loop.last and show_ad and settings.adsense_stories_slot %}{% include "_ad_guide.html" %}{% endif %}
     {% endfor %}
   </div>
+  {% endif %}
 </article>
 
 {% if others %}

@@ -1,0 +1,29 @@
+{# The end of a paid guide's opening, for readers without a guide pack that
+   holds it (guide.html; guide_packs.py): what the rest of the guide is
+   about, and the packs for sale that hold it. #}
+<section class="paywall" id="keep-reading" aria-labelledby="paywall-title">
+  <h2 id="paywall-title">Read the rest of this guide</h2>
+  {% if text.contents %}
+  <p>The full guide covers:</p>
+  <ul class="paywall-parts">
+    {% for anchor, heading in text.contents %}<li>{{ heading }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if offers %}
+  <p>It is part of {{ "a guide pack" if offers|length == 1 else "these guide packs" }}. Pay once through PayPal, and read
+    {{ "it" if offers|length == 1 else "them" }} on your phone and your computer, with no account and no ads.</p>
+  <ul class="pack-offers">
+    {% for pack in offers %}
+    <li>
+      <a class="pack-offer-name" href="/guides/packs/{{ pack.slug }}">{{ pack.title }}</a>
+      <span class="pack-offer-price">{{ guide_pack_money(pack.price_cents) }}</span>
+      <span class="muted small">{{ pack.summary|truncate(120) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="paywall-buy"><a class="btn" href="/guides/packs/{{ offers[0].slug }}">See the {{ offers[0].title }}</a></p>
+  <p class="muted small">Bought it already? Open the link from your email once on this device{% if mail_on() %}, or <a href="/guides/packs/{{ offers[0].slug }}#lost">get the link again</a>{% endif %}.</p>
+  {% else %}
+  <p>This guide is for readers of a guide pack, which is not on sale right now. Please come back soon.</p>
+  {% endif %}
+</section>
