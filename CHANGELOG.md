@@ -51,6 +51,19 @@ release, see [Updating](docs/maintenance.md#updating).
   dollars) and `DEAL_WEEK_PRICE` (default 10 dollars a week); `0` turns
   either off. Links in the sidebar's "Buy, sell and find local" box and at
   the bottom of every page. No database change.
+- **Section sponsors.** Sell one section of the site by the week: a line
+  such as "Weather brought to you by Island Bakery", with a link, at the top
+  of every page of that section (a news topic, Jobs, Events, Bids, Weather or
+  Outages). One business a section a week. Businesses book and pay on the
+  Advertise page as for the sponsor spot, and you approve each one on
+  `/advertise/review`; renewal reminders, "Run this ad again", Discord
+  alerts and the money summary work the same way. New setting
+  `SECTION_SPONSOR_PRICE` (empty: not sold). No database change.
+- **Media kit.** The Advertise page has a "Download the media kit" link: a
+  one-page PDF with your real numbers from the last 30 days (page views, the
+  most-read sections, where readers come from) and your prices, to send to
+  local businesses. It is made again every 10 minutes. It needs a new
+  package (fpdf2), so rebuild as usual when you update.
 - **Visitor guides.** A new section, `/guides`, with practical guides for
   visiting Guam that you write and keep up to date yourself, in your browser,
   on `/admin/guides` (the `STATS_PASSWORD` password). Write in Markdown, add a
