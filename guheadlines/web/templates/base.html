@@ -63,7 +63,9 @@
   {% if weather and weather.warnings %}{% include "_weather_banner.html" %}{% endif %}
 
   <div class="wrap layout">
-    <main id="main">{% block main %}{% endblock %}</main>
+    <main id="main">
+      {%- if section_sponsor %}{% include "_section_sponsor.html" %}{% endif -%}
+      {% block main %}{% endblock %}</main>
     <aside class="sidebar">
       {% if sponsor %}{% include "_sponsor.html" %}
       {% elif "site" in advertise %}{% include "_sponsor_open.html" %}{% endif %}

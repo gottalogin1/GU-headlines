@@ -15,6 +15,7 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from email.utils import format_datetime
+from functools import partial
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -72,6 +73,7 @@ from ..models import (
     GuidePack,
     GuidePass,
     Listing,
+    Referrers,
     Source,
 )
 from ..newsletter import schedule_text
@@ -92,7 +94,7 @@ from ..weather import (
     for_page,
     weather_page,
 )
-from . import backups, event_calendar, queries, seo, sponsor, stats
+from . import backups, event_calendar, media_kit, queries, seo, sponsor, stats
 from .queries import MARK_END, MARK_START, BidFilters, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -786,6 +788,35 @@ def booked_site_ad() -> AdBooking | None:
     return ad_cache.get("site", find)
 
 
+def ad_sections() -> list[ads.Section]:
+    """The sections of the site that a business can sponsor (ads.py)."""
+    return ads.sections(settings, config_cache.get().categories)
+
+
+def section_sponsor(slug: str | None) -> dict | None:
+    """The sponsor line at the top of a section's pages
+    (_section_sponsor.html): this week's approved section sponsor, when the
+    page is in a section (its active_nav is the section's slug)."""
+    found = next((s for s in ad_sections() if s.slug == slug), None) if slug else None
+    if found is None:
+        return None
+
+    def find() -> AdBooking | None:
+        with session_scope() as session:
+            return ads.section_ad(session, found.slug, datetime.now(GUAM_TZ).date())
+
+    booked = ad_cache.get(found.kind, find)
+    if booked is None:
+        return None
+    return {
+        "section": found.name,
+        "business": booked.business,
+        "words": booked.words,
+        # /go/ad/<id> counts the click (while the visitor stats are on).
+        "href": f"/go/ad/{booked.id}",
+    }
+
+
 def sponsor_ad() -> dict | None:
     """The sponsor spot (_sponsor.html): this week's booked ad, else the
     picture in SPONSOR_IMAGE; None when there is neither."""
@@ -924,6 +955,7 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
             "show_ad": show_ad,
             "csp_nonce": nonce,
             "sponsor": sponsor_ad(),
+            "section_sponsor": section_sponsor(context.get("active_nav")),
             # What the Advertise page sells ("site", "newsletter"): its links show.
             "advertise": [offer.kind for offer in advertising()],
             "signup": signup_info(),
@@ -1665,9 +1697,9 @@ def sponsor_picture(v: str = Query("", max_length=20)):
 
 @app.get("/go/ad/{booking_id}")
 def go_ad(request: Request, booking_id: int):
-    """Count a click on a booked ad (the sponsor spot, or the sponsor line in
-    the newsletter), then send the reader on to the business's website. Only
-    an approved booking's own address is used."""
+    """Count a click on a booked ad (the sponsor spot, a section's sponsor, or
+    the sponsor line in the newsletter), then send the reader on to the
+    business's website. Only an approved booking's own address is used."""
     if not 1 <= booking_id < 2**31:
         raise HTTPException(404)
     with session_scope() as session:
@@ -3841,6 +3873,37 @@ audience_cache = _TTLCache(ttl=600)
 AD_NAMES = {ads.SITE: "Sponsor spot", ads.NEWSLETTER: "Newsletter sponsor"}
 
 
+def section_name(slug: str) -> str:
+    """A section's name: its news topic's, or its page's ("Weather")."""
+    topic = config_cache.get().category(slug)
+    if topic is not None:
+        return topic.name
+    return next((name for page, name, _ in ads.PAGES if page == slug), slug)
+
+
+def ad_section(kind: str) -> str:
+    """The name of the section that a booking sponsors; "" for the other kinds."""
+    slug = ads.section_slug(kind)
+    return section_name(slug) if slug else ""
+
+
+def ad_name(kind: str) -> str:
+    """ "Sponsor spot", "Newsletter sponsor", or "Weather sponsor" (a section)."""
+    if section := ad_section(kind):
+        return f"{section} sponsor"
+    return AD_NAMES[kind]
+
+
+def _offer_for(kind: str) -> ads.Offer | None:
+    """The offer that a booking's kind belongs to, while it is for sale, and,
+    for a section, while the section is still there."""
+    offer = next((o for o in advertising() if o.kind == ads.offer_kind(kind)), None)
+    if offer is not None and ads.section_slug(kind):
+        if kind not in {s.kind for s in ad_sections()}:
+            return None
+    return offer
+
+
 def _list_words(words: list[str]) -> str:
     if len(words) <= 1:
         return "".join(words)
@@ -3852,7 +3915,7 @@ def ad_when(booking: AdBooking, first: bool = False) -> str:
     editions of Tue, Dec 8 and Fri, Dec 11" ("The ..." with `first`, to start
     a sentence)."""
     days = sorted(booking.days)
-    if booking.kind == ads.SITE:
+    if ads.weekly(booking.kind):
         words = [f"{d:%b} {d.day}" for d in days]
         text = f"the week{'s' if len(days) > 1 else ''} of {_list_words(words)}, {days[-1].year}"
     else:
@@ -3861,7 +3924,9 @@ def ad_when(booking: AdBooking, first: bool = False) -> str:
     return "T" + text[1:] if first else text
 
 
-templates.env.globals.update(ad_when=ad_when, money=ads.money, ad_names=AD_NAMES)
+templates.env.globals.update(
+    ad_when=ad_when, money=ads.money, ad_name=ad_name, ad_section=ad_section, ad_weekly=ads.weekly
+)
 
 
 def _ad_form_values(form, offer: ads.Offer, now: datetime) -> tuple[dict, dict]:
@@ -3896,6 +3961,8 @@ def _ad_form_values(form, offer: ads.Offer, now: datetime) -> tuple[dict, dict]:
         )
     if offer.kind == ads.NEWSLETTER and not 10 <= len(values["words"]) <= longest:
         errors["words"] = f"Write the sponsor line, from 10 to {longest} letters."
+    if offer.kind == ads.SECTION and len(values["words"]) > longest:
+        errors["words"] = f"Make the short line at most {longest} letters, or leave it out."
     if ads.refused([values["business"], values["link"], values["words"]], _muted()):
         errors["form"] = "Sorry, this ad can't be booked on this site."
     return values, errors
@@ -3908,6 +3975,7 @@ def _advertise_page(
     form_kind: str | None = None,
     values: dict | None = None,
     errors: dict | None = None,
+    section: str = "",
 ) -> HTMLResponse:
     offers = advertising()
     now = datetime.now(timezone.utc)
@@ -3917,13 +3985,25 @@ def _advertise_page(
         numbers = audience_cache.get(str(today), lambda: ads.audience(session, today))
         forms = []
         for offer in offers:
-            days = ads.choices(settings, offer.kind, now)
-            held = ads.taken(session, offer.kind, days)
+            form: dict = {"offer": offer}
+            kind = offer.kind
+            if offer.kind == ads.SECTION:
+                # One form, for the section picked (?section=<slug>), with the
+                # page views of each section to choose by.
+                found = ad_sections()
+                chosen = next((s for s in found if s.slug == section), found[0])
+                kind = chosen.kind
+                form["sections"] = found
+                form["chosen"] = chosen
+                form["views"] = audience_cache.get(
+                    f"sections:{today}", partial(ads.section_views, session, found, today)
+                )
+            days = ads.choices(settings, kind, now)
+            held = ads.taken(session, kind, days)
             # (day, last day of its week or None, taken)
-            last = timedelta(days=6) if offer.kind == ads.SITE else None
-            forms.append(
-                {"offer": offer, "days": [(d, last and d + last, d in held) for d in days]}
-            )
+            last = timedelta(days=6) if ads.weekly(kind) else None
+            form["days"] = [(d, last and d + last, d in held) for d in days]
+            forms.append(form)
     response = render(
         request,
         "advertise.html",
@@ -3931,8 +4011,8 @@ def _advertise_page(
         title="Advertise",
         description=(
             f"Put your business in front of Guam readers on {settings.site_name}: the sponsor"
-            " spot on every page, or the sponsor line in the newsletter. See the real numbers,"
-            " book online and pay with PayPal."
+            " spot on every page, a section of the site, or the sponsor line in the newsletter."
+            " See the real numbers, book online and pay with PayPal."
         ),
         canonical={},
         robots="noindex, follow" if status_code != 200 else None,
@@ -3956,11 +4036,104 @@ def _advertise_page(
 
 
 @app.get("/advertise", response_class=HTMLResponse)
-def advertise(request: Request):
-    """What a business can buy, the site's real numbers, and the booking forms."""
+def advertise(request: Request, section: str = Query("", max_length=40)):
+    """What a business can buy, the site's real numbers, and the booking forms
+    (the section sponsor's form for the section in ?section=)."""
     if not advertising():
         raise HTTPException(404)
-    return _advertise_page(request)
+    return _advertise_page(request, section=section)
+
+
+# What each paid listing (listings.py) gives, for the media kit.
+LISTING_PITCH = {
+    "job": "Your opening at the top of the Jobs page.",
+    "event": "Your event at the top of the Events calendar, until it is over.",
+    "classified": "A classified ad on the Classifieds page, with a photo.",
+    "business": "A photo, a link and a top spot in the Business directory. A basic entry is free.",
+    "press": "Your news on a page of its own, marked Sponsored, and once in the newsletter.",
+    "deal": "Your coupon or special on the Deals page and in turns at the top of the home page.",
+}
+
+
+def _media_kit(request: Request, today: date) -> bytes:
+    """The media kit's PDF (web/media_kit.py), with the numbers of the last 30
+    days and the prices of everything for sale now."""
+    config = config_cache.get()
+    found = ad_sections()
+    since = today - timedelta(days=29)
+    with session_scope() as session:
+        numbers = ads.audience(session, today)
+        views = ads.section_views(session, found, today)
+        visits = func.sum(Referrers.visits)
+        referrers = session.execute(
+            select(Referrers.site, visits)
+            .where(Referrers.day >= since)
+            .group_by(Referrers.site)
+            .order_by(visits.desc(), Referrers.site)
+        ).all()
+        stories = session.scalar(
+            select(func.count())
+            .select_from(Article)
+            .where(Article.first_seen_at >= datetime.combine(since, datetime.min.time(), GUAM_TZ))
+        )
+    by_views = sorted(found, key=lambda s: -views.get(s.slug, 0))
+    prices = []
+    for offer in advertising():
+        price = f"{ads.money(offer.price_cents)} a week"
+        if offer.kind == ads.SITE:
+            pitch = "Your picture at the top of the side column on every page, with a link."
+        elif offer.kind == ads.SECTION:
+            names = ", ".join(s.name for s in by_views[:3])
+            pitch = f"Your business named at the top of one section, such as {names}, with a link."
+        else:
+            price = f"{ads.money(offer.price_cents)} an edition"
+            days = _days_text(settings.newsletter_days, "and")
+            pitch = f"Your line and link first in the newsletter email, every {days}."
+        prices.append((offer.name, price, pitch))
+    for kind, offer in paid_listings().items():
+        price = offer["price"] + (f" for {offer['days']} days" if offer["days"] else "")
+        name = "Directory upgrade" if kind == "business" else listings.KINDS[kind].name
+        prices.append((name, price, LISTING_PITCH.get(kind, "")))
+    kit = media_kit.Kit(
+        site_name=settings.site_name,
+        tagline=settings.site_tagline,
+        address=domain(seo.base_url(request)),
+        made=today,
+        days=numbers["days"],
+        daily=[d["views"] for d in numbers["daily"]],
+        views=numbers["views"],
+        per_day=numbers["per_day"],
+        per_week=numbers["per_week"],
+        sponsor_clicks=numbers["sponsor_clicks"],
+        newsletter_clicks=numbers["newsletter_clicks"],
+        stories=stories or 0,
+        sources=sum(1 for s in config.sources if s.collected),
+        sections=[(s.name, views.get(s.slug, 0)) for s in by_views],
+        referrers=[(site, int(n)) for site, n in referrers],
+        prices=prices,
+    )
+    return media_kit.pdf(kit)
+
+
+@app.get("/advertise/media-kit.pdf")
+def advertise_media_kit(request: Request):
+    """The media kit: one page with the site's real numbers and prices, as a
+    PDF for businesses. Public, as the numbers on the Advertise page are, and
+    there only while that page is on."""
+    if not advertising():
+        raise HTTPException(404)
+    today = datetime.now(GUAM_TZ).date()
+    data = audience_cache.get(f"media-kit:{today}", lambda: _media_kit(request, today))
+    name = re.sub(r"[^a-z0-9]+", "-", settings.site_name.lower()).strip("-") or "site"
+    return Response(
+        data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{name}-media-kit-{today:%Y-%m}.pdf"',
+            "Cache-Control": "public, max-age=600",
+            "X-Robots-Tag": "noindex",
+        },
+    )
 
 
 @app.post("/advertise")
@@ -3987,6 +4160,14 @@ async def advertise_book(request: Request):
             return RedirectResponse("/advertise", status_code=303)
         now = datetime.now(timezone.utc)
         values, errors = _ad_form_values(form, offer, now)
+        kind = offer.kind
+        section = str(form.get("section") or "")[:40]
+        if offer.kind == ads.SECTION:
+            chosen = next((s for s in ad_sections() if s.slug == section), None)
+            if chosen is None:
+                errors["form"] = "Pick a section, then your weeks."
+            else:
+                kind = chosen.kind
         picture = None
         upload = form.get("picture")
         if offer.kind == ads.SITE:
@@ -4005,13 +4186,18 @@ async def advertise_book(request: Request):
         if offer.kind == ads.SITE and "picture" not in errors:
             errors["picture"] = "Please choose the picture again."
         return _advertise_page(
-            request, status_code=400, form_kind=offer.kind, values=values, errors=errors
+            request,
+            status_code=400,
+            form_kind=offer.kind,
+            values=values,
+            errors=errors,
+            section=section,
         )
     try:
         with session_scope() as session:
             booking = ads.book(
                 session,
-                kind=offer.kind,
+                kind=kind,
                 days=values["picked"],
                 business=values["business"],
                 email=values["email"],
@@ -4022,14 +4208,19 @@ async def advertise_book(request: Request):
                 now=now,
             )
             code = booking.code
-            log.info("ad booking %d made (%s, not paid yet)", booking.id, offer.kind)
+            log.info("ad booking %d made (%s, not paid yet)", booking.id, kind)
     except ads.NotAvailable as exc:
         names = [fmt_day(d) for d in exc.days]
         errors["days"] = (
             f"Sorry, someone else has just booked {_list_words(names)}. Please pick again."
         )
         return _advertise_page(
-            request, status_code=409, form_kind=offer.kind, values=values, errors=errors
+            request,
+            status_code=409,
+            form_kind=offer.kind,
+            values=values,
+            errors=errors,
+            section=section,
         )
     return RedirectResponse(
         f"/advertise/booking/{code}", status_code=303, headers={"Cache-Control": "no-store"}
@@ -4129,14 +4320,14 @@ def _book_again_choices(session, booking: AdBooking, now: datetime) -> dict | No
     that can be booked, as (day, last day of its week or None, taken,
     ticked). The first free dates after the ad's own are ticked, as many as
     it booked."""
-    offer = next((o for o in advertising() if o.kind == booking.kind), None)
+    offer = _offer_for(booking.kind)
     if booking.status != "approved" or offer is None:
         return None
     days = ads.choices(settings, booking.kind, now)
     held = ads.taken(session, booking.kind, days)
     free_after = [d for d in days if d not in held and d > max(booking.days)]
     ticked = set(free_after[: len(booking.days)])
-    last = timedelta(days=6) if booking.kind == ads.SITE else None
+    last = timedelta(days=6) if ads.weekly(booking.kind) else None
     return {
         "offer": offer,
         "days": [(d, last and d + last, d in held, d in ticked) for d in days],
@@ -4186,7 +4377,7 @@ def ad_booking_pay(request: Request, code: str):
             order = paypal.create_order(
                 settings,
                 amount_cents=booking.amount_cents,
-                description=f"{settings.site_name}: {AD_NAMES[booking.kind]}, {ad_when(booking)}",
+                description=f"{settings.site_name}: {ad_name(booking.kind)}, {ad_when(booking)}",
                 custom_id=f"ad-booking-{booking.id}",
                 return_url=f"{base}/paid",
                 cancel_url=base,
@@ -4205,11 +4396,14 @@ def ad_booking_pay(request: Request, code: str):
 
 def _booking_alert(booking: AdBooking, request: Request) -> alerts.Alert:
     pending = " PayPal is still checking the payment." if booking.note else ""
+    what = ad_name(booking.kind)
+    if booking.kind in AD_NAMES:  # a section's name keeps its capitals
+        what = what.lower()
     return alerts.Alert(
         title=f"{settings.site_name}: a new ad to approve",
         message=(
             f"{booking.business} paid {ads.money(booking.amount_cents)} for the"
-            f" {AD_NAMES[booking.kind].lower()}, {ad_when(booking)}.{pending} Approve it or turn"
+            f" {what}, {ad_when(booking)}.{pending} Approve it or turn"
             f" it down: {seo.absolute_url(request, '/advertise/review')}"
         ),
         emoji="💵",
@@ -4281,12 +4475,11 @@ async def ad_booking_again(request: Request, code: str):
         return PlainTextResponse("Too large", status_code=413)
     picked_text = parse_qs(body.decode("utf-8", "replace"), max_num_fields=80).get("day", [])
     now = datetime.now(timezone.utc)
-    offers = {offer.kind: offer for offer in advertising()}
     with session_scope() as session:
         old = ads.by_code(session, code)
         if old is None:
             raise HTTPException(404)
-    offer = offers.get(old.kind)
+    offer = _offer_for(old.kind)
     if old.status != "approved" or offer is None:
         return _to_booking(code)
     if ads.refused([old.business, old.link, old.words], _muted()):

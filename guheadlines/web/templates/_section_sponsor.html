@@ -1,0 +1,9 @@
+{# A section's sponsor (ads.py, SECTION_SPONSOR_PRICE): one business a week,
+   named at the top of every page of one section, such as "Weather brought to
+   you by". Words only, so the page loads nothing more. The link passes
+   through /go/ad/<number>, which counts the click for the business. #}
+<aside class="guide-sponsor section-sponsor" aria-label="Sponsor">
+  <span class="guide-sponsor-label">{{ section_sponsor.section }} brought to you by</span>
+  <a href="{{ section_sponsor.href }}" target="_blank" rel="nofollow sponsored noopener">{{ section_sponsor.business }} ↗</a>
+  {% if section_sponsor.words %}<span class="guide-sponsor-text">{{ section_sponsor.words }}</span>{% endif %}
+</aside>

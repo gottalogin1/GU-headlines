@@ -15,7 +15,7 @@ import pytest
 from conftest import make_jpeg
 from fastapi.testclient import TestClient
 from PIL import Image
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from guheadlines import ads, mail, paypal, renewals
 from guheadlines.db import session_scope
@@ -99,6 +99,32 @@ def test_sponsor_pictures_are_checked_and_made_small():
         ads.picture_copy(_picture(1200, 200))
     with pytest.raises(ValueError, match="isn't a picture"):
         ads.picture_copy(b"<svg></svg>")
+
+
+def test_sections_that_can_have_a_sponsor():
+    from guheadlines.config import load_config
+    from guheadlines.settings import get_settings
+
+    assert ads.offer_kind("section:weather") == ads.SECTION and ads.offer_kind("site") == "site"
+    assert ads.section_slug("section:cnmi") == "cnmi" and ads.section_slug("newsletter") == ""
+    assert ads.weekly("site") and ads.weekly("section:jobs") and not ads.weekly("newsletter")
+    assert ads.section_path("weather") == "/weather"
+    assert ads.section_path("sports") == "/category/sports"
+    settings = get_settings()
+    topics = load_config(settings.config_dir).categories
+    found = ads.sections(settings, topics)
+    assert [s.slug for s in found[: len(topics)]] == [t.slug for t in topics]
+    assert [s.slug for s in found[len(topics) :]] == [
+        "jobs",
+        "events",
+        "bids",
+        "weather",
+        "outages",
+    ]
+    assert found[0].kind == f"section:{topics[0].slug}"
+    # Weather and Outages only while their pages are on.
+    off = dataclasses.replace(settings, weather_interval_minutes=0, outages_interval_minutes=0)
+    assert {"weather", "outages"}.isdisjoint(s.slug for s in ads.sections(off, topics))
 
 
 # ------------------------------------------------------------- the site
@@ -780,3 +806,220 @@ def test_a_reminder_email_goes_out_before_an_ad_ends(site, monkeypatch):
     renewals.send_reminders(site_mail, before_end)
     to, subject, text, html = next(item for item in sent if item[0] == "news@example.com")
     assert subject.startswith("Your last newsletter sponsor line goes out on")
+
+
+# ------------------------------------------------------- section sponsors
+
+
+def _section(client, section="weather", days=None, **fields):
+    return _book(client, kind="section", section=section, days=days, **fields)
+
+
+def test_a_business_sponsors_a_section(site, monkeypatch):
+    _set(monkeypatch, **ON, section_sponsor_price_cents=1500)
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=today, path="/weather", views=80),
+                PageViews(day=today, path="/events", views=30),
+                PageViews(day=today, path="/events/12", views=5),
+                PageViews(day=today, path="/category/sports", views=20),
+            ]
+        )
+    page = site.get("/advertise").text
+    assert "Section sponsor · $15 a week" in page
+    # A link for each section, with its page views; the first one's form is open.
+    assert 'href="/advertise?section=weather#book-section">Weather' in page
+    assert re.search(
+        r'section=events#book-section">Events <span class="ad-section-views">35<', page
+    )
+    assert '<input type="hidden" name="section" value="local">' in page
+    weather = site.get("/advertise?section=weather").text
+    assert '<input type="hidden" name="section" value="weather">' in weather
+    assert "Weeks of Weather, Monday to Sunday" in weather
+    assert "Weather brought to you by Island Bakery" in weather
+
+    code = _code(_section(site, words="Fresh pandesal every morning"))
+    booking = _booking(code)
+    assert (booking.kind, booking.amount_cents, booking.picture) == ("section:weather", 1500, None)
+    mine = site.get(f"/advertise/booking/{code}").text
+    assert "Weather sponsor" in mine and "Weather brought to you by" in mine
+    # One business a section a week, but each section has its own weeks.
+    assert _section(site).status_code == 409
+    assert re.search(
+        rf'value="{_week().isoformat()}" disabled', site.get("/advertise?section=weather").text
+    )
+    assert _code(_section(site, section="sports", business="Reef Divers"))
+    # Not a section: the form asks again.
+    wrong = _section(site, section="nowhere", days=[_week(3)])
+    assert wrong.status_code == 400 and "Pick a section" in wrong.text
+
+    _pay(site, code)
+    assert "Island Bakery paid $15 for the Weather sponsor" in site.alerts[0].message
+    order = json.loads(site.paypal.calls("/v2/checkout/orders")[0].content)
+    assert "Weather sponsor, the week of" in order["purchase_units"][0]["description"]
+    review = site.get("/advertise/review", auth=LOGIN).text
+    assert "<dd>Weather sponsor</dd>" in review
+    _move_to_this_week(booking.id)
+    assert "section-sponsor" not in site.get("/weather").text  # not approved yet
+    _decide(site, booking.id, "approve")
+
+    # The Weather pages show it; other pages don't.
+    shown = site.get("/weather").text.split('<main id="main">')[1]
+    assert shown.lstrip().startswith('<aside class="guide-sponsor section-sponsor"')
+    assert "Weather brought to you by</span>" in shown
+    assert (
+        f'<a href="/go/ad/{booking.id}" target="_blank" rel="nofollow sponsored noopener">' in shown
+    )
+    assert "Island Bakery ↗" in shown and "Fresh pandesal every morning" in shown
+    for path in ("/", "/jobs", "/category/sports", "/status"):
+        assert "section-sponsor" not in site.get(path).text, path
+    assert "Section sponsors." in site.get("/status").text  # the disclaimer says what it is
+    # A click counts for the booking, not for the sponsor spot.
+    site.get(f"/go/ad/{booking.id}", headers=BROWSER, follow_redirects=False)
+    from guheadlines.web import stats
+
+    stats.counts.flush()
+    with session_scope() as session:
+        counted = dict(session.execute(select(PageViews.path, PageViews.views)).all())
+    assert counted[f"ad-click:{booking.id}"] == 1 and "sponsor-click" not in counted
+    # Its page views are the Weather page's only.
+    results = site.get(f"/advertise/booking/{code}").text
+    assert "<dt>Page views</dt><dd>80</dd>" in results and "<dt>Clicks</dt><dd>1</dd>" in results
+
+
+def test_a_section_sponsor_is_booked_again_and_reminded(site, monkeypatch):
+    _set(monkeypatch, **ON, section_sponsor_price_cents=1500)
+    sent = []
+    monkeypatch.setattr(mail, "send", lambda settings, to, *email, **kw: sent.append((to, *email)))
+    first = _booking(_code(_section(site, days=[_week(0)])))
+    _pay(site, first.code)
+    _decide(site, first.id, "approve")
+    page = site.get(f"/advertise/booking/{first.code}").text
+    assert "Run this ad again" in page and "$15 a week" in page
+    again = site.post(
+        f"/advertise/booking/{first.code}/again",
+        data={"day": [_week(1).isoformat()]},
+        headers=FROM_SITE,
+        follow_redirects=False,
+    )
+    second = _booking(_code(again))
+    assert (second.kind, second.days, second.amount_cents) == ("section:weather", [_week(1)], 1500)
+    with session_scope() as session:
+        session.execute(
+            update(AdBooking).where(AdBooking.id == second.id).values(status="cancelled")
+        )
+        session.execute(delete(AdSlot).where(AdSlot.booking_id == second.id))
+
+    on = dataclasses.replace(_mail_settings(), section_sponsor_price_cents=1500)
+    end = renewals.booking_end(first)
+    assert renewals.send_reminders(on, end - timedelta(days=2)) == 1
+    (to, subject, text, html) = sent[0]
+    sunday = _week(0) + timedelta(days=6)
+    assert subject == f"Your section sponsor line ends on {sunday:%A, %B} {sunday.day}"
+    assert "https://guamheadlines.example/weather shows for the last time" in text
+    # Not sold any more: no "book again", and no email.
+    sent.clear()
+    with session_scope() as session:
+        session.execute(update(AdBooking).values(reminded_at=None))
+    off = dataclasses.replace(on, section_sponsor_price_cents=0)
+    assert renewals.send_reminders(off, end - timedelta(days=2)) == 0
+    _set(monkeypatch, **ON, section_sponsor_price_cents=1500, weather_interval_minutes=0)
+    assert "Run this ad again" not in site.get(f"/advertise/booking/{first.code}").text
+
+
+def _pdf_text(data: bytes) -> str:
+    """The words on the pages of a PDF that fpdf2 made (its streams are zlib)."""
+    import zlib
+
+    words = []
+    for stream in re.findall(rb"stream\r?\n(.*?)\r?\nendstream", data, re.S):
+        try:
+            content = zlib.decompress(stream).decode("cp1252")
+        except zlib.error:
+            continue
+        words += re.findall(r"\((.*?)\) ?Tj", content)
+    return " ".join(w.replace("\\(", "(").replace("\\)", ")") for w in words)
+
+
+def test_the_media_kit_fits_on_one_page_with_every_price():
+    from guheadlines.web import media_kit
+
+    kit = media_kit.Kit(
+        site_name="GU Headlines",
+        tagline="Guam news",
+        address="guamheadlines.com",
+        made=date(2026, 11, 27),
+        days=30,
+        daily=[100] * 30,
+        views=3000,
+        per_day=100,
+        per_week=700,
+        sponsor_clicks=5,
+        newsletter_clicks=5,
+        stories=900,
+        sources=14,
+        sections=[(f"Section {n}", 100 - n) for n in range(8)],
+        referrers=[(f"site{n}.com", 100 - n) for n in range(8)],
+        # Nine things for sale (three ads, six kinds of listings), two lines each.
+        prices=[("Directory upgrade", "$20.00 for 365 days", "Words about it. " * 7)] * 9,
+    )
+    _, end = media_kit._fit(kit)
+    assert end <= media_kit.PRICES_END  # above the booking box and the footnote
+    assert media_kit.pdf(kit).count(b"/Type /Page\n") == 1
+
+
+def test_the_media_kit(site, monkeypatch):
+    assert site.get("/advertise/media-kit.pdf").status_code == 200
+    _set(monkeypatch, **{**ON, "sponsor_week_price_cents": 0, "newsletter_sponsor_price_cents": 0})
+    assert site.get("/advertise/media-kit.pdf").status_code == 404  # no Advertise page
+
+    from guheadlines.web.app import audience_cache
+
+    audience_cache._data.clear()
+    _set(monkeypatch, **ON, section_sponsor_price_cents=1500)
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=today, path="/", views=900),
+                PageViews(day=today, path="/weather", views=250),
+                PageViews(day=today - timedelta(days=2), path="/jobs", views=150),
+                PageViews(day=today, path="newsletter-click", views=33),
+            ]
+        )
+    response = site.get("/advertise/media-kit.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert 'filename="gu-headlines-media-kit-' in response.headers["content-disposition"]
+    assert response.headers["x-robots-tag"] == "noindex"
+    data = response.content
+    assert data.startswith(b"%PDF-") and data.count(b"/Type /Page\n") == 1
+    text = _pdf_text(data)
+    for words in (
+        "GU Headlines",
+        "MEDIA KIT",
+        "testserver",  # the site's address (SITE_URL when it is set)
+        "Readers in the last 30 days",
+        "1,300",  # page views
+        "Newsletter story clicks",
+        "Weather",
+        "250",
+        "Sponsor spot",
+        "$25 a week",
+        "Section sponsor",
+        "$15 a week",
+        "Newsletter sponsor",
+        "$15 an edition",
+        "Press release",  # paid listings are for sale too (PayPal and the password are set)
+        "Your news on a page of its own",
+        "Deal",
+        "Book and pay online: testserver/advertise",
+    ):
+        assert words in text, words
+    assert "github" not in text.lower() and "@" not in text
+    # On the Advertise page, and the owner's review page.
+    assert 'href="/advertise/media-kit.pdf" download' in site.get("/advertise").text
+    assert 'href="/advertise/media-kit.pdf"' in site.get("/advertise/review", auth=LOGIN).text
+    assert "Disallow: /advertise/" in site.get("/robots.txt").text
