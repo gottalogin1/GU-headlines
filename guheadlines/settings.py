@@ -39,7 +39,7 @@ class Settings:
     database_url: str
     config_dir: Path
     media_dir: Path
-    site_name: str = "GU Headlines"
+    site_name: str = "Guam Headlines"
     site_tagline: str = "Guam news, updated every hour"
     # The site's public address (https://news.example.com), used for the links
     # search engines are given: canonical links, the sitemap, social cards.
@@ -50,6 +50,12 @@ class Settings:
     # Tools: the content="..." value of the meta tag each one offers.
     google_site_verification: str = ""
     bing_site_verification: str = ""
+    # The site's own pages elsewhere (a Facebook page, Instagram...), given to
+    # search engines as other places that belong to the site (SOCIAL_PROFILES).
+    social_profiles: tuple[str, ...] = ()
+    # Tell Bing (and Yandex, Naver, Seznam) about new and changed pages after
+    # each news check, through IndexNow (indexnow.py). Needs a public SITE_URL.
+    indexnow: bool = True
     # Google AdSense: the publisher ID (ca-pub-...) and the ad unit's slot
     # number, both from the ad code AdSense gives. With both, an ad block is
     # shown beside the stories on the home, Sources and Jobs pages.
@@ -267,6 +273,13 @@ def _web_address(value: str | None) -> str:
     return value
 
 
+def _web_addresses(value: str | None) -> tuple[str, ...]:
+    """SOCIAL_PROFILES "https://facebook.com/a, https://instagram.com/b": the
+    http(s) addresses in it, in order, without repeats; anything else is left out."""
+    found = (_web_address(part) for part in (value or "").split(","))
+    return tuple(dict.fromkeys(url for url in found if url))
+
+
 def _paypal_link(value: str | None) -> str:
     """PAYPAL_DONATE_LINK: a https address on paypal.com or paypal.me ("https://"
     is added when it is missing), or "" if it is not one. A link with an email
@@ -426,6 +439,8 @@ def load_settings() -> Settings:
         site_url=_site_url(env.get("SITE_URL")) or _domain_site_url(env.get("SITE_DOMAIN")),
         google_site_verification=env.get("GOOGLE_SITE_VERIFICATION", "").strip(),
         bing_site_verification=env.get("BING_SITE_VERIFICATION", "").strip(),
+        social_profiles=_web_addresses(env.get("SOCIAL_PROFILES")),
+        indexnow=_bool(env.get("INDEXNOW"), defaults.indexnow),
         adsense_client=_adsense_client(env.get("ADSENSE_CLIENT")),
         adsense_slot=_adsense_slot(env.get("ADSENSE_SLOT")),
         adsense_stories_slot=_adsense_slot(env.get("ADSENSE_STORIES_SLOT")),

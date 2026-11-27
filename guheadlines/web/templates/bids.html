@@ -3,7 +3,7 @@
 {% set blank %}<span class="not-given" title="Not given in the notice">—</span>{% endset %}
 {% set arrow %}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>{% endset %}
 <header class="page-head">
-  <h1>Bids and RFPs</h1>
+  <h1>Guam bids and RFPs</h1>
   <p class="muted">Open Government of Guam bids and requests for proposals from {{ sources|length }} {{ "source" if sources|length == 1 else "sources" }}, checked every {{ settings.bids_interval_hours }} hours. A bid leaves this page once its due date has passed. Every bid links to the agency or portal that posted it.</p>
   {% if bid_alerts %}<p class="bid-alert-cta"><a href="/bids/alerts">Get new bids for your trade by email</a> <span class="muted">· {{ bid_alerts.price }} a month</span></p>{% endif %}
 </header>

@@ -9,7 +9,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import Request
@@ -27,12 +27,57 @@ SITEMAP_LIMIT = 50_000
 # a 1200 x 630 JPEG in the static folder (_seo.html gives its size and type).
 SOCIAL_CARD = "social-card.jpg"
 
+# The site's logo for search results and AI answers: the square "GU" mark
+# (Google wants at least 112 x 112).
+LOGO = "apple-touch-icon.png"
+LOGO_SIZE = 180
+
+# Guam, the place every page is about. The Wikipedia and Wikidata links tell
+# search engines and AI assistants which "Guam" is meant.
+GUAM = {
+    "@type": "Place",
+    "name": "Guam",
+    "sameAs": ["https://en.wikipedia.org/wiki/Guam", "https://www.wikidata.org/wiki/Q16635"],
+}
+
+# How many stories of a page its structured data lists.
+ITEM_LIST_LIMIT = 10
+
+
+def update_text() -> str:
+    """How often the news is checked, in words: "every hour", "every 30 minutes"."""
+    minutes = settings.scrape_interval_minutes
+    if minutes % 60:
+        return f"every {minutes} minutes"
+    hours = minutes // 60
+    return "every hour" if hours == 1 else f"every {hours} hours"
+
+
+def home_title() -> str:
+    """The home page's title: the site's name and the words people search for."""
+    return f"{settings.site_name}: latest Guam news today from every newsroom"
+
 
 def default_description() -> str:
     return (
-        f"{settings.site_tagline}: local stories, military, business, labor, tourism, "
-        "sports, food and Saipan news from Guam's newsrooms in one place."
+        f"Today's Guam news and headlines from the island's newsrooms in one place, "
+        f"updated {update_text()}: local, military, business, tourism, sports and "
+        "Saipan news, plus Guam weather, events, jobs and bids."
     )
+
+
+def home_description(newsrooms: list[str]) -> str:
+    """The home page's summary, naming the first few newsrooms (sources.yaml
+    order), which people also search for."""
+    if len(newsrooms) < 3:
+        return default_description()
+    named, more = newsrooms[:3], len(newsrooms) - 3
+    names = f"{named[0]}, {named[1]}, {named[2]}" + (f" and {more} more newsrooms" if more else "")
+    text = (
+        f"Today's Guam news and headlines from {names}, in one place and updated "
+        f"{update_text()}. Plus Guam weather, tides, events, jobs and bids."
+    )
+    return text if len(text) <= 200 else default_description()
 
 
 def base_url(request: Request) -> str:
@@ -63,16 +108,94 @@ def json_ld(data: dict) -> Markup:
     return Markup(text)
 
 
+def _host(request: Request) -> str:
+    """guamheadlines.com: the site's address without https:// or www."""
+    return (urlsplit(base_url(request)).hostname or "").removeprefix("www.")
+
+
 def website_data(request: Request) -> dict:
-    """The site's name and address, which Google uses for the name shown in results."""
-    return {
+    """The site's name and address, which Google uses for the name shown in
+    results; its address is given as another name for it."""
+    data = {
         "@context": "https://schema.org",
         "@type": "WebSite",
+        "@id": absolute_url(request, "/#website"),
         "name": settings.site_name,
         "url": absolute_url(request, "/"),
         "description": default_description(),
-        "inLanguage": "en",
+        "inLanguage": "en-US",
+        "about": GUAM,
+        "publisher": {"@id": absolute_url(request, "/#organization")},
     }
+    host = _host(request)
+    if host and host.lower() != settings.site_name.lower():
+        data["alternateName"] = host
+    return data
+
+
+def organization_data(request: Request, static_url) -> dict:
+    """Who runs the site, with its logo and its pages elsewhere
+    (SOCIAL_PROFILES): what search engines and AI assistants show about the
+    site itself."""
+    logo = absolute_url(request, static_url(LOGO))
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": absolute_url(request, "/#organization"),
+        "name": settings.site_name,
+        "url": absolute_url(request, "/"),
+        "logo": {
+            "@type": "ImageObject",
+            "url": logo,
+            "width": LOGO_SIZE,
+            "height": LOGO_SIZE,
+        },
+        "description": (
+            f"{settings.site_name} collects Guam news from the island's newsrooms "
+            f"{update_text()} and links each story to the original."
+        ),
+        "areaServed": GUAM,
+    }
+    host = _host(request)
+    if host and host.lower() != settings.site_name.lower():
+        data["alternateName"] = host
+    if settings.social_profiles:
+        data["sameAs"] = list(settings.social_profiles)
+    return data
+
+
+def webpage_data(
+    request: Request,
+    meta: PageMeta,
+    page_type: str,
+    items: Iterable[tuple[str, str]] = (),
+    modified: datetime | None = None,
+) -> dict:
+    """The page itself: what kind of page it is (a list of stories is a
+    CollectionPage), that it is about Guam, when it last changed, and the
+    first stories it lists ([(headline, the story's address)]), each at its
+    publisher."""
+    data = {
+        "@context": "https://schema.org",
+        "@type": page_type,
+        "@id": meta.canonical,
+        "url": meta.canonical,
+        "name": meta.title,
+        "description": meta.description,
+        "inLanguage": "en-US",
+        "isPartOf": {"@id": absolute_url(request, "/#website")},
+        "about": GUAM,
+    }
+    if modified is not None:
+        data["dateModified"] = modified.astimezone(GUAM_TZ).isoformat(timespec="seconds")
+    elements = [
+        {"@type": "ListItem", "position": n, "url": url, "name": name[:200]}
+        for n, (name, url) in enumerate(items, start=1)
+        if n <= ITEM_LIST_LIMIT
+    ]
+    if elements:
+        data["mainEntity"] = {"@type": "ItemList", "itemListElement": elements}
+    return data
 
 
 def breadcrumb_data(request: Request, trail: Iterable[tuple[str, str | None]]) -> dict:
@@ -161,6 +284,7 @@ def event_data(
 @dataclass
 class PageMeta:
     title: str
+    full_title: str
     description: str
     image: str
     canonical: str | None = None
@@ -179,6 +303,9 @@ def page_meta(
     canonical: dict | None = None,
     breadcrumbs: list[tuple[str, str | None]] | None = None,
     structured: list[dict] | None = None,
+    page_type: str | None = None,
+    items: Iterable[tuple[str, str]] = (),
+    modified: datetime | None = None,
     result=None,
     static_url=None,
 ) -> PageMeta:
@@ -188,9 +315,26 @@ def page_meta(
     (e.g. {"page": 2}); None means the page gets no canonical link (search
     results, error pages, pages search engines are told to skip).
     `structured` is the page's own structured data, such as an event.
+    `page_type` ("CollectionPage", "WebPage", "AboutPage") adds a description
+    of the page itself, with `items` (the stories it lists) and `modified`
+    (when it last changed).
     """
+    page = getattr(result, "page", 1) if result is not None else 1
+    later = isinstance(page, int) and page > 1
+    # The browser tab and search results show the page's own title followed
+    # by the site's name; the home page's title starts with the name.
+    if title or later:
+        # The home page's later pages are not the home page.
+        title = title or "Latest Guam news"
+        if later:
+            # Each page of a list has its own title.
+            title = f"{title}, page {page}"
+        full_title = f"{title} · {settings.site_name}"
+    else:
+        title = full_title = home_title()
     meta = PageMeta(
-        title=title or f"{settings.site_name} · {settings.site_tagline}",
+        title=title,
+        full_title=full_title,
         description=description or default_description(),
         image=absolute_url(request, static_url(SOCIAL_CARD)),
         robots=robots,
@@ -204,6 +348,10 @@ def page_meta(
                 meta.next = canonical_url(request, **{**canonical, "page": result.page + 1})
     if request.url.path == "/" and meta.canonical and not meta.prev:
         meta.structured.append(json_ld(website_data(request)))
+    if request.url.path in ("/", "/status") and meta.canonical and not meta.prev:
+        meta.structured.append(json_ld(organization_data(request, static_url)))
+    if page_type and meta.canonical:
+        meta.structured.append(json_ld(webpage_data(request, meta, page_type, items, modified)))
     if breadcrumbs and meta.canonical:
         trail = [("Home", "/"), *breadcrumbs]
         meta.structured.append(json_ld(breadcrumb_data(request, trail)))

@@ -869,6 +869,9 @@ def render(request: Request, template: str, status_code: int = 200, **context) -
         canonical=context.pop("canonical", None),
         breadcrumbs=context.pop("breadcrumbs", None),
         structured=context.pop("structured", None),
+        page_type=context.pop("page_type", None),
+        items=context.pop("item_list", ()),
+        modified=context.pop("modified", None),
         result=context.get("result"),
         static_url=static_url,
     )
@@ -931,6 +934,11 @@ def _listing(request: Request, template: str, filters: Filters, page: int, **con
     context.setdefault("canonical", {"page": page})
     if context.pop("noindex_if_empty", False) and not result.items:
         context["robots"] = "noindex"
+    # For search engines and AI assistants: a list of Guam stories, the first
+    # few by headline and address, and when the newest came in.
+    context.setdefault("page_type", "CollectionPage")
+    context["item_list"] = [(i.article.title, i.article.url) for i in result.items]
+    context["modified"] = max((i.article.published_at for i in result.items), default=None)
     return render(
         request,
         template,
@@ -958,6 +966,11 @@ def _separate(topic: str | None = None) -> tuple[str, ...]:
     return tuple(config_cache.get().separate_topics(topic))
 
 
+def _newsroom_names() -> list[str]:
+    """The news sites that are read, in sources.yaml order."""
+    return [s.name for s in config_cache.get().sources if s.collected]
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request, page: int = Query(1, ge=1, le=10000)):
     return _listing(
@@ -966,6 +979,10 @@ def home(request: Request, page: int = Query(1, ge=1, le=10000)):
         Filters(hide_sources=_hidden(), hide_topics=_separate()),
         page,
         active_nav="latest",
+        description=seo.home_description(_newsroom_names()),
+        show_about=page == 1,
+        newsrooms=_newsroom_names(),
+        update_text=seo.update_text(),
         show_ad=True,
         show_weather=page == 1,
         featured=featured_events() if page == 1 else [],
@@ -983,7 +1000,8 @@ def category_page(request: Request, slug: str, page: int = Query(1, ge=1, le=100
         Filters(category=slug, hide_sources=_hidden(slug), hide_topics=_separate(slug)),
         page,
         active_nav=slug,
-        heading=category.name,
+        # "Guam military news": the words people search for.
+        heading=category.page_title[:1].upper() + category.page_title[1:],
         subheading=category.description,
         title=category.page_title,
         description=(
@@ -1090,6 +1108,7 @@ def archive(request: Request):
         ),
         active_nav="archive",
         canonical={},
+        page_type="CollectionPage",
         breadcrumbs=[("Archive", None)],
     )
 
@@ -1124,6 +1143,7 @@ def archive_month(request: Request, year: int, month: int):
         ),
         active_nav="archive",
         canonical={},
+        page_type="CollectionPage",
         robots=None if days else "noindex",
         breadcrumbs=[("Archive", "/archive"), (name, None)],
     )
@@ -1190,11 +1210,24 @@ def status(request: Request):
         uncollectable=config.uncollectable_sources,
         runs=runs,
         affiliate_links=bool(travel_links()),
-        title="Sources",
+        title="About Guam Headlines and its news sources"
+        if settings.site_name == "Guam Headlines"
+        else f"About {settings.site_name} and its Guam news sources",
+        description=(
+            f"How {settings.site_name} works: the Guam newsrooms it reads {seo.update_text()}, "
+            "when each was last checked, the sites that can't be collected, and the disclaimer."
+        ),
         active_nav="status",
         canonical={},
+        page_type="AboutPage",
+        breadcrumbs=[("Sources", None)],
         show_ad=True,
     )
+
+
+def _newest_reading() -> datetime | None:
+    """When the newest weather or outage reading came in (weather_reports())."""
+    return max((t for _, t in weather_reports().values() if t), default=None)
 
 
 @app.get("/weather", response_class=HTMLResponse)
@@ -1206,14 +1239,16 @@ def weather_view(request: Request):
         request,
         "weather.html",
         page_weather=shown,
-        title="Guam weather and tides",
+        title="Guam weather today: forecast, typhoons, tides and surf",
         description=(
             "Guam weather now: the reading at the airport, the National Weather Service"
-            " forecast and alerts, typhoons in the western Pacific, sunrise and sunset,"
-            " and the high and low tides for today, the week and the month."
+            " forecast and alerts, typhoons in the western Pacific, surf, sunrise and sunset,"
+            " and Guam's high and low tides for today, the week and the month."
         ),
         active_nav="weather",
         canonical={},
+        page_type="WebPage",
+        modified=_newest_reading(),
         breadcrumbs=[("Weather", None)],
         show_travel=True,
     )
@@ -1234,14 +1269,16 @@ def outages_view(request: Request):
             "gpa_phone": GPA_TROUBLE_PHONE,
             "gwa_phone": GWA_DISPATCH_PHONE,
         },
-        title="Guam power and water outages",
+        title="Guam power outages and water outages today",
         description=(
-            "Power outages from the Guam Power Authority and water outages and boil-water"
-            " notices from the Guam Waterworks Authority and Guam EPA: today, coming up and"
-            " the last few days, by village."
+            "Guam power outages from the Guam Power Authority, and water outages and"
+            " boil-water notices from the Guam Waterworks Authority and Guam EPA: today,"
+            " coming up and the last few days, by village."
         ),
         active_nav="outages",
         canonical={},
+        page_type="WebPage",
+        modified=_newest_reading(),
         breadcrumbs=[("Outages", None)],
     )
 
@@ -1280,10 +1317,11 @@ def jobs(
         job_filters=job_filters,
         boards=boards,
         uncollectable=[b for b in boards_config if b.enabled and b.cannot_scrape],
-        title="Jobs on Guam",
+        title="Guam jobs: the latest job openings on Guam",
         description=_jobs_description([b["board"].name for b in boards]),
         active_nav="jobs",
         canonical={"source": job_filters.source, "page": page},
+        page_type="CollectionPage",
         # A word search is a search page; a board's own list is worth finding.
         robots="noindex, follow" if job_filters.q else None,
         breadcrumbs=[("Jobs", None)],
@@ -1361,10 +1399,11 @@ def events(
         featured_legend=bool(featured_events()),
         feed=_feed_links(request, feed_calendar.slug if feed_calendar else None),
         feed_calendar=feed_calendar,
-        title="Events on Guam",
+        title="Guam events calendar: things to do on Guam",
         description=_events_description([c["calendar"].name for c in calendars]),
         active_nav="events",
         canonical={"calendar": event_filters.calendar, "page": page},
+        page_type="CollectionPage",
         # A word search is a search page, and another month or a picked day
         # is the same page again; a calendar's own list is worth finding.
         robots="noindex, follow" if event_filters.q or month or day else None,
@@ -1548,10 +1587,11 @@ def bids(
         bid_filters=bid_filters,
         sources=sources,
         now=now,
-        title="Bids and RFPs",
+        title="Guam bids and RFPs: Government of Guam procurement",
         description=_bids_description([s["source"].name for s in sources]),
         active_nav="bids",
         canonical={"source": bid_filters.source},
+        page_type="CollectionPage",
         # A word search or an agency is a search page; a source's own list
         # is worth finding.
         robots="noindex, follow" if bid_filters.q or bid_filters.agency else None,
@@ -1561,7 +1601,10 @@ def bids(
 
 
 def _bids_description(sources: list[str]) -> str:
-    text = "Open Government of Guam bids and requests for proposals, with their due dates"
+    text = (
+        "Guam bids and RFPs: open Government of Guam bids and requests for proposals,"
+        " with their due dates"
+    )
     if sources:
         text += f", from {_names(sources)}"
     return text + ". Every bid links to the agency or portal that published it."
@@ -1572,14 +1615,14 @@ def _names(names: list[str]) -> str:
 
 
 def _events_description(calendars: list[str]) -> str:
-    text = "Upcoming events on Guam: sessions, hearings, public meetings and more"
+    text = "Guam events and things to do: what's on, sessions, hearings, public meetings and more"
     if calendars:
         text += f", from {_names(calendars)}"
     return text + ". Every event links to the calendar that published it."
 
 
 def _jobs_description(boards: list[str]) -> str:
-    text = "Job openings on Guam with pay, location and closing dates"
+    text = "Guam jobs: the latest job openings on Guam, with pay, location and closing dates"
     if boards:
         text += f", from {_names(boards)}"
     return text + ". Every posting links to the board that published it."
@@ -2331,7 +2374,7 @@ def classifieds(
         request,
         "classified",
         "classifieds.html",
-        "Classifieds",
+        "Guam classifieds",
         "Guam classified ads: things for sale, cars and trucks, housing, services and wanted"
         f" ads from people on the island, on {settings.site_name}.",
         q,
@@ -2352,7 +2395,7 @@ def directory(
         request,
         "business",
         "directory.html",
-        "Business directory",
+        "Guam business directory",
         "Guam businesses by category and village: restaurants, shops, services and more,"
         f" with their phone numbers and websites, on {settings.site_name}.",
         q,
@@ -2784,13 +2827,14 @@ def guides_index(request: Request):
         request,
         "guides.html",
         sections=list(sections.items()),
-        title="Visitor guides",
+        title="Guam visitor guides: things to do, beaches and food",
         description=(
-            f"Guides for visiting Guam from {settings.site_name}: getting around, the weather,"
-            " beaches, food and what to see, kept up to date."
+            f"Guam travel guides from {settings.site_name}: things to do on Guam, getting"
+            " around, the weather, beaches, food and what to see, kept up to date."
         ),
         active_nav="guides",
         canonical={},
+        page_type="CollectionPage",
         breadcrumbs=[("Visitor guides", None)],
         show_ad=True,
         show_travel=True,

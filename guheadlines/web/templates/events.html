@@ -4,7 +4,7 @@
 {% block main %}
 {% set blank %}<span class="not-given" title="Not given by the calendar">—</span>{% endset %}
 <header class="page-head">
-  <h1>Events</h1>
+  <h1>Events on Guam</h1>
   <p class="muted">What's coming up on Guam over the next 90 days, from {{ calendars|length }} {{ "calendar" if calendars|length == 1 else "calendars" }}, checked every {{ settings.events_interval_hours }} hours. Every event links to the calendar that published it.</p>
   {% if offers.event %}<p class="post-offer"><a class="btn" href="/post/event">Feature your event</a> <span class="muted small">At the top of this page and on the home page until it is over: {{ offers.event.price }}.</span></p>{% endif %}
 </header>
