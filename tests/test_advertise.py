@@ -1025,3 +1025,127 @@ def test_the_media_kit(site, monkeypatch):
     assert 'href="/advertise/media-kit.pdf" download' in site.get("/advertise").text
     assert 'href="/advertise/media-kit.pdf"' in site.get("/advertise/review", auth=LOGIN).text
     assert "Disallow: /advertise/" in site.get("/robots.txt").text
+
+
+# ------------------------------------------------- monthly trends (/stats)
+
+
+def test_page_views_month_by_month(clean_db):
+    from guheadlines.models import Referrers
+
+    weather, events = ads.Section("weather", "Weather"), ads.Section("events", "Events")
+    today = date(2026, 11, 27)
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=date(2026, 9, 20), path="/", views=110),  # the counting began
+                PageViews(day=date(2026, 10, 3), path="/", views=300),
+                PageViews(day=date(2026, 10, 3), path="/weather", views=100),
+                PageViews(day=date(2026, 10, 4), path="/events/12", views=10),  # under Events
+                PageViews(day=date(2026, 10, 4), path="/eventsx", views=5),  # not Events
+                PageViews(day=date(2026, 10, 4), path="sponsor-click", views=99),  # not a page
+                PageViews(day=date(2026, 11, 26), path="/weather", views=520),
+                PageViews(day=today, path="/", views=1000),  # not finished: left out
+                Referrers(day=date(2026, 10, 3), site="google.com", visits=40),
+                Referrers(day=date(2026, 10, 9), site="", visits=2),
+            ]
+        )
+    with session_scope() as session:
+        months = ads.monthly(session, [weather, events], today)
+        assert [(m.first, m.last) for m in months] == [
+            (date(2026, 9, 20), date(2026, 9, 30)),
+            (date(2026, 10, 1), date(2026, 10, 31)),
+            (date(2026, 11, 1), date(2026, 11, 26)),
+        ]
+        sep, oct, nov = months
+        assert (sep.whole, oct.whole, nov.whole) == (False, True, False)
+        assert (sep.views, oct.views, nov.views) == (110, 415, 520)
+        assert oct.sections == {"weather": 100, "events": 10}
+        assert (sep.visits, oct.visits, nov.visits) == (0, 42, 0)
+        # A week on average: 110 views in 11 days, 520 in 26.
+        assert (sep.per_week(sep.views), nov.per_week(nov.sections["weather"])) == (70, 140)
+        # Only the last two months.
+        assert [m.first for m in ads.monthly(session, [weather], today, months=2)] == [
+            date(2026, 10, 1),
+            date(2026, 11, 1),
+        ]
+        # Nothing finished yet: no month.
+        assert ads.monthly(session, [weather], date(2026, 9, 20)) == []
+
+
+def test_growth_needs_the_whole_period_before(clean_db):
+    today = date(2026, 11, 27)
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=today - timedelta(days=40), path="/", views=1000),
+                PageViews(day=today, path="/", views=1500),
+            ]
+        )
+    with session_scope() as session:
+        # The counting began within the 30 days before: no growth to give.
+        assert ads.audience(session, today)["growth"] is None
+        session.add(PageViews(day=today - timedelta(days=59), path="/jobs", views=1))
+    with session_scope() as session:
+        assert ads.audience(session, today)["growth"] == 50  # 1,500 against 1,001
+    assert ads.change(90, 100) == -10 and ads.change(5, 0) is None
+
+
+def test_stats_page_shows_month_by_month_and_the_prices(site, monkeypatch):
+    _set(monkeypatch, **ON, section_sponsor_price_cents=1500)
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=today - timedelta(days=1), path="/", views=70),
+                PageViews(day=today, path="/", views=2930),
+                PageViews(day=today, path="/weather", views=300),
+            ]
+        )
+    page = site.get("/stats", auth=LOGIN).text
+    months = page.split('id="months"', 1)[1].split("Sections, month by month", 1)[0]
+    # Yesterday only: 70 page views in one day are 490 a week. Today is left out.
+    assert '<td class="num">70</td><td class="num">490</td>' in months
+    sections = page.split("Sections, month by month", 1)[1].split('id="prices"', 1)[0]
+    assert "<td>Every page (sponsor spot)</td>" in sections and "<td>Weather</td>" in sections
+    assert 'href="/advertise/media-kit.pdf"' in months
+    prices = page.split('id="prices"', 1)[1].split("</table>", 1)[0]
+    rows = [" ".join(re.sub(r"<[^>]+>", " ", row).split()) for row in prices.split("<tr>")[2:]]
+    # 3,300 page views in 30 days are 770 a week; $25 / 770 x 1,000 = $32.47.
+    assert rows[0] == "Sponsor spot (every page) $25 770 $32.47"
+    # Weather: 300 in 30 days, 70 a week: $15 / 70 x 1,000 = $214.29.
+    assert rows[1] == "Weather sponsor $15 70 $214.29"
+    assert rows[2].endswith(" $15 0 –")  # a section with no views yet
+
+    # Without prices, the page says which settings give them.
+    _set(
+        monkeypatch,
+        sponsor_week_price_cents=0,
+        section_sponsor_price_cents=0,
+        newsletter_sponsor_price_cents=0,
+    )
+    page = site.get("/stats", auth=LOGIN).text
+    assert "Set SPONSOR_WEEK_PRICE or SECTION_SPONSOR_PRICE" in page
+    assert 'href="/advertise/media-kit.pdf"' not in page
+
+
+def test_the_media_kit_and_advertise_page_name_the_growth(site):
+    from guheadlines.web.app import audience_cache
+
+    audience_cache._data.clear()
+    today = datetime.now(GUAM_TZ).date()
+    with session_scope() as session:
+        session.add_all(
+            [
+                PageViews(day=today - timedelta(days=59), path="/", views=1000),
+                PageViews(day=today, path="/", views=1500),
+            ]
+        )
+    assert "up 50% on the 30 days before" in _pdf_text(site.get("/advertise/media-kit.pdf").content)
+    assert "<dt>Up on the 30 days before</dt><dd>+50%</dd>" in site.get("/advertise").text
+    # A fall is not named.
+    audience_cache._data.clear()
+    with session_scope() as session:
+        session.add(PageViews(day=today - timedelta(days=40), path="/", views=2000))
+    assert "days before" not in _pdf_text(site.get("/advertise/media-kit.pdf").content)
+    assert "Up on the" not in site.get("/advertise").text

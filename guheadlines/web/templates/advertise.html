@@ -17,6 +17,9 @@
   <dl class="job-facts stats-totals">
     <div><dt>Page views</dt><dd>{{ "{:,}".format(numbers.views) }}</dd></div>
     <div><dt>A day, on average</dt><dd>{{ "{:,}".format(numbers.per_day) }}</dd></div>
+    {% if numbers.growth and numbers.growth > 0 %}
+    <div><dt>Up on the {{ numbers.days }} days before</dt><dd>+{{ numbers.growth }}%</dd></div>
+    {% endif %}
     {% if numbers.sponsor_clicks %}
     <div><dt>Clicks on the sponsor spot</dt><dd>{{ "{:,}".format(numbers.sponsor_clicks) }}</dd></div>
     {% endif %}

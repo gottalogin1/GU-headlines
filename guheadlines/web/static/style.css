@@ -1086,6 +1086,8 @@ a.btn { display: inline-block; text-decoration: none; }
 .stats-health + .stats-health { margin-top: 16px; }
 .stats-health td:nth-child(n+3) { white-space: nowrap; }
 .stats-keywords { margin-top: 14px; }
+.stats-months th, .stats-months td:first-child { white-space: nowrap; }
+.stats-sections th, .stats-sections td { padding-inline: 10px; }
 
 /* ---------- paid listings (listings.py) ---------- */
 .tag-featured { color: var(--tag-featured); background: var(--tag-featured-bg); }
