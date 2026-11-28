@@ -84,6 +84,7 @@ PAGES = (
     ("events", "Events", "/events"),
     ("bids", "Bids", "/bids"),
     ("weather", "Weather", "/weather"),
+    ("typhoon", "Typhoon tracker", "/typhoon"),
     ("outages", "Outages", "/outages"),
 )
 
@@ -155,10 +156,10 @@ class Section:
 def sections(settings: Settings, topics) -> list[Section]:
     """The sections that can have a sponsor: each news topic (from
     categories.yaml, with its slug and name), then the other pages, the
-    Weather and Outages pages only while they are on."""
+    Weather, Typhoon tracker and Outages pages only while they are on."""
     off = set()
     if not settings.weather_interval_minutes:
-        off.add("weather")
+        off.update(("weather", "typhoon"))
     if not settings.outages_interval_minutes:
         off.add("outages")
     found = [Section(topic.slug, topic.name) for topic in topics]

@@ -84,7 +84,7 @@
          readers) find each one from any page. #}
       <span class="footer-guam"><a href="/">Guam news</a>
       {%- if settings.weather_interval_minutes %} · <a href="/weather">Guam weather</a>
-      {%- if settings.tide_station %} · <a href="/weather#tides">Guam tides</a>{% endif %}{% endif %}
+      {%- if settings.tide_station %} · <a href="/weather#tides">Guam tides</a>{% endif %} · <a href="/typhoon">Guam typhoon tracker</a>{% endif %}
        · <a href="/events">Guam events</a> · <a href="/jobs">Guam jobs</a> · <a href="/bids">Guam bids and RFPs</a>
       {%- if settings.outages_interval_minutes %} · <a href="/outages">Guam power outages</a>{% endif %}
       {%- for c in categories if c.slug == "obituaries" %} · <a href="/category/{{ c.slug }}">Guam obituaries</a>{% endfor %}

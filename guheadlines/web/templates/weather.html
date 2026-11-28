@@ -271,7 +271,7 @@
   <h2 id="storms-title">Typhoons and tropical storms</h2>
   {% if w.storms %}
   <ul class="wx-list">
-    {% for s in w.storms %}<li>{{ link(s.url|safe_url, s.name) }}</li>{% endfor %}
+    {% for s in w.storms %}<li><a href="/typhoon#{{ s.key or 'storms' }}">{{ s.title or s.name }}</a>{% if s.name != (s.title or s.name) %}<span class="muted">{{ s.name }}</span>{% endif %}</li>{% endfor %}
   </ul>
   {% elif w.storms is none %}
   <p class="wx-none">No recent storm list.</p>
@@ -279,6 +279,7 @@
   <p class="wx-reading"><span class="wx-mid">None</span></p>
   <p>No tropical storms or typhoons have warnings in the western Pacific.</p>
   {% endif %}
+  <p><a href="/typhoon">Typhoon tracker: storm map, COR level, shelters and a checklist →</a></p>
   {% call source() %}The western North Pacific, from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}.{% endcall %}
 </section>
 
@@ -312,6 +313,7 @@
 <section class="wx-card" id="ready" aria-labelledby="ready-title">
   <h2 id="ready-title">Be ready</h2>
   <ul class="wx-list">
+    <li><a href="/typhoon">Guam typhoon tracker</a><span class="muted">Storms near Guam, the COR level, shelters and a checklist</span></li>
     <li>{{ link("https://ghs.guam.gov/", "Guam Homeland Security / Office of Civil Defense") }}<span class="muted">Typhoon readiness (COR) levels and shelters</span></li>
     <li>{{ link(nws_guam_url, "National Weather Service, Guam") }}<span class="muted">Every forecast and statement</span></li>
     <li>{{ link(guam_radar_url, "Guam weather radar") }}<span class="muted">Where it is raining now</span></li>

@@ -95,6 +95,10 @@ that is always on can do this by itself after each change; see
   sunrise and sunset, and the high and low tides for a day, a week or a
   month, each part linked to its source. Free government data, no key.
   See [Weather](docs/settings.md#weather).
+- **Typhoon tracker** (`/typhoon`): storms near Guam on a map, how close the
+  Joint Typhoon Warning Center's forecast takes each one, Guam's COR level
+  from Guam Homeland Security, shelter news, and checklists for each COR
+  level and for a typhoon kit.
 - **Outages page** with the power outages from GPA, the water outages from
   GWA, and boil-water notices, by day, each linked to the agency's notice.
 - **Gas prices** in the sidebar: regular, premium and diesel, picked up from

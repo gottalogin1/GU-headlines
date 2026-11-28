@@ -11,6 +11,7 @@
       </summary>
       <div class="weather-alert-text">
         {% for p in a.text %}<p>{{ p }}</p>{% endfor %}
+        {% if is_tropical(a) and settings.weather_interval_minutes %}<p><a href="/typhoon">The storm on a map, the COR level and shelters: Guam typhoon tracker →</a></p>{% endif %}
         <p class="small">From the National Weather Service office in Tiyan.
           <a href="{{ nws_guam_url }}" target="_blank" rel="noopener">The latest from NWS Guam ↗</a></p>
       </div>

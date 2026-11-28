@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{# The Typhoon page (typhoon.typhoon_page). Drawn here on the server, with no
+   script: the map is an SVG made from typhoon.track_map, and the checklist
+   boxes are plain checkboxes (ticks are not saved). Each card ends with
+   where its facts come from, with a link. #}
+{% macro source() %}<p class="wx-source">{{ caller() }}</p>{% endmacro %}
+{% macro link(url, text) %}<a href="{{ url }}" target="_blank" rel="noopener">{{ text }} ↗</a>{% endmacro %}
+
+{% block main %}
+{% set p = storm_page %}
+{% set cor = p.cor %}
+<header class="page-head">
+  <h1>Guam typhoon tracker</h1>
+  <p class="muted">Typhoons and tropical storms near Guam, from the Joint Typhoon Warning Center,
+    the National Weather Service and Guam Homeland Security. Times are Chamorro Standard Time.</p>
+</header>
+
+<nav class="wx-jump" aria-label="On this page">
+  <a href="#now">Right now</a>
+  <a href="#map">Map</a>
+  <a href="#storms">Storms</a>
+  <a href="#watch">Areas to watch</a>
+  <a href="#shelters">Shelters</a>
+  <a href="#cor">COR levels</a>
+  <a href="#kit">Typhoon kit</a>
+  <a href="#after">After the storm</a>
+  {% if p.stories %}<a href="#news">Storm news</a>{% endif %}
+</nav>
+
+<div class="wx">
+<section class="wx-card wx-wide" id="now" aria-labelledby="now-title">
+  <h2 id="now-title">Right now</h2>
+  <div class="ty-now">
+    <div class="ty-cor ty-cor-{{ cor.level }}">
+      <p class="ty-cor-level"><span class="ty-cor-label">Guam is in</span>
+        <span class="wx-big">COR {{ cor.level }}{% if cor.extra %}-{{ cor.extra }}{% endif %}</span></p>
+      <p class="ty-cor-meaning">{{ cor.meaning }}{% if cor.all_clear %} All clear.{% endif %}</p>
+      {% if cor.release %}
+      <p class="ty-cor-from">From {{ link(cor.release.url|safe_url, "GHS/OCD") }}, <span title="{{ cor.release.time|fmt_datetime }}">{{ cor.release.time|rel_time }}</span>: “{{ cor.release.title }}”</p>
+      {% else %}
+      <p class="ty-cor-from">Unless the Governor raises it. Guam Homeland Security announces each change.</p>
+      {% endif %}
+    </div>
+    <div class="ty-summary">
+      {% if p.alerts %}
+      {% for a in p.alerts %}
+      <details class="wx-alert{% if a.warning %} is-warning{% endif %}"{% if loop.first and a.warning %} open{% endif %}>
+        <summary><strong>{{ a.event }}</strong>{% if a.area %} for {{ a.area }}{% endif %}{% if a.ends %} <span class="muted">until {{ a.ends|fmt_until }}</span>{% endif %}</summary>
+        <div class="wx-alert-text">
+          {% for para in a.text %}<p>{{ para }}</p>{% endfor %}
+          <p class="small">From the {{ link(nws_guam_url, "National Weather Service in Tiyan") }}.</p>
+        </div>
+      </details>
+      {% endfor %}
+      {% elif p.checked %}
+      <p class="ty-ok">No typhoon or tropical storm watches or warnings for Guam.</p>
+      {% endif %}
+      {% set active = p.storms|selectattr("details")|list %}
+      {% if active %}
+      <ul class="ty-lines">
+        {% for s in active %}
+        <li>
+          {% if s.kind == "alert" %}
+          <strong><a href="#{{ s.anchor }}">A storm may form</a></strong> {{ s.miles }} miles {{ s.where }} of Guam{% if s.until %}, JTWC says, by {{ s.until|fmt_until }}{% else %} within a day, JTWC says{% endif %}.
+          {% else %}
+          <strong><a href="#{{ s.anchor }}">{{ s.title }}</a></strong> is {{ s.miles }} miles {{ s.where }} of Guam{% if s.heading %}, moving {{ s.heading }} at {{ s.speed_mph }} mph{% endif %}{% if s.wind_mph %}, with winds of {{ s.wind_mph }} mph{% endif %}.
+          {% if s.closest and s.closest.now %}It is moving away from Guam.
+          {% elif s.closest %}JTWC's forecast takes it closest to Guam, about {{ s.closest.miles }} miles {{ s.closest.where }}, around {{ s.closest.time|fmt_until }}.{% endif %}
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% elif p.storms_checked %}
+      <p class="ty-ok">No tropical storms or typhoons in the western Pacific right now.</p>
+      {% else %}
+      <p class="wx-none">No recent word from the Joint Typhoon Warning Center. See {{ link(jtwc_url, "its page") }}.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% call source() %}COR level from {{ link(ghs_news_url, "Guam Homeland Security / Office of Civil Defense") }} releases. Watches and warnings from the {{ link(nws_guam_url, "National Weather Service") }}. Storms from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}{% if p.checked %}, checked <span title="{{ p.checked|fmt_datetime }}">{{ p.checked|rel_time }}</span>{% endif %}.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide" id="map" aria-labelledby="map-title">
+  <h2 id="map-title">Map of storms near Guam</h2>
+  {% set m = p.map %}
+  <figure class="ty-map">
+    <svg viewBox="0 0 {{ m.width }} {{ m.height }}" role="img" aria-labelledby="map-desc">
+      <desc id="map-desc">Map of the western Pacific around Guam, with rings 100, 300 and 500 miles from Guam{% for s in m.storms %}, and {{ s.title }}{% endfor %}{% for a in m.areas %}, and {{ a.name }}{% endfor %}.</desc>
+      <rect class="ty-sea" width="{{ m.width }}" height="{{ m.height }}"/>
+      {% for g in m.grid.lats %}<line class="ty-grid" x1="0" x2="{{ m.width }}" y1="{{ g.y }}" y2="{{ g.y }}"/><text class="ty-grid-label" x="4" y="{{ g.y - 4 }}">{{ g.label }}</text>{% endfor %}
+      {% for g in m.grid.lons %}<line class="ty-grid" x1="{{ g.x }}" x2="{{ g.x }}" y1="0" y2="{{ m.height }}"/><text class="ty-grid-label" x="{{ g.x + 4 }}" y="{{ m.height - 6 }}">{{ g.label }}</text>{% endfor %}
+      {% for s in m.storms if s.line %}<line class="ty-alert-band" x1="{{ s.line.x1 }}" y1="{{ s.line.y1 }}" x2="{{ s.line.x2 }}" y2="{{ s.line.y2 }}" stroke-width="{{ s.line.width }}"/>{% endfor %}
+      {% for r in m.rings %}<circle class="ty-ring" cx="{{ m.guam.x }}" cy="{{ m.guam.y }}" r="{{ r.r }}"/>{% endfor %}
+      {% for pl in m.places %}<circle class="ty-place" cx="{{ pl.x }}" cy="{{ pl.y }}" r="3"/>{% endfor %}
+      {% for a in m.areas %}<circle class="ty-area is-{{ a.chance }}" cx="{{ a.x }}" cy="{{ a.y }}" r="11"/>{% endfor %}
+      {% for s in m.storms %}
+      <g class="ty-storm {{ s.class }}">
+        {% if s.wind_r %}<circle class="ty-wind" cx="{{ s.x }}" cy="{{ s.y }}" r="{{ s.wind_r }}"/>{% endif %}
+        {% if s.past %}<polyline class="ty-past" points="{{ s.past }}"/>{% endif %}
+        {% if s.dots %}<polyline class="ty-ahead" points="{{ s.ahead }}"/>{% endif %}
+        {% for d in s.dots %}<circle class="ty-dot {{ d.class }}" cx="{{ d.x }}" cy="{{ d.y }}" r="5"/>{% endfor %}
+        <circle class="ty-center" cx="{{ s.x }}" cy="{{ s.y }}" r="{{ 8 if s.alert else 9 }}"/>
+      </g>
+      {% endfor %}
+      <circle class="ty-guam" cx="{{ m.guam.x }}" cy="{{ m.guam.y }}" r="6"/>
+      {#- Labels last, so they sit on top of the lines. #}
+      {% macro label(l, cls, text) %}<text class="{{ cls }}{% if l.wide_only %} ty-wide-only{% endif %}" x="{{ l.x }}" y="{{ l.y }}"{% if l.anchor != "start" %} text-anchor="{{ l.anchor }}"{% endif %}>{{ text }}</text>{% endmacro %}
+      {% for r in m.rings if r.label %}{{ label(r.label, "ty-ring-label", r.miles ~ " mi") }}{% endfor %}
+      {% for pl in m.places %}{{ label(pl.label, "ty-place-label", pl.name) }}{% endfor %}
+      {% for a in m.areas %}{{ label(a.label, "ty-area-label", a.name) }}{% endfor %}
+      {% for s in m.storms %}{% for d in s.dots if d.label %}{{ label(d.label, "ty-dot-label", d.text) }}{% endfor %}{% endfor %}
+      {% for s in m.storms %}{{ label(s.label, "ty-storm-label", s.title) }}{% endfor %}
+      {{ label(m.guam.label, "ty-guam-label", "Guam") }}
+    </svg>
+    <figcaption>
+      <ul class="ty-legend">
+        <li><span class="ty-key is-guam"></span>Guam, with rings 100, 300 and 500 miles away</li>
+        {% if m.storms %}
+        <li><span class="ty-key is-past"></span>Path so far</li>
+        <li><span class="ty-key is-ahead"></span>JTWC forecast path; dots every 12 hours, the date each day</li>
+        <li><span class="ty-key is-wind"></span>Where tropical-storm-force winds (39 mph or more) reach</li>
+        <li class="ty-strengths"><span><span class="ty-key is-depression"></span>Depression</span> <span><span class="ty-key is-storm"></span>Tropical storm</span> <span><span class="ty-key is-typhoon"></span>Typhoon</span> <span><span class="ty-key is-super"></span>Super typhoon</span></li>
+        {% endif %}
+        {% if m.areas %}<li><span class="ty-key is-area"></span>Area where a storm may form</li>{% endif %}
+      </ul>
+    </figcaption>
+  </figure>
+  {% call source() %}Drawn here from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}'s warnings and forecasts. Forecasts get less sure further ahead: three days out, a storm's center is often 100 miles or more from where it was forecast.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide" id="storms" aria-labelledby="storms-title">
+  <h2 id="storms-title">Typhoons and tropical storms</h2>
+  {% if p.storms %}
+  {% for s in p.storms %}
+  <article class="ty-storm-card" id="{{ s.anchor }}" aria-labelledby="{{ s.anchor }}-title">
+    {% if not s.details %}
+    <h3 id="{{ s.anchor }}-title" class="ty-storm-title">{{ s.title }}</h3>
+    <p>Its warning could not be read here. {{ link(s.url|safe_url, "Read it at JTWC") }}</p>
+    {% elif s.kind == "alert" %}
+    <h3 id="{{ s.anchor }}-title" class="ty-storm-title">A storm may form{% if s.number %} <span class="muted">(Invest {{ s.number }})</span>{% endif %}</h3>
+    <p class="wx-lead">JTWC has issued a Tropical Cyclone Formation Alert: a tropical storm may form within a day, {{ s.miles }} miles {{ s.where }} of Guam.</p>
+    <dl class="wx-facts">
+      <div><dt>Center</dt><dd>{{ s.position }}</dd></div>
+      <div><dt>From Guam</dt><dd>{{ s.miles }} miles {{ s.where }}</dd></div>
+      {% if s.wind_mph %}<div><dt>Winds</dt><dd>{{ s.wind_low_mph }} to {{ s.wind_mph }} mph</dd></div>{% endif %}
+      {% if s.issued %}<div><dt>Issued</dt><dd>{{ s.issued|fmt_until }}</dd></div>{% endif %}
+      {% if s.until %}<div><dt>Next word by</dt><dd>{{ s.until|fmt_until }}</dd></div>{% endif %}
+    </dl>
+    {% call source() %}{{ link(s.url|safe_url, "Formation alert") }} from the Joint Typhoon Warning Center. The band on the map is where JTWC expects it may form.{% endcall %}
+    {% else %}
+    <h3 id="{{ s.anchor }}-title" class="ty-storm-title">{{ s.title }} <span class="muted">({{ s.number }})</span>{% if s.final %} <span class="ty-tag">Final warning</span>{% endif %}</h3>
+    <p class="wx-reading"><span class="wx-mid">{{ s.wind_mph }} mph</span>
+      <span class="wx-sky">{{ s.strength }}{% if s.category %}, like a Category {{ s.category }} hurricane{% endif %}</span></p>
+    <dl class="wx-facts">
+      <div><dt>From Guam</dt><dd>{{ s.miles }} miles {{ s.where }}</dd></div>
+      <div><dt>Center</dt><dd>{{ s.position }}</dd></div>
+      {% if s.heading %}<div><dt>Moving</dt><dd>{{ s.heading|capitalize }}, {{ s.speed_mph }} mph</dd></div>{% endif %}
+      {% if s.gust_mph %}<div><dt>Gusts</dt><dd>{{ s.gust_mph }} mph</dd></div>{% endif %}
+      {% if s.storm_force_miles %}<div><dt>Winds of 39+ mph</dt><dd>Up to {{ s.storm_force_miles }} miles out</dd></div>{% endif %}
+      {% if s.typhoon_force_miles %}<div><dt>Winds of 74+ mph</dt><dd>Up to {{ s.typhoon_force_miles }} miles out</dd></div>{% endif %}
+      {% if s.pressure_mb %}<div><dt>Pressure</dt><dd>{{ s.pressure_mb }} mb</dd></div>{% endif %}
+      {% if s.waves_ft %}<div><dt>Highest waves</dt><dd>{{ s.waves_ft }} ft</dd></div>{% endif %}
+      {% if s.closest and not s.closest.now %}<div><dt>Closest to Guam</dt><dd>About {{ s.closest.miles }} miles, {{ s.closest.time|fmt_until }}</dd></div>{% endif %}
+    </dl>
+    {% if s.forecast %}
+    <table class="ty-forecast">
+      <caption>JTWC's forecast</caption>
+      <thead><tr><th scope="col">When</th><th scope="col">From Guam</th><th scope="col">Winds</th><th scope="col">Strength</th></tr></thead>
+      <tbody>
+        {% for f in s.forecast %}
+        <tr>
+          <th scope="row">{{ f.time|fmt_until|replace(" ChST", "") }}</th>
+          <td>{{ f.miles }} mi {{ f.where }}</td>
+          <td>{% if f.wind_mph %}{{ f.wind_mph }} mph{% endif %}</td>
+          <td>{{ f.note or f.strength }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% call source() %}{{ link(s.url|safe_url, "Warning " ~ s.warning_nr) }} from the Joint Typhoon Warning Center, for <span title="{{ s.time|fmt_datetime }}">{{ s.time|fmt_until }}</span>{% if s.next %}; next warning by {{ s.next|fmt_time }}{% endif %}.
+      Winds are one-minute averages; the miles are worked out here from JTWC's positions.{% if s.past %} The path so far is from {{ s.past + 1 }} warnings read here.{% endif %}{% endcall %}
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% elif p.storms_checked %}
+  <p class="wx-reading"><span class="wx-mid">None</span></p>
+  <p>No tropical storms or typhoons have warnings in the western Pacific. Typhoons can reach Guam in any month, most often from July to November.</p>
+  {% else %}
+  <p class="wx-none">No recent storm list.</p>
+  {% endif %}
+  {% call source() %}The western North Pacific, from the {{ link(jtwc_url, "Joint Typhoon Warning Center") }}, the U.S. military's typhoon forecasters in Hawaii.{% endcall %}
+</section>
+
+<section class="wx-card" id="watch" aria-labelledby="watch-title">
+  <h2 id="watch-title">Areas to watch</h2>
+  {% if p.areas %}
+  <p class="wx-lead">Where a storm may form, and JTWC's chance that it becomes one within a day.</p>
+  <ul class="wx-list">
+    {% for a in p.areas %}
+    <li><strong>{{ a.name }}: <span class="ty-chance is-{{ a.chance }}">{{ a.chance }} chance</span></strong>
+      <span class="muted">{{ a.miles }} miles {{ a.where }} of Guam{% if a.wind_mph %}, winds about {{ a.wind_mph }} mph{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  {% elif p.areas is none %}
+  <p class="wx-none">No recent outlook from JTWC.</p>
+  {% else %}
+  <p class="wx-reading"><span class="wx-mid">None</span></p>
+  <p>JTWC is not watching any area for a new storm in the western Pacific.</p>
+  {% endif %}
+  {% call source() %}{{ link(jtwc_outlook_url, "Significant Tropical Weather Advisory") }} from the Joint Typhoon Warning Center{% if p.outlook_issued %}, <span title="{{ p.outlook_issued|fmt_datetime }}">{{ p.outlook_issued|rel_time }}</span>{% endif %}.{% endcall %}
+</section>
+
+<section class="wx-card" id="updates" aria-labelledby="updates-title">
+  <h2 id="updates-title">Guam Homeland Security</h2>
+  {% if p.releases %}
+  <ul class="wx-list">
+    {% for r in p.releases %}
+    <li>{{ link(r.url|safe_url, r.title) }}<span class="muted" title="{{ r.time|fmt_datetime }}">{{ r.time|rel_time }}</span></li>
+    {% endfor %}
+  </ul>
+  {% elif p.ghs_checked %}
+  <p class="wx-none">No releases in the last month.</p>
+  {% else %}
+  <p class="wx-none">Not checked yet.</p>
+  {% endif %}
+  {% call source() %}The newest releases of {{ link(ghs_news_url, "Guam Homeland Security / Office of Civil Defense") }}: COR levels, shelters and the all clear.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide" id="shelters" aria-labelledby="shelters-title">
+  <h2 id="shelters-title">Typhoon shelters</h2>
+  {% if p.shelters or p.shelter_news %}
+  <div class="ty-shelter-news">
+    {% for r in p.shelters %}
+    <p class="wx-flag">{{ link(r.url|safe_url, r.title) }} <span class="muted">GHS/OCD, {{ r.time|rel_time }}</span></p>
+    {% endfor %}
+    {% for s in p.shelter_news %}
+    <p><a href="{{ s.href }}" target="_blank" rel="noopener">{{ s.title }} ↗</a> <span class="muted">{{ s.source }}, {{ s.published_at|rel_time }}</span></p>
+    {% endfor %}
+    <p class="small">Open the release for the list of shelters and when each one opens.</p>
+  </div>
+  {% else %}
+  <p class="wx-lead">No shelters are open: Guam Homeland Security has not announced any in the last week.</p>
+  {% endif %}
+  <div class="wx-columns">
+    <div>
+      <h3>How shelters work on Guam</h3>
+      <ul class="wx-tips">
+        <li>Guam Homeland Security / Office of Civil Defense opens emergency shelters, mostly at public schools, before a storm. Which schools open changes with each storm, so check its newest release before you go.</li>
+        <li>Shelters open hours before the damaging winds. Go early: travel is dangerous once COR 1 is set.</li>
+        <li>You register when you arrive. Bring a photo ID for each adult.</li>
+        <li>Stay in the shelter until the all clear.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>What to bring</h3>
+      <ul class="wx-tips">
+        <li>Food and water for about a week, and a can opener</li>
+        <li>Medicines, glasses and medical supplies</li>
+        <li>Bedding: a mat, blanket or sleeping bag, and a pillow</li>
+        <li>Photo ID and important papers in a waterproof bag</li>
+        <li>Flashlight, batteries and a phone charger</li>
+        <li>Clothes, toiletries, and diapers or formula for babies</li>
+      </ul>
+    </div>
+  </div>
+  {% call source() %}Shelter announcements from {{ link(ghs_news_url, "Guam Homeland Security") }} and Guam news of the last week.{% endcall %}
+</section>
+
+<section class="wx-card wx-wide ty-cor-card" id="cor" aria-labelledby="cor-title">
+  <h2 id="cor-title">COR levels: what they mean and what to do</h2>
+  <p class="wx-lead">The Governor sets Guam's Condition of Readiness (COR) as a storm comes closer. Damaging winds are winds of 39 mph or more.</p>
+  <ol class="ty-cor-steps">
+    <li class="ty-cor-4{% if cor.level == 4 %} is-now{% endif %}">
+      <h3>COR 4{% if cor.level == 4 %} <span class="ty-tag">Now</span>{% endif %}</h3>
+      <p>{{ cor_levels[4] }}</p>
+      <ul class="ty-check">
+        <li>Keep your typhoon kit stocked and your plan up to date.</li>
+        <li>Know where you would go if your home is not safe.</li>
+        <li>Trim trees and fix loose roofing before the season.</li>
+      </ul>
+    </li>
+    <li class="ty-cor-3{% if cor.level == 3 %} is-now{% endif %}">
+      <h3>COR 3{% if cor.level == 3 %} <span class="ty-tag">Now</span>{% endif %}</h3>
+      <p>{{ cor_levels[3] }}</p>
+      <ul class="ty-check">
+        <li>Buy water, food, medicine, fuel and batteries now.</li>
+        <li>Fill the car's tank and get cash.</li>
+        <li>Stay out of the water: the surf builds early.</li>
+        <li>Bring in or tie down anything the wind could throw.</li>
+      </ul>
+    </li>
+    <li class="ty-cor-2{% if cor.level == 2 %} is-now{% endif %}">
+      <h3>COR 2{% if cor.level == 2 %} <span class="ty-tag">Now</span>{% endif %}</h3>
+      <p>{{ cor_levels[2] }}</p>
+      <ul class="ty-check">
+        <li>Put up shutters and board windows.</li>
+        <li>Fill containers and the bathtub with water for washing.</li>
+        <li>Charge phones and power banks; set the fridge to its coldest.</li>
+        <li>If your home is not safe, go to a shelter or a sturdy home now.</li>
+      </ul>
+    </li>
+    <li class="ty-cor-1{% if cor.level == 1 %} is-now{% endif %}">
+      <h3>COR 1{% if cor.level == 1 %} <span class="ty-tag">Now</span>{% endif %}</h3>
+      <p>{{ cor_levels[1] }}</p>
+      <ul class="ty-check">
+        <li>Stay inside, away from windows, in the strongest room.</li>
+        <li>The calm eye is not the end: the wind comes back from the other side.</li>
+        <li>Listen to the radio for the all clear.</li>
+      </ul>
+    </li>
+  </ol>
+  {% call source() %}COR levels as Guam Homeland Security / Office of Civil Defense uses them; military bases set their own TCCOR levels. See {{ link(ghs_url, "GHS/OCD") }} and {{ link(ready_url, "Ready.gov") }}.{% endcall %}
+</section>
+
+<section class="wx-card" id="kit" aria-labelledby="kit-title">
+  <h2 id="kit-title">Typhoon kit checklist</h2>
+  <p class="wx-lead">Enough for 7 to 10 days for everyone at home, as Guam Homeland Security asks.</p>
+  <ul class="ty-kit">
+    <li><label><input type="checkbox"> Water: 1 gallon per person per day</label></li>
+    <li><label><input type="checkbox"> Food that keeps, and a manual can opener</label></li>
+    <li><label><input type="checkbox"> Medicines and prescriptions for two weeks</label></li>
+    <li><label><input type="checkbox"> First aid kit</label></li>
+    <li><label><input type="checkbox"> Flashlights, batteries, a battery or crank radio</label></li>
+    <li><label><input type="checkbox"> Phone chargers and power banks</label></li>
+    <li><label><input type="checkbox"> Cash, in small bills</label></li>
+    <li><label><input type="checkbox"> IDs, insurance and deeds in a waterproof bag</label></li>
+    <li><label><input type="checkbox"> Fuel for the car and the generator</label></li>
+    <li><label><input type="checkbox"> Plywood or shutters, nails, tarps and rope</label></li>
+    <li><label><input type="checkbox"> Bleach and buckets, for cleaning and safe water</label></li>
+    <li><label><input type="checkbox"> Baby, elderly and pet supplies</label></li>
+  </ul>
+  <p class="wx-note muted">The ticks are not saved. Print this page to keep a copy.</p>
+</section>
+
+<section class="wx-card" id="after" aria-labelledby="after-title">
+  <h2 id="after-title">After the storm</h2>
+  <ul class="wx-tips">
+    <li>Wait for the all clear before you go out.</li>
+    <li>Stay away from downed power lines, and call GPA about them.</li>
+    <li>Run a generator outside only, far from doors and windows: its fumes can kill.</li>
+    <li>If GWA puts out a boil-water notice, boil tap water until it is lifted.{% if settings.outages_interval_minutes %} See <a href="/outages">power and water outages</a>.{% endif %}</li>
+    <li>Photograph damage before you clean up, for insurance and aid.</li>
+    <li>Check on neighbors, older people and anyone living alone.</li>
+  </ul>
+</section>
+
+{% if p.stories %}
+<section class="wx-card wx-wide" id="news" aria-labelledby="news-title">
+  <h2 id="news-title">Storm news from Guam</h2>
+  <ul class="wx-list">
+    {% for s in p.stories %}
+    <li><a href="{{ s.href }}" target="_blank" rel="noopener">{{ s.title }} ↗</a><span class="muted">{{ s.source }}, <span title="{{ s.published_at|fmt_datetime }}">{{ s.published_at|rel_time }}</span></span></li>
+    {% endfor %}
+  </ul>
+  {% call source() %}Stories of the last week about typhoons, tropical storms, COR levels and shelters, from the newsrooms this site reads.{% endcall %}
+</section>
+{% endif %}
+
+<section class="wx-card wx-wide" id="ready" aria-labelledby="ready-title">
+  <h2 id="ready-title">More on typhoons</h2>
+  <ul class="wx-list ty-links">
+    <li>{{ link(ghs_url, "Guam Homeland Security / Office of Civil Defense") }}<span class="muted">COR levels, shelters, the all clear</span></li>
+    <li>{{ link(nws_tropical_url, "National Weather Service, Guam: tropical") }}<span class="muted">Storm statements for Guam and Micronesia</span></li>
+    <li>{{ link(jtwc_url, "Joint Typhoon Warning Center") }}<span class="muted">Warnings, forecast maps and satellite pictures</span></li>
+    <li>{{ link(guam_radar_url, "Guam weather radar") }}<span class="muted">Rain bands as they come in</span></li>
+    <li>{{ link("https://rammb-slider.cira.colostate.edu/?sat=himawari", "Himawari satellite") }}<span class="muted">Clouds over the western Pacific</span></li>
+    <li><a href="/weather">Guam weather and tides</a><span class="muted">The forecast, surf and boating</span></li>
+    <li>{{ link(ready_url, "Ready.gov: typhoons and hurricanes") }}<span class="muted">What to do before, during and after</span></li>
+  </ul>
+</section>
+</div>
+{% endblock %}

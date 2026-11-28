@@ -839,8 +839,8 @@ SITE_TAGLINE=Guam news, updated every 30 minutes
 
 ## Weather
 
-The worker also reads the weather and the tides for Guam from three free
-United States government services. They need no key.
+The worker also reads the weather and the tides for Guam from free United
+States and Government of Guam services. They need no key.
 
 - The **National Weather Service** (NWS) office in Tiyan
   ([weather.gov/gum](https://www.weather.gov/gum/)): the watches, warnings and
@@ -849,7 +849,14 @@ United States government services. They need no key.
   Airport, the Surf Zone Forecast (rip currents, surf height, water
   temperature) and the Coastal Waters Forecast (wind and seas).
 - The **Joint Typhoon Warning Center** (JTWC): the tropical storms and
-  typhoons that it has warnings for in the western North Pacific.
+  typhoons that it has warnings for in the western North Pacific, each
+  storm's latest warning (where it is, its winds, and JTWC's forecast path
+  for five days), formation alerts for storms that may form within a day, and
+  JTWC's daily list of areas it watches (its Significant Tropical Weather
+  Advisory).
+- **Guam Homeland Security / Office of Civil Defense** (GHS/OCD,
+  [ghs.guam.gov](https://ghs.guam.gov/news)): its newest releases, from its
+  feed, for the COR level and shelter announcements on the Typhoon page.
 - **NOAA Tides & Currents**
   ([tidesandcurrents.noaa.gov](https://tidesandcurrents.noaa.gov/)): the times
   and heights of the high and low tides at one tide station, for the next
@@ -877,12 +884,21 @@ What the site shows:
   [The Weather page](using-the-website.md#the-weather-page)). Sunrise,
   sunset and the moon's phase are worked out by the site itself, with no
   service.
+- **The Typhoon tracker** (`/typhoon`, linked from the weather box, the
+  Weather page, a tropical warning in the banner and the footer): the storms
+  near Guam on a map drawn by the site, how far each one is and how close
+  JTWC's forecast takes it, Guam's COR level, shelter news, and checklists
+  (see [The Typhoon tracker](using-the-website.md#the-typhoon-tracker)). It
+  has no settings of its own: it is on while the weather is on
+  (`WEATHER_INTERVAL_MINUTES` above 0).
 
 If a service cannot be reached, the site keeps what it got last. A warning
 stays in the banner until its end time. The reading, the forecasts and the
 storm list are left out when they are more than 6 hours old (18 hours for the
 surf and coastal waters forecasts, which NWS writes twice a day). The tides
-are used as long as the saved month lasts.
+are used as long as the saved month lasts. JTWC's list of areas to watch is
+left out when it was written more than 36 hours ago; GHS/OCD releases are
+shown for a month.
 
 To read the weather and the tides now and see what each service gave:
 

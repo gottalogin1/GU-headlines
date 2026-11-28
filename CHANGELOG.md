@@ -6,6 +6,23 @@ release, see [Updating](docs/maintenance.md#updating).
 ## Unreleased
 
 ### Added
+- **Typhoon tracker** (`/typhoon`). Typhoons and tropical storms near Guam
+  on a map the site draws itself (rings 100, 300 and 500 miles from Guam,
+  each storm's path so far and the Joint Typhoon Warning Center's forecast
+  path), with how far each storm is from Guam and how close the forecast
+  takes it and when; a card per storm with its winds, gusts, movement and
+  JTWC's forecast table; formation alerts and JTWC's areas to watch with
+  their chance; Guam's COR level from the newest Guam Homeland Security
+  release; National Weather Service tropical watches and warnings; shelter
+  announcements; checklists for each COR level, a typhoon kit and after the
+  storm; and the week's storm news from the site's own stories. The weather
+  worker now also reads each storm's JTWC warning, JTWC's daily outlook and
+  the GHS/OCD feed. Linked from the weather box, the Weather page, a
+  tropical warning in the banner and the footer; in the sitemap, llms.txt
+  and IndexNow; and a section that can have a sponsor ("Typhoon tracker
+  brought to you by"). No new settings (it is on while
+  `WEATHER_INTERVAL_MINUTES` is above 0), no database change. How-to:
+  `docs/using-the-website.md#the-typhoon-tracker`.
 - **Weekly health check in Discord.** Every Monday at 8:00 AM Guam time, the
   worker opens every page of the site (every page in the sitemap, plus the
   search, the calendar and newsletter feeds, robots.txt and llms.txt) and
@@ -609,6 +626,11 @@ Agendas page and the other calendars.
   on GitHub, if you added them.
 
 ### Fixed
+- **The storm list no longer goes missing on quiet days.** When no storm
+  is active anywhere, JTWC's feed now has a single "No Active Tropical
+  Warnings" entry instead of its usual lists; the site read that as a broken
+  feed, so the weather box and the Weather page said "No recent storm list"
+  instead of "None in the western Pacific". It now reads it as no storms.
 - **One PayPal payment can no longer pay for two things.** When a buyer
   came back from PayPal, a new listing accepted the ID of any order of the
   site with the same price, such as a renewal or an ad booking that the

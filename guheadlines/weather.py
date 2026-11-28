@@ -12,12 +12,17 @@ saves the last good copy of each in the weather table:
               each side of the island, water temperature
 - marine:     the NWS coastal waters forecast (wind and seas, for boating)
 - storms:     the tropical storms and typhoons that the Joint Typhoon Warning
-              Center (JTWC) has warnings for in the western North Pacific
+              Center (JTWC) has warnings for in the western North Pacific,
+              each with its latest warning (where it is, its winds, JTWC's
+              forecast path) for the Typhoon page (typhoon.py)
+- outlook:    JTWC's daily list of areas where a storm may form
+- ghs:        the newest releases of Guam Homeland Security / Office of
+              Civil Defense (COR levels, shelters)
 - tides:      the high and low tides of the next month at the NOAA tide
               station of TIDE_STATION (Apra Harbor), read every few hours only
 
-All of it is United States government data, free to use, with no key. The
-website reads only the table, so a slow or broken source never slows a page.
+All of it is United States or Government of Guam data, free to use, with
+no key. The website reads only the table, so a slow or broken source never slows a page.
 """
 
 from __future__ import annotations
@@ -31,9 +36,10 @@ from itertools import pairwise
 from urllib.parse import urlencode
 
 from lxml import etree
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from . import sky
+from . import sky, typhoon
 from .db import session_scope
 from .models import WeatherReport
 from .scraper.http import HttpClient
@@ -443,6 +449,12 @@ def parse_storms(feed: bytes) -> list[dict]:
         if (item.findtext("guid") or "").strip() == "NWPAC-NIO-WARNINGS":
             html = item.findtext("description") or ""
             break
+        # With no storm anywhere, JTWC replaces its lists with one entry:
+        # "No Active Tropical Warnings in the Northwest Pacific, North Indian
+        # Ocean, ..." (seen on 2026-11-27).
+        title = (item.findtext("title") or "").lower()
+        if title.startswith("no active tropical warnings") and "northwest pacific" in title:
+            return []
     else:
         raise WeatherError("the JTWC feed has no western Pacific list")
     storms = []
@@ -455,10 +467,14 @@ def parse_storms(feed: bytes) -> list[dict]:
             continue
         end = titles[i + 1].start() if i + 1 < len(titles) else len(html)
         link = _HREF_RE.search(html, match.end(), end)
+        url = link[1] if link else JTWC_URL
         storms.append(
             {
                 "name": re.sub(r"\s+WTPN\d{2}$", "", title),
-                "url": link[1] if link else JTWC_URL,
+                "url": url,
+                # JTWC's name for the storm's products (wp2524): the Typhoon
+                # page's anchor, and how a storm's path is kept between checks.
+                "key": typhoon.storm_key(url),
             }
         )
     if not storms and "no current tropical cyclone warnings" not in html.lower():
@@ -569,6 +585,29 @@ def _read_hourly(client: HttpClient) -> list[dict]:
     return parse_hourly(_json(client, url))
 
 
+def saved(kind: str):
+    """The last saved copy of one kind, or None."""
+    with session_scope() as session:
+        return session.scalar(select(WeatherReport.data).where(WeatherReport.kind == kind))
+
+
+def read_storms(client: HttpClient) -> list[dict]:
+    """The storm list, with each western Pacific storm's latest JTWC warning
+    or formation alert (typhoon.parse_jtwc_text) and its path so far. A
+    warning that can't be read leaves that storm with its name and link."""
+    storms = parse_storms(client.get(JTWC_FEED).content)
+    now = _now()
+    for storm in storms:
+        if not storm["url"].endswith("web.txt"):
+            continue
+        try:
+            text = client.get(storm["url"]).content.decode("utf-8", errors="replace")
+            storm.update(typhoon.parse_jtwc_text(text, now))
+        except Exception as exc:  # the list is still worth showing
+            log.warning("weather: JTWC text %s not read: %s", storm["url"], exc)
+    return typhoon.carry_tracks(storms, saved("storms"))
+
+
 READERS = {
     "alerts": lambda client: parse_alerts(_json(client, ALERTS_URL)),
     "conditions": lambda client: parse_observation(_json(client, OBSERVATION_URL)),
@@ -576,7 +615,11 @@ READERS = {
     "hourly": _read_hourly,
     "surf": lambda client: parse_surf(_json(client, SURF_URL)),
     "marine": lambda client: parse_marine(_json(client, MARINE_URL)),
-    "storms": lambda client: parse_storms(client.get(JTWC_FEED).content),
+    "storms": read_storms,
+    "outlook": lambda client: typhoon.parse_outlook(
+        client.get(typhoon.JTWC_OUTLOOK_URL).content.decode("utf-8", errors="replace")
+    ),
+    "ghs": lambda client: typhoon.parse_ghs(client.get(typhoon.GHS_FEED).content),
 }
 
 
@@ -605,7 +648,9 @@ def check_weather(
             # api.weather.gov's robots.txt turns all robots away, to keep
             # search engines out of the API. NWS publishes the API for
             # programs like this one and asks only for a User-Agent. NOAA's
-            # tide API is also published for programs.
+            # tide API is also published for programs. GHS/OCD's robots.txt
+            # allows its feed (read once a check, well within its 10 second
+            # crawl delay).
             respect_robots=False,
         )
     readers = dict(READERS)
