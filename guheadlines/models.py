@@ -413,11 +413,22 @@ NEWSLETTER_CLICKS = "newsletter-click"
 # Sign-ups in the site's newsletter box (sendfox.py), kept in page_views
 # under this name, for the weekly report (reports.py).
 NEWSLETTER_SIGNUPS = "newsletter-signup"
+# For the weekly health check (checkup.py), also kept in page_views: how many
+# times each kind of page was asked for ("served:" and the page's pattern,
+# such as "served:/events/{event_id}"), how many of those got a server error
+# ("server-error:...") or took longer than SLOW_PAGE_SECONDS ("slow:..."),
+# and the worker's checks of the site every 5 minutes (answered or not).
+PAGES_SERVED = "served:"
+PAGE_ERRORS = "server-error:"
+SLOW_PAGES = "slow:"
+UPTIME_UP = "uptime-up"
+UPTIME_DOWN = "uptime-down"
 
 
 class PageViews(Base):
     """How many times readers opened each page on one Guam day (see web/stats.py),
-    and the clicks on the sponsor spot (path SPONSOR_CLICKS)."""
+    the clicks on the sponsor spot (path SPONSOR_CLICKS), and the other counts
+    named above (their names never start with "/")."""
 
     __tablename__ = "page_views"
 

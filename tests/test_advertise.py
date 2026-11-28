@@ -445,7 +445,10 @@ def test_a_business_books_pays_and_the_owner_approves(site):
     with session_scope() as session:
         counted = dict(session.execute(select(PageViews.path, PageViews.views)).all())
     assert counted[f"ad-click:{booking.id}"] == 1 and counted["sponsor-click"] == 1
-    assert not any("booking" in path for path in counted)
+    # The secret address is never kept: not as a page view, and the health
+    # check's counts keep only the kind of page (/advertise/booking/{code}).
+    assert not any(code in path for path in counted)
+    assert not any("booking" in path for path in counted if path.startswith("/"))
     # The business sees how its ad is doing.
     with session_scope() as session:
         session.add(PageViews(day=datetime.now(GUAM_TZ).date(), path="/", views=40))

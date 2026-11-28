@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from conftest import visitor_views
 from fastapi.testclient import TestClient
 from sqlalchemy import update
 
@@ -930,7 +931,7 @@ def _counted() -> tuple[dict, dict]:
     with session_scope() as session:
         views = {row.path: row.views for row in session.query(PageViews)}
         clicks = {row.article_id: row.clicks for row in session.query(StoryClicks)}
-    return views, clicks
+    return visitor_views(views), clicks
 
 
 def test_story_links_go_through_the_counting_stop(counting):
@@ -994,7 +995,9 @@ def test_nothing_is_counted_while_stats_are_off(client):
     story_id = _article_id("article_1")
     client.get("/", headers=BROWSER)
     client.get(f"/go/{story_id}", headers=BROWSER, follow_redirects=False)
-    assert stats.counts._views == {} and stats.counts._clicks == {}
+    assert visitor_views(stats.counts._views) == {} and stats.counts._clicks == {}
+    # Only the kinds of pages asked for, for the weekly health check (checkup.py).
+    assert {path for _, path in stats.counts._views} == {"served:/", "served:/go/{article_id}"}
     # Old links still lead to the story.
     go = client.get(f"/go/{story_id}", follow_redirects=False)
     assert go.headers["location"] == "https://www.postguam.com/news/local/a/article_1.html"

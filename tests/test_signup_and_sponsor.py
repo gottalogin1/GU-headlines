@@ -12,6 +12,7 @@ from itertools import pairwise
 
 import httpx
 import pytest
+from conftest import visitor_views
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -171,7 +172,7 @@ def test_signup_adds_the_address_to_the_sendfox_list(signup, fake_sendfox):
     from guheadlines.models import NEWSLETTER_SIGNUPS
     from guheadlines.web import stats
 
-    assert [path for _, path in stats.counts._views] == [NEWSLETTER_SIGNUPS]
+    assert [path for _, path in visitor_views(stats.counts._views)] == [NEWSLETTER_SIGNUPS]
     contact = fake_sendfox.requests[-1]
     assert contact.headers["authorization"] == f"Bearer {TOKEN}"
     assert str(contact.url) == "https://api.sendfox.com/contacts"
@@ -427,7 +428,7 @@ def test_sponsor_clicks_are_counted_on_the_stats_page(with_sponsor, monkeypatch)
     stats.counts.flush()
     with session_scope() as session:
         views = {row.path: row.views for row in session.query(PageViews)}
-    assert views == {"/": 1, SPONSOR_CLICKS: 1}
+    assert visitor_views(views) == {"/": 1, SPONSOR_CLICKS: 1}
     login = base64.b64encode(b"me:a long stats password").decode()
     page = client.get("/stats", headers={"authorization": f"Basic {login}"}).text
     spot = page.split("Sponsor spot</h2>", 1)[1].split("</dl>", 1)[0]

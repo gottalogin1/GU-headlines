@@ -23,6 +23,22 @@ release, see [Updating](docs/maintenance.md#updating).
   brought to you by"). No new settings (it is on while
   `WEATHER_INTERVAL_MINUTES` is above 0), no database change. How-to:
   `docs/using-the-website.md#the-typhoon-tracker`.
+- **Weekly health check in Discord.** Every Monday at 8:00 AM Guam time, the
+  worker opens every page of the site (every page in the sitemap, plus the
+  search, the calendar and newsletter feeds, robots.txt and llms.txt) and
+  posts **🩺 Weekly health check**: pages that don't open (server error, not
+  found, no answer), pages slower than `SLOW_PAGE_SECONDS` (1 second) twice
+  in a row, the kinds of pages where visitors got a server error or that
+  were often slow for them during the week, news sites whose new stories
+  stopped coming with a photo (or whose photos could not be saved), sources
+  still not working or quiet, and how often the site answered the worker's
+  check every 5 minutes. "All good" comes without a phone notification.
+  Pages that wait for PayPal never count as slow. For visitors, only the kind
+  of page is counted (such as `/events/…`), never the page or who visited.
+  New settings `HEALTH_CHECK_DAY` (`monday`; `off` turns it off) and
+  `SLOW_PAGE_SECONDS`; without Docker, `WEBSITE_ADDRESS`. No database
+  change. Run it now with `guheadlines health-check --show`. How-to:
+  `docs/maintenance.md#weekly-health-check`.
 - **Traffic trends for selling ads on the stats page.** `/stats` now has
   **Month by month**: the visits and page views of each month of the last
   year (a chart and a table), the page views of a week on average, and the

@@ -204,7 +204,9 @@ guheadlines worker              # and this as another
 
 Without Docker, photos go to `data/media` in the project folder (set
 `MEDIA_DIR` to change it), and settings come from environment variables with
-the same names as in `.env`.
+the same names as in `.env`. Set `WEBSITE_ADDRESS=http://127.0.0.1:8000` for
+the worker, so the weekly health check finds the website (in Docker it is
+`http://web:8000`).
 
 ## Development
 

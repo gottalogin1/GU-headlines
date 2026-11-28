@@ -374,9 +374,10 @@ message as a notification. These alerts come:
 | 💾 disk 91% full, 🧠 memory 95% in use, 🔒 certificate ends | the server ([server checks](#server-checks)) | The server runs low on disk space or memory, or an https certificate ends within 14 days. |
 | 🚫 the mail server is on a spam block list | the server | Your own mail server's IP address is on a block list ([server checks](#server-checks)). |
 | 💰 Money for *day*, 📊 Weekly report | the worker ([reports](#reports)) | Every morning, and every Monday. |
+| 🩺 Weekly health check | the worker ([weekly health check](#weekly-health-check)) | Every Monday: broken and slow pages, news sites whose photos stopped, uptime. |
 
 Each problem is posted once, not every hour. Nothing is posted while all is
-well, except the reports.
+well, except the reports and the weekly health check.
 
 ### Reports
 
@@ -419,6 +420,60 @@ docker compose exec worker guheadlines report weekly --show  # shows it here onl
 A report that can't be posted (Discord down) is tried again every 10 minutes.
 If the worker was off at 8:00, it posts the report when it starts, until 8:00
 in the evening.
+
+### Weekly health check
+
+Every Monday at 8:00 AM Guam time (`HEALTH_CHECK_DAY`, `REPORT_TIME`), the
+worker checks the whole site and posts **🩺 Weekly health check** in Discord,
+for the 7 days before:
+
+- **Broken pages.** The worker opens every page in the sitemap (the home
+  page, topics, news sites, Jobs, Events and the newest event pages, Bids,
+  the guides, the newest archive pages...), plus the search, the calendar
+  feed, the newsletter feed, `robots.txt` and `llms.txt`, and lists each one
+  that doesn't open: *server error* (a mistake in the site's program), *not
+  found*, or *no answer*. It also lists the kinds of pages where visitors
+  got a server error during the week, such as `/events/…: 3 times (of 400)`
+  (the `…` is the part that changes from page to page).
+- **Slow pages.** Pages that took longer than `SLOW_PAGE_SECONDS` (1 second)
+  to make, both times the worker opened them, and the kinds of pages that
+  were often that slow for visitors (at least 3 times, and at least 1 in 100
+  visits). Pages that wait for PayPal are never counted as slow.
+- **Photos.** A news site whose new stories stopped coming with a photo (less
+  than half as often as in the 4 weeks before), or whose photos could not be
+  saved on the server (the site then shows the news site's own copy). That
+  usually means the news site changed its pages, or blocks the server.
+- **Not working or quiet.** News sites, job boards and event calendars that
+  still don't work, and news sites that went quiet. Each one already had its
+  own alert; this is the list of those not fixed yet.
+- **Uptime.** The worker asks the site every 5 minutes whether it works, and
+  the check says how often it answered, such as *2,016 of 2,016 checks
+  (100%)*. Below 99% it counts as a problem. This check runs inside the
+  server; the [outside check](#watching-from-outside-the-server) is the one
+  that alerts at once when visitors can't reach the site.
+
+When all is well, it says **all good** and comes without a phone notification.
+The worker opens the pages inside the server (at `http://web:8000`), so the
+times are the server's own, without the trip over the internet, and its
+visits are not counted as page views. For visitors, only the kind of page
+is counted (`/events/…`), never the page itself or who visited.
+
+To run it now (it takes a minute or two):
+
+```sh
+docker compose exec worker guheadlines health-check --show  # shows it here only
+docker compose exec worker guheadlines health-check         # posts it in Discord
+```
+
+When it lists a server error, the website's log says what went wrong:
+
+```sh
+docker compose logs web --since 24h | grep -B2 -A20 Traceback
+```
+
+A slow page often gets faster once the server has more memory or fewer
+programs running; the [server checks](#server-checks) post when memory runs
+low. `HEALTH_CHECK_DAY=off` turns the health check off.
 
 ### Server checks
 

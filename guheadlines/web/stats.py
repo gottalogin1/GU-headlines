@@ -1,5 +1,7 @@
 """Visitor counts for the private stats page (/stats): page views, story
-clicks and the websites that visits come from, counted on the server.
+clicks and the websites that visits come from, counted on the server. Also,
+for the weekly health check (checkup.py), how often each kind of page was
+asked for, and how often it failed or was slow.
 
 No script runs in the visitor's browser, no cookie is set and no IP address is
 kept: a view, a click or a visit only adds 1 to a total for its Guam day. Each web
@@ -28,6 +30,9 @@ from ..models import (
     GUIDE_SPONSOR_CLICKS,
     NEWSLETTER_CLICKS,
     NEWSLETTER_SIGNUPS,
+    PAGE_ERRORS,
+    PAGES_SERVED,
+    SLOW_PAGES,
     SPONSOR_CLICKS,
     Article,
     PageViews,
@@ -39,6 +44,10 @@ from ..scraper.text import GUAM_TZ
 log = logging.getLogger(__name__)
 
 FLUSH_SECONDS = 30
+
+# The weekly health check's own visits (checkup.py) say this name. They are
+# not counted: it is no reader, and it reports what it finds itself.
+CHECKUP_AGENT = "GUHeadlinesHealthCheck/1.0"
 
 # Search engines, link previews (Facebook, Discord, iMessage...), PageSpeed
 # and other programs: their names hold one of these words or a web address.
@@ -137,9 +146,23 @@ class Counts:
     def referrer(self, site: str) -> None:
         self._add(self._referrers, site)
 
-    def _add(self, counter: Counter, key: str | int) -> None:
+    def served(self, pattern: str, error: bool = False, slow: bool = False) -> None:
+        """A page of this kind ("/events/{event_id}") was asked for, and it
+        got a server error, or took longer than SLOW_PAGE_SECONDS: for the
+        weekly health check (checkup.py). Counted also while the visitor
+        stats are off: only the kind of page is kept, not the page itself."""
+        keys = [f"{PAGES_SERVED}{pattern}"]
+        if error:
+            keys.append(f"{PAGE_ERRORS}{pattern}")
+        if slow:
+            keys.append(f"{SLOW_PAGES}{pattern}")
+        self._add(self._views, *keys)
+
+    def _add(self, counter: Counter, *keys: str | int) -> None:
         with self._lock:
-            counter[(datetime.now(GUAM_TZ).date(), key)] += 1
+            day = datetime.now(GUAM_TZ).date()
+            for key in keys:
+                counter[(day, key)] += 1
             if self._writer is None:
                 self._writer = threading.Thread(
                     target=self._write_every, name="visitor-counts", daemon=True
