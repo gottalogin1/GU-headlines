@@ -626,6 +626,21 @@ Agendas page and the other calendars.
   on GitHub, if you added them.
 
 ### Fixed
+- **Google's "Events structured data" warnings.** Search Console warned that
+  event pages were missing `offers`, `performer`, `image`, `endDate` and
+  `description`. Each event page now tells Google its end (the start time
+  when the calendar gives no end), a description (the calendar's, or one
+  made of the event's name, time, place and organizer), a picture (a card
+  the site draws with the event's details, `/events/<number>.png`) and a
+  performer (the group that holds the event). A price is given only for
+  events known to be free, which now say **Admission: Free** on their page
+  (every other event page says **Admission: Unknown**):
+  calendars with the new `free_admission: true` option in
+  `config/events.yaml` (on for the Legislature and GovGuam public meetings),
+  and events whose description says they are free without giving a price.
+  Other events get no made-up price, so Search Console still warns about
+  `offers` for them; Google lists them anyway. No new settings, no database
+  change. How-to: `docs/events.md#each-events-page`.
 - **The storm list no longer goes missing on quiet days.** When no storm
   is active anywhere, JTWC's feed now has a single "No Active Tropical
   Warnings" entry instead of its usual lists; the site read that as a broken

@@ -100,7 +100,7 @@ from ..weather import (
     for_page,
     weather_page,
 )
-from . import backups, event_calendar, media_kit, queries, seo, sponsor, stats
+from . import backups, event_calendar, event_image, media_kit, queries, seo, sponsor, stats
 from .queries import MARK_END, MARK_START, BidFilters, EventFilters, Filters, JobFilters
 
 log = logging.getLogger(__name__)
@@ -1729,6 +1729,19 @@ def _upcoming_event(event_id: int) -> dict:
     return item
 
 
+def _event_calendar_config(slug: str) -> CalendarConfig | None:
+    """An event's calendar in events.yaml (None for featured events, which
+    people post on the site)."""
+    return next((c for c in events_config_cache.get() if c.slug == slug), None)
+
+
+def _event_color(slug: str, calendar: CalendarConfig | None) -> str | None:
+    """The colour of a calendar's events (style.css --cal-*)."""
+    if slug == FEATURED_CALENDAR:
+        return event_calendar.FEATURED_COLOR
+    return calendar.color if calendar else None
+
+
 def google_calendar_link(event) -> str:
     """A Google Calendar link that opens one event, filled in, ready to save."""
     start, end = ical.ical_times(event)
@@ -1756,8 +1769,8 @@ def event_page(request: Request, event_id: int):
     links that add the event to a calendar app."""
     item = _upcoming_event(event_id)
     event = item["event"]
-    colors = {c.slug: c.color for c in events_config_cache.get() if c.color}
-    colors[FEATURED_CALENDAR] = event_calendar.FEATURED_COLOR
+    calendar = _event_calendar_config(item["calendar_slug"])
+    free = seo.free_admission(event, calendar_free=bool(calendar and calendar.free_admission))
     when = event_when(event)
     summary = f"{when}, {event.location}" if event.location else when
     if event.description:
@@ -1767,12 +1780,16 @@ def event_page(request: Request, event_id: int):
         url=seo.absolute_url(request, f"/events/{event.id}"),
         calendar_name=item["calendar_name"],
         calendar_homepage=safe_url(item["calendar_homepage"]) or None,
+        when=when,
+        image=seo.absolute_url(request, f"/events/{event.id}.png"),
+        free=free,
     )
     return render(
         request,
         "event.html",
         item=item,
-        color=colors.get(item["calendar_slug"]),
+        color=_event_color(item["calendar_slug"], calendar),
+        free=free,
         google_link=google_calendar_link(event),
         # Many events share a name ("Public Hearing"); the day tells them apart.
         title=f"{event.title}, {_short_day(to_local(event.starts_at).date())}",
@@ -1784,6 +1801,24 @@ def event_page(request: Request, event_id: int):
         show_ad=True,
         show_travel=True,
     )
+
+
+@app.get("/events/{event_id:int}.png")
+def event_picture(event_id: int):
+    """The picture of an event that its page gives search engines: a card with
+    its name, time, place and organizer (event_image.py)."""
+    item = _upcoming_event(event_id)
+    event = item["event"]
+    calendar = _event_calendar_config(item["calendar_slug"])
+    card = event_image.event_card(
+        event.title,
+        event_when(event),
+        event.location,
+        event.organizer or item["calendar_name"],
+        _event_color(item["calendar_slug"], calendar),
+        settings.site_name,
+    )
+    return Response(card, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/events/{event_id:int}.ics")

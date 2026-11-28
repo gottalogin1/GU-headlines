@@ -426,6 +426,9 @@ class CalendarConfig:
     # Also show its events in the home page's news feed, each one the day
     # before it (only its main events: see main_events).
     news_feed: bool = False
+    # Its events cost nothing to attend (public meetings), which the event
+    # pages say and tell search engines.
+    free_admission: bool = False
     enabled: bool = True
     request_delay: float | None = None
     ignore_robots: bool = False
@@ -518,6 +521,7 @@ def parse_events_config(data: dict) -> list[CalendarConfig]:
             not_main=not_main,
             color=color,
             news_feed=bool(raw.get("news_feed", False)),
+            free_admission=bool(raw.get("free_admission", False)),
             enabled=bool(raw.get("enabled", True)),
             request_delay=float(raw["request_delay"]) if raw.get("request_delay") else None,
             ignore_robots=bool(raw.get("ignore_robots", False)),

@@ -242,13 +242,49 @@ def guide_data(request: Request, guide) -> dict:
 # A place that is only online. Google lists events at a physical place only.
 _ONLINE_RE = re.compile(r"\b(zoom|webex|teams|online|virtual|teleconference|live ?stream)\b", re.I)
 
+# Words that say an event costs nothing to attend ("Free and open to the
+# public", "Admission is free"), and a price, which makes them unsure ("Free
+# for members, $10 for guests").
+_FREE_RE = re.compile(
+    r"\b(free (and open )?to the public|free for (everyone|the public)|free to attend"
+    r"|free (admission|entry|entrance)|admission is free|free event"
+    r"|no (admission|entry|entrance|cover) (fee|charge|cost))\b",
+    re.I,
+)
+_PRICE_RE = re.compile(r"\$ ?\d|\b\d+(\.\d\d)? ?(dollars|usd)\b", re.I)
+
+
+def free_admission(event, calendar_free: bool = False) -> bool:
+    """Whether the event is known to cost nothing to attend: its calendar's
+    events all are (events.yaml free_admission, such as public meetings), or
+    its name or description says so. Never when they give a price."""
+    text = " ".join(part for part in (event.title, event.description) if part)
+    if _PRICE_RE.search(text):
+        return False
+    return calendar_free or bool(_FREE_RE.search(text))
+
 
 def event_data(
-    event, *, url: str, calendar_name: str, calendar_homepage: str | None
+    event,
+    *,
+    url: str,
+    calendar_name: str,
+    calendar_homepage: str | None,
+    when: str,
+    image: str,
+    free: bool = False,
 ) -> dict | None:
     """Event structured data for an event's own page (`url`), so that Google
     can list the event in its event results. None when the event has no
-    physical place, which Google needs."""
+    physical place, which Google needs.
+
+    Every field comes from what the calendar gives, and what it leaves out
+    is filled in only with what is known for sure: no end time is the start
+    time, no description is the event's name, time, place and organizer (all
+    shown on the page), the image is the event's card (event_image.py), the
+    performer is the group that holds it, as no calendar names performers,
+    and the price is given only for an event that is `free` (see
+    free_admission); others have no offers rather than a made-up price."""
     place = event.location
     if not place or _ONLINE_RE.search(place):
         return None
@@ -259,8 +295,11 @@ def event_data(
         last = (end - timedelta(days=1)).date() if end else start.date()
         start_date, end_date = start.date().isoformat(), max(last, start.date()).isoformat()
     else:
-        start_date, end_date = start.isoformat(), end.isoformat() if end else None
-    organizer = {"@type": "Organization", "name": event.organizer or calendar_name}
+        start_date = start.isoformat()
+        end_date = end.isoformat() if end and end > start else start_date
+    held_by = event.organizer or calendar_name
+    description = event.description or f"{event.title}: {when}, at {place}. Held by {held_by}."
+    organizer = {"@type": "Organization", "name": held_by}
     if calendar_homepage:
         organizer["url"] = calendar_homepage
     data = {
@@ -268,7 +307,10 @@ def event_data(
         "@type": "Event",
         "name": event.title,
         "url": url,
+        "description": description,
+        "image": [image],
         "startDate": start_date,
+        "endDate": end_date,
         # Events marked cancelled or postponed are not collected.
         "eventStatus": "https://schema.org/EventScheduled",
         "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
@@ -278,11 +320,17 @@ def event_data(
             "address": {"@type": "PostalAddress", "streetAddress": place, "addressCountry": "GU"},
         },
         "organizer": organizer,
+        "performer": dict(organizer),
     }
-    if end_date:
-        data["endDate"] = end_date
-    if event.description:
-        data["description"] = event.description
+    if free:
+        # The page says "Admission: Free", so the offer points to it.
+        data["offers"] = {
+            "@type": "Offer",
+            "price": 0,
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock",
+            "url": url,
+        }
     return data
 
 

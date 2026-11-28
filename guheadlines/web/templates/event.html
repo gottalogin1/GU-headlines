@@ -14,6 +14,7 @@
     <dl class="job-facts event-facts">
       <div><dt>When</dt><dd><time datetime="{{ (e.starts_at|to_local).isoformat() }}">{{ e|event_when }}</time></dd></div>
       <div><dt>Where</dt><dd>{{ e.location or "Not given by the calendar" }}</dd></div>
+      <div><dt>Admission</dt><dd>{{ "Free" if free else "Unknown" }}</dd></div>
     </dl>
     {% if e.description %}<p class="intro job-description">{{ e.description }}</p>{% endif %}
     {% if e.url or e.agenda_url %}
