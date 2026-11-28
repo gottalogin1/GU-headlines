@@ -14,6 +14,10 @@
 </figure>
 {% endmacro %}
 
+{% macro change(n) %}{% if n is none %}<span class="muted">–</span>{% elif n > 0 %}+{{ n }}%{% else %}{{ n }}%{% endif %}{% endmacro %}
+
+{% macro month_name(m) %}{{ "{:%B %Y}".format(m.first) }}{% if not m.whole %}<div class="muted small">{{ "{:%b}".format(m.first) }} {{ m.first.day }}–{{ m.last.day }}</div>{% endif %}{% endmacro %}
+
 {% block main %}
 <header class="page-head">
   <h1>Visitor stats</h1>
@@ -84,6 +88,78 @@
   <div><dt>Sponsor clicks</dt><dd>{{ "{:,}".format(sponsor_clicks) }}</dd></div>
   <div><dt>Clicks per 1,000 views</dt><dd>{{ "%.1f"|format(sponsor_clicks * 1000 / views) if views else "–" }}</dd></div>
 </dl>
+{% endif %}
+
+<h2 class="section-title" id="months">Month by month</h2>
+<p class="muted section-note">Whole months, whatever the period above. Only finished days count, so this month
+  runs to yesterday, and the first month starts on the day the counting began. "A week" is the page views of
+  a week in that month, on average, so a month that is not over compares fairly with a whole one. "Change" is
+  a week's page views against the month before.{% if media_kit %} The <a href="/advertise/media-kit.pdf">media kit</a>
+  shows the last 30 days.{% endif %}</p>
+{% if months %}
+{% if months|length > 1 %}
+{% set peak = months|map(attribute="per_week")|max %}
+<figure class="stats-chart">
+  <figcaption>Page views a week, month by month{% if peak %} <span class="muted">(highest: {{ "{:,}".format(peak) }})</span>{% endif %}</figcaption>
+  <svg viewBox="0 0 {{ months|length * 10 }} 100" preserveAspectRatio="none" role="img" aria-label="Page views a week, month by month. The numbers are in the table below.">
+    {% for row in months %}{% set height = (row.per_week * 100 / peak) if peak else 0 %}
+    <rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 100 - height }}" width="8" height="{{ height }}"><title>{{ "{:%B %Y}".format(row.month.first) }}: {{ "{:,}".format(row.per_week) }}</title></rect>
+    {% endfor %}
+  </svg>
+  <div class="stats-axis muted small"><span>{{ "{:%b %Y}".format(months[0].month.first) }}</span><span>{{ "{:%b %Y}".format(months[-1].month.first) }}</span></div>
+</figure>
+{% endif %}
+<div class="table-wrap">
+<table class="status-table compact stats-months">
+  <thead><tr><th>Month</th><th class="num">Visits</th><th class="num">Page views</th><th class="num">A week</th><th class="num">Change</th></tr></thead>
+  <tbody>
+  {% for row in months|reverse %}
+  <tr><td>{{ month_name(row.month) }}</td><td class="num">{{ "{:,}".format(row.month.visits) }}</td><td class="num">{{ "{:,}".format(row.month.views) }}</td><td class="num">{{ "{:,}".format(row.per_week) }}</td><td class="num">{{ change(row.change) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted section-note">A visit is a reader who comes to the site from another website or from no website
+  (see "Where readers come from" below). Moving from page to page is one visit.</p>
+
+<h2 class="section-title">Sections, month by month</h2>
+<p class="muted section-note">The page views of a week, on average, in each section that a business can sponsor.
+  The sponsor spot is on every page, so its row is the whole site. The months are {{ "{:%B %Y}".format(shown_months[0].first) }}
+  {%- if shown_months|length > 1 %} to {{ "{:%B %Y}".format(shown_months[-1].first) }}{% endif %}, and a month that is not
+  whole says which days count. "Change" is the newest month against the one before it. Use this to see which
+  sections grow, and to show a business that the numbers in the media kit are not a lucky month.</p>
+<div class="table-wrap">
+<table class="status-table compact stats-months stats-sections">
+  <thead><tr><th>Section</th>{% for m in shown_months %}<th class="num">{{ "{:%b}".format(m.first) }}{% if not m.whole %}<div>{{ m.first.day }}–{{ m.last.day }}</div>{% endif %}</th>{% endfor %}<th class="num">Change</th></tr></thead>
+  <tbody>
+  {% for row in section_rows %}
+  <tr><td>{{ row.name }}</td>{% for week in row.weeks %}<td class="num">{{ "{:,}".format(week) }}</td>{% endfor %}<td class="num">{{ change(row.change) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted section-note">No finished day counted yet. The first month shows from tomorrow.</p>{% endif %}
+
+<h2 class="section-title" id="prices">Your prices per 1,000 page views</h2>
+{% if prices %}
+<p class="muted section-note">What a business pays for each 1,000 page views that its ad is on, at your price
+  for a week and the page views of a week in the last 30 days (the numbers of the media kit). Use it to compare
+  your prices: a section with a much higher number than the others gets few readers for its price, and one with
+  a much lower number could cost more. Section sponsors have one price for every section
+  (SECTION_SPONSOR_PRICE in .env).</p>
+<div class="table-wrap">
+<table class="status-table compact">
+  <thead><tr><th>Ad</th><th class="num">Price a week</th><th class="num">Page views a week</th><th class="num">Per 1,000 views</th></tr></thead>
+  <tbody>
+  {% for row in prices %}
+  <tr><td>{{ row.name }}</td><td class="num">{{ row.price }}</td><td class="num">{{ "{:,}".format(row.week) }}</td><td class="num">{% if row.per_1000 %}{{ row.per_1000 }}{% else %}<span class="muted">–</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted section-note">No weekly ad has a price yet. Set SPONSOR_WEEK_PRICE or SECTION_SPONSOR_PRICE in
+  .env (see .env.example) to see here what each one costs a business per 1,000 page views.</p>
 {% endif %}
 
 <h2 class="section-title">Where readers come from</h2>

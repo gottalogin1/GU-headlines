@@ -57,6 +57,8 @@ class Kit:
     sections: list[tuple[str, int]]  # (name, page views), the most read first
     referrers: list[tuple[str, int]]  # (website, visits), the most first; "" = no website
     prices: list[tuple[str, str, str]]  # (name, price, what the business gets)
+    # Page views up (or down) from the `days` before, in percent; None when unknown.
+    growth: int | None = None
 
 
 def _day(day: date) -> str:
@@ -161,9 +163,10 @@ def _top(kit: Kit, chart: int, rows: int) -> tuple[_Page, float]:
 
     # The numbers.
     first = kit.made - timedelta(days=kit.days - 1)
-    y = page.heading(
-        144, f"Readers in the last {kit.days} days", f"{_day(first)} to {_day(kit.made)}"
-    )
+    note = f"{_day(first)} to {_day(kit.made)}"
+    if kit.growth and kit.growth > 0:  # a sales sheet names the growth, not a fall
+        note += f", up {kit.growth}% on the {kit.days} days before"
+    y = page.heading(144, f"Readers in the last {kit.days} days", note)
     tiles = [
         ("Page views", kit.views),
         ("A day, on average", kit.per_day),
