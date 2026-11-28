@@ -113,9 +113,11 @@ event. The site fills in each one only with what it knows for sure:
   `free_admission: true` (the Legislature and GovGuam public meetings), or
   its name or description says so ("free and open to the public", "admission
   is free") without giving a price. Its page then also says
-  **Admission: Free**. Other events get no price at all rather than a
-  made-up one, so Search Console keeps warning "Missing field offers" for
-  them; that warning doesn't stop Google from listing them.
+  **Admission: Free**. Every other event's page says **Admission: Unknown**,
+  and Google gets no price for it: Google's price field takes only a number,
+  so "unknown" can't go in it, and a made-up price would be wrong. Search
+  Console keeps warning "Missing field offers" for these events; that
+  warning doesn't stop Google from listing them.
 
 To see what Google reads on one event's page, paste its address into
 Google's [Rich Results Test](https://search.google.com/test/rich-results).

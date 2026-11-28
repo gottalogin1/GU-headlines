@@ -633,7 +633,8 @@ Agendas page and the other calendars.
   made of the event's name, time, place and organizer), a picture (a card
   the site draws with the event's details, `/events/<number>.png`) and a
   performer (the group that holds the event). A price is given only for
-  events known to be free, which now say **Admission: Free** on their page:
+  events known to be free, which now say **Admission: Free** on their page
+  (every other event page says **Admission: Unknown**):
   calendars with the new `free_admission: true` option in
   `config/events.yaml` (on for the Legislature and GovGuam public meetings),
   and events whose description says they are free without giving a price.

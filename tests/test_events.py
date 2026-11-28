@@ -1125,8 +1125,8 @@ def test_event_page_fills_what_the_calendar_leaves_out(web):
     )
     assert event["performer"] == {"@type": "Organization", "name": "Guam Community College"}
     assert event["image"] == [f"http://testserver/events/{event_id}.png"]
-    # Its price is not known: no offers rather than a made-up price.
-    assert "offers" not in event and "Admission" not in html
+    # Its price is not known: the page says so, and Google gets no made-up price.
+    assert "offers" not in event and "<dt>Admission</dt><dd>Unknown</dd>" in html
 
 
 def test_event_page_free_when_its_description_says_so(web):
@@ -1146,7 +1146,7 @@ def test_event_page_free_when_its_description_says_so(web):
     assert event["offers"]["price"] == 0
     html = web.get(f"/events/{priced}").text
     (event,) = [d for d in _structured(html) if d["@type"] == "Event"]
-    assert "offers" not in event and "Admission" not in html
+    assert "offers" not in event and "<dt>Admission</dt><dd>Unknown</dd>" in html
 
 
 def test_free_admission():
