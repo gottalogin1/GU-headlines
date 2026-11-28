@@ -22,6 +22,18 @@ release, see [Updating](docs/maintenance.md#updating).
   `SLOW_PAGE_SECONDS`; without Docker, `WEBSITE_ADDRESS`. No database
   change. Run it now with `guheadlines health-check --show`. How-to:
   `docs/maintenance.md#weekly-health-check`.
+- **Traffic trends for selling ads on the stats page.** `/stats` now has
+  **Month by month**: the visits and page views of each month of the last
+  year (a chart and a table), the page views of a week on average, and the
+  change from the month before. A table shows the page views of a week in
+  each section that a business can sponsor (and on every page, for the
+  sponsor spot) for the last six months. **Your prices per 1,000 page views**
+  shows what each weekly ad costs a business for each 1,000 page views, at
+  your prices and the page views of the last 30 days. Only finished days
+  count, so a month that has just begun compares fairly. When the page views
+  of the last 30 days are up on the 30 days before, the media kit and the
+  Advertise page say by how much ("up 10% on the 30 days before"). No new
+  settings, no database change.
 - **Life in the Son Christian Fellowship's events.** The church's events
   (lifeinthesonguam.org/events) are on the Events page, in purple on the
   month calendar, each with its own page and in the calendar app feed. They

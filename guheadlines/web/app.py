@@ -2226,9 +2226,14 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
     # This worker's newest counts. The other worker writes its own within 30 seconds.
     stats.counts.flush()
     config = config_cache.get()
-    since = datetime.now(GUAM_TZ).date() - timedelta(days=days - 1)
+    found = ad_sections()
+    today = datetime.now(GUAM_TZ).date()
+    since = today - timedelta(days=days - 1)
     with session_scope() as session:
         data = queries.visitor_stats(session, since)
+        months = ads.monthly(session, found, today)
+        recent = ads.audience(session, today)
+        recent_sections = ads.section_views(session, found, today)
         to_review = session.scalar(select(func.count()).where(Listing.status == listings.REVIEW))
         news_health = health.news_health(
             session, [s.slug for s in config.sources if s.collected], datetime.now(timezone.utc)
@@ -2270,6 +2275,43 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         **{f"/category/{c.slug}": c.name for c in config.categories},
         **{f"/source/{s.slug}": s.name for s in config.sources},
     }
+    # Month by month: page views a week, on average, and the change from the month before.
+    weekly = [m.per_week(m.views) for m in months]
+    month_rows = [
+        {"month": m, "per_week": week, "change": ads.change(week, weekly[n - 1] if n else 0)}
+        for n, (m, week) in enumerate(zip(months, weekly, strict=True))
+    ]
+    # The last six months of every page (the sponsor spot) and of each section.
+    shown = months[-6:]
+    section_rows = []
+    if shown:
+        named = [("Every page (sponsor spot)", [m.per_week(m.views) for m in shown])]
+        named += sorted(
+            ((s.name, [m.per_week(m.sections[s.slug]) for m in shown]) for s in found),
+            key=lambda row: -row[1][-1],
+        )
+        section_rows = [
+            {
+                "name": name,
+                "weeks": weeks,
+                "change": ads.change(weeks[-1], weeks[-2]) if len(weeks) > 1 else None,
+            }
+            for name, weeks in named
+        ]
+    # What the weekly prices cost a business for each 1,000 page views, with the
+    # page views of the last 30 days (the numbers of the media kit).
+    prices = []
+
+    def price(name: str, cents: int, week: int) -> None:
+        per_1000 = ads.money(round(cents * 1000 / week)) if week else None
+        prices.append({"name": name, "price": ads.money(cents), "week": week, "per_1000": per_1000})
+
+    if settings.sponsor_week_price_cents:
+        price("Sponsor spot (every page)", settings.sponsor_week_price_cents, recent["per_week"])
+    if settings.section_sponsor_price_cents:
+        for s in sorted(found, key=lambda s: -recent_sections.get(s.slug, 0)):
+            week = round(recent_sections.get(s.slug, 0) * 7 / recent["days"])
+            price(f"{s.name} sponsor", settings.section_sponsor_price_cents, week)
     response = render(
         request,
         "stats.html",
@@ -2288,6 +2330,11 @@ def visitor_stats(request: Request, days: int = Query(7, ge=1, le=365)):
         referrers=data["referrers"][:20],
         visits=sum(row.visits for row in data["referrers"]),
         sponsor_clicks=data["sponsor_clicks"],
+        months=month_rows,
+        shown_months=shown,
+        section_rows=section_rows,
+        prices=prices,
+        media_kit=bool(advertising()),
         topics=sorted(topics, key=lambda t: (-t["clicks"], -t["views"])),
         news_health=news_health,
         feed_health=feed_health,
@@ -4563,6 +4610,7 @@ def _media_kit(request: Request, today: date) -> bytes:
         per_week=numbers["per_week"],
         sponsor_clicks=numbers["sponsor_clicks"],
         newsletter_clicks=numbers["newsletter_clicks"],
+        growth=numbers["growth"],
         stories=stories or 0,
         sources=sum(1 for s in config.sources if s.collected),
         sections=[(s.name, views.get(s.slug, 0)) for s in by_views],
