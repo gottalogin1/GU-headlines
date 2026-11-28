@@ -123,6 +123,15 @@ class Settings:
     report_time: time = time(8, 0)
     daily_report: bool = True
     weekly_report_day: int | None = 0
+    # The weekly health check in Discord (see checkup.py), at report_time on
+    # this day (0 is Monday; None: no health check): pages that are broken or
+    # slow, news sites whose photos stopped, and how often the site answered.
+    health_check_day: int | None = 0
+    # A page that takes longer than this to make, in seconds, is slow.
+    slow_page_seconds: float = 1.0
+    # Where the worker reaches the website for the health check. In Docker,
+    # the website is the "web" service; without Docker, set WEBSITE_ADDRESS.
+    website_address: str = "http://web:8000"
     # How often the worker reads the weather (NWS alerts, forecast and airport
     # reading; the JTWC storm list), in minutes. 0 turns the warning banner
     # and the weather box off.
@@ -380,6 +389,12 @@ def _day(value: str | None, default: int | None) -> int | None:
     return default
 
 
+def _slow_page_seconds(value: str | None) -> float:
+    """SLOW_PAGE_SECONDS: from 0.1 to 60 seconds; 1 when missing or not a number."""
+    seconds = _float(value, 1.0)
+    return min(60.0, max(0.1, seconds)) if seconds == seconds else 1.0
+
+
 def _clock(value: str | None, default: time) -> time:
     """NEWSLETTER_TIME "10:00", "14:30", "9" or "2:30 pm" -> a time of day;
     the default when the setting is missing or not a time."""
@@ -487,6 +502,10 @@ def load_settings() -> Settings:
         report_time=_clock(env.get("REPORT_TIME"), defaults.report_time),
         daily_report=_bool(env.get("DAILY_REPORT"), defaults.daily_report),
         weekly_report_day=_day(env.get("WEEKLY_REPORT_DAY"), defaults.weekly_report_day),
+        health_check_day=_day(env.get("HEALTH_CHECK_DAY"), defaults.health_check_day),
+        slow_page_seconds=_slow_page_seconds(env.get("SLOW_PAGE_SECONDS")),
+        website_address=(env.get("WEBSITE_ADDRESS") or "").strip().rstrip("/")
+        or defaults.website_address,
         weather_interval_minutes=max(5, weather_minutes) if weather_minutes > 0 else 0,
         outages_interval_minutes=max(5, outage_minutes) if outage_minutes > 0 else 0,
         gas_price_days=max(0, min(365, _int(env.get("GAS_PRICE_DAYS"), defaults.gas_price_days))),

@@ -53,6 +53,23 @@ def visitor_counts(monkeypatch):
             counter.clear()
 
 
+def visitor_views(views: dict) -> dict:
+    """Page views and clicks only: without the counts that the website keeps
+    for the weekly health check (web/stats.py Counts.served), whose names
+    start with "served:", "server-error:" or "slow:". `views` is {path: n}
+    or {(day, path): n}."""
+    from guheadlines.models import PAGE_ERRORS, PAGES_SERVED, SLOW_PAGES
+
+    def path(key) -> str:
+        return key[1] if isinstance(key, tuple) else key
+
+    return {
+        key: n
+        for key, n in views.items()
+        if not path(key).startswith((PAGES_SERVED, PAGE_ERRORS, SLOW_PAGES))
+    }
+
+
 def fixture_bytes(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
 

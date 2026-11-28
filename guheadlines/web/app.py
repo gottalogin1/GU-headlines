@@ -31,6 +31,7 @@ from fastapi.responses import (
     Response,
     StreamingResponse,
 )
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
@@ -289,6 +290,62 @@ class LimitRequestSizeMiddleware:
         await self.app(scope, receive, send)
 
 
+# Pages whose time is not counted for the weekly health check: /healthz (the
+# worker asks it every 5 minutes).
+NOT_WATCHED = {"/healthz"}
+
+
+def waits_elsewhere(endpoint: Callable) -> Callable:
+    """Marks a page that waits for another site (PayPal) before it answers:
+    it is never counted as slow, since that time is not the site's own."""
+    endpoint.waits_elsewhere = True  # type: ignore[attr-defined]
+    return endpoint
+
+
+class PageWatchMiddleware:
+    """Counts, for the weekly health check (checkup.py), how many times each
+    kind of page ("/events/{event_id}") was asked for, how many of those got
+    a server error, and how many pages took longer than SLOW_PAGE_SECONDS
+    until they began to answer. Files (/static, /media), addresses that are
+    no page, /healthz and the health check's own visits are left out."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = time.perf_counter()
+        # An error that reaches this point becomes a 500 page (Starlette).
+        answer = {"status": 500, "seconds": None}
+
+        async def watch(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                answer["status"] = message["status"]
+                answer["seconds"] = time.perf_counter() - started
+            await send(message)
+
+        try:
+            await self.app(scope, receive, watch)
+        finally:
+            route = scope.get("route")
+            agent = dict(scope["headers"]).get(b"user-agent", b"")
+            if (
+                isinstance(route, APIRoute)
+                and route.path not in NOT_WATCHED
+                and not agent.startswith(stats.CHECKUP_AGENT.encode())
+            ):
+                seconds = answer["seconds"] or time.perf_counter() - started
+                stats.counts.served(
+                    route.path,
+                    error=answer["status"] >= 500,
+                    slow=scope["method"] == "GET"
+                    and seconds > settings.slow_page_seconds
+                    and not getattr(route.endpoint, "waits_elsewhere", False),
+                )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -299,6 +356,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.site_name, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 )
+# The first added runs last, right around each page, so the time it notes is
+# the page's own.
+app.add_middleware(PageWatchMiddleware)
 app.add_middleware(RejectNulMiddleware)
 app.add_middleware(LimitRequestSizeMiddleware)
 # Pages are mostly text and shrink to a fraction of their size; photos (and
@@ -3154,6 +3214,7 @@ def listing_page(
 
 
 @app.get("/listing/{listing_id}/{key}/pay")
+@waits_elsewhere
 def listing_pay(request: Request, listing_id: int, key: str):
     """Make a PayPal order for the listing, and send the poster to PayPal to
     pay it. (A link, not a form: see paypal.py.)"""
@@ -3232,6 +3293,7 @@ def listing_paid(
 
 
 @app.get("/listing/{listing_id}/{key}/renew")
+@waits_elsewhere
 def listing_renew(request: Request, listing_id: int, key: str):
     """Make a PayPal order that keeps a live listing on the site for more
     days, and send the poster to PayPal to pay it (see renewals.py)."""
@@ -3261,6 +3323,7 @@ def listing_renew(request: Request, listing_id: int, key: str):
 
 
 @app.get("/listing/{listing_id}/{key}/renewed")
+@waits_elsewhere
 def listing_renewed(
     request: Request, listing_id: int, key: str, token: str = Query("", max_length=64)
 ):
@@ -3911,6 +3974,7 @@ def guide_pack_page(request: Request, slug: str, result: str = Query("", max_len
 
 
 @app.get("/guides/buy/{slug}")
+@waits_elsewhere
 def guide_pack_buy(request: Request, slug: str):
     """Make a PayPal order for a pack, and send the buyer to PayPal to pay
     it. (A link, not a form: see paypal.py.) Nothing is stored until the
@@ -3972,6 +4036,7 @@ def _after_guide_sale(request: Request, guide_pass: GuidePass, pack: GuidePack) 
 
 
 @app.get("/guides/buy/{slug}/paid")
+@waits_elsewhere
 def guide_pack_paid(request: Request, slug: str, token: str = Query("", max_length=64)):
     """Where PayPal sends the buyer back after approving the payment, with
     ?token=<the order's ID>: take the money, make the pass, and open the
@@ -4799,6 +4864,7 @@ def _is_paypal_page(url: str) -> bool:
 
 
 @app.get("/advertise/booking/{code}/pay")
+@waits_elsewhere
 def ad_booking_pay(request: Request, code: str):
     """The PayPal button: make a PayPal order for the booking and send the
     business to PayPal to pay. A plain link, not a form, because the security
@@ -4851,6 +4917,7 @@ def _booking_alert(booking: AdBooking, request: Request) -> alerts.Alert:
 
 
 @app.get("/advertise/booking/{code}/paid")
+@waits_elsewhere
 def ad_booking_paid(request: Request, code: str, token: str = Query("", max_length=100)):
     """Where PayPal sends the business back after it approves the payment
     (?token=<the order>): take the money, and the booking waits for the owner."""
@@ -5211,6 +5278,7 @@ def bid_alerts_review(
 
 
 @app.get("/bids/alerts/pay")
+@waits_elsewhere
 def bid_alerts_pay(request: Request, t: str = Query("", max_length=64)):
     """Open PayPal's page for the monthly payment. A plain link leads here
     (not a form): Chrome applies a page's form-action rule, which allows only
@@ -5280,6 +5348,7 @@ def _manage_results() -> dict[str, tuple[bool, str]]:
 
 
 @app.get("/bids/alerts/manage", response_class=HTMLResponse)
+@waits_elsewhere
 def bid_alerts_manage(
     request: Request, t: str = Query("", max_length=64), result: str = Query("", max_length=10)
 ):
