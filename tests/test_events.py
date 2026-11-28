@@ -1050,6 +1050,20 @@ def test_event_page(web):
         "name": "Guam Legislature",
         "url": "https://guamlegislature.gov/calendar/",
     }
+    # The fields Search Console asks for, from the event's own details.
+    assert event["description"] == "Bills on the agenda <script>x</script>."
+    assert event["image"] == [f"{url}.png"]
+    assert event["performer"] == event["organizer"]
+    # Legislature sessions are free (free_admission in events.yaml): $0,
+    # which the page shows too.
+    assert event["offers"] == {
+        "@type": "Offer",
+        "price": 0,
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock",
+        "url": url,
+    }
+    assert "<dt>Admission</dt><dd>Free</dd>" in html
     (crumbs,) = [d for d in _structured(html) if d["@type"] == "BreadcrumbList"]
     assert [i["name"] for i in crumbs["itemListElement"]] == ["Home", "Events", "Regular Session"]
     # Add to a calendar app: Google Calendar, or a file for the others.
@@ -1076,6 +1090,139 @@ def test_event_page_without_a_place_or_that_is_over(web):
         assert web.get(f"/events/{ids[title]}.ics").status_code == 404
     for path in ("/events/0", "/events/abc", "/events/99999999999999999999", "/events/1x"):
         assert web.get(path).status_code == 404, path
+
+
+def _add_event(calendar_slug: str, **fields) -> int:
+    from guheadlines.db import session_scope
+    from guheadlines.models import Event, EventCalendar
+
+    now = datetime.now(timezone.utc)
+    with session_scope() as session:
+        calendar = session.scalar(select(EventCalendar).where(EventCalendar.slug == calendar_slug))
+        event = Event(calendar_id=calendar.id, first_seen_at=now, last_seen_at=now, **fields)
+        session.add(event)
+        session.flush()
+        return event.id
+
+
+def test_event_page_fills_what_the_calendar_leaves_out(web):
+    tomorrow = datetime.now(GUAM_TZ).date() + timedelta(days=1)
+    event_id = _add_event(
+        "gcc",
+        uid="page:9",
+        title="Open House",
+        starts_at=datetime.combine(tomorrow, time(9), tzinfo=GUAM_TZ),
+        location="GCC Multipurpose Auditorium, Mangilao",
+    )
+    html = web.get(f"/events/{event_id}").text
+    (event,) = [d for d in _structured(html) if d["@type"] == "Event"]
+    # No end time: the start, not a guessed length.
+    assert event["startDate"] == event["endDate"] == f"{tomorrow.isoformat()}T09:00:00+10:00"
+    # No description: what the page says about it.
+    assert event["description"] == (
+        f"Open House: {tomorrow:%a}, {tomorrow:%b} {tomorrow.day}, 9:00 AM, at GCC"
+        " Multipurpose Auditorium, Mangilao. Held by Guam Community College."
+    )
+    assert event["performer"] == {"@type": "Organization", "name": "Guam Community College"}
+    assert event["image"] == [f"http://testserver/events/{event_id}.png"]
+    # Its price is not known: no offers rather than a made-up price.
+    assert "offers" not in event and "Admission" not in html
+
+
+def test_event_page_free_when_its_description_says_so(web):
+    start = datetime.now(GUAM_TZ) + timedelta(days=2)
+    common = {"starts_at": start, "location": "Guam Community College, Mangilao"}
+    free = _add_event(
+        "gcc", uid="page:10", title="Job Fair", description="Free and open to the public.", **common
+    )
+    priced = _add_event(
+        "gcc",
+        uid="page:11",
+        title="Gala",
+        description="Free admission for students, $25 for guests.",
+        **common,
+    )
+    (event,) = [d for d in _structured(web.get(f"/events/{free}").text) if d["@type"] == "Event"]
+    assert event["offers"]["price"] == 0
+    html = web.get(f"/events/{priced}").text
+    (event,) = [d for d in _structured(html) if d["@type"] == "Event"]
+    assert "offers" not in event and "Admission" not in html
+
+
+def test_free_admission():
+    from types import SimpleNamespace
+
+    from guheadlines.web.seo import free_admission
+
+    def event(title, description=None):
+        return SimpleNamespace(title=title, description=description)
+
+    for text in (
+        "Free and open to the public",
+        "Admission is free.",
+        "A free event for families",
+        "FREE ADMISSION",
+        "There is no entry fee.",
+        "The talk is free to attend.",
+    ):
+        assert free_admission(event("Talk", text)), text
+    assert free_admission(event("Free Admission Day at the museum"))
+    for text in (
+        None,
+        "Open to the public.",
+        "Free parking is available.",
+        "Lunch is free of charge.",
+        "Free admission for members, $10 for guests.",
+        "Tickets: 15 dollars. Free event shirt.",
+    ):
+        assert not free_admission(event("Talk", text)), text
+    # A calendar whose events are all free (public meetings), unless one gives a price.
+    assert free_admission(event("Public Hearing"), calendar_free=True)
+    assert not free_admission(event("Fundraiser", "Plates $10"), calendar_free=True)
+
+
+def test_event_picture(web):
+    import io
+
+    from PIL import Image
+
+    ids = _event_ids()
+    response = web.get(f"/events/{ids['Regular Session']}.png")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "public, max-age=3600"
+    # Google may index it: an image for the event result.
+    assert "x-robots-tag" not in response.headers
+    assert Image.open(io.BytesIO(response.content)).size == (1920, 1080)
+    for title in ("Last Week's Fair", "Delisted Event"):
+        assert web.get(f"/events/{ids[title]}.png").status_code == 404
+
+
+def test_event_card_text_stays_on_the_card():
+    from guheadlines.web import event_image
+
+    font = event_image._font("Bold", 110)
+    width = event_image.WIDTH - event_image.LEFT - event_image.RIGHT
+    long_word = "Supercalifragilisticexpialidocious" * 3
+    lines = event_image._lines(f"{long_word} and a few more words", font, width, 3)
+    assert lines[0].endswith("…") and all(font.getlength(line) <= width for line in lines)
+    lines = event_image._lines("word " * 80, font, width, 3)
+    assert len(lines) == 3 and lines[-1].endswith("…")
+    assert event_image._lines("Regular Session", font, width, 3) == ["Regular Session"]
+    # A long title gets a smaller size, and the smallest is cut short.
+    hearing = (
+        "Public Hearing on Bill No. 245-38 (COR), an act relative to the Mañagaha preservation and"
+    )
+    font, lines = event_image._title(hearing, width)
+    assert event_image.TITLE_SIZES[-1] < font.size < event_image.TITLE_SIZES[0]
+    assert not lines[-1].endswith("…")
+    font, lines = event_image._title(hearing * 3, width)
+    assert font.size == event_image.TITLE_SIZES[-1] and lines[-1].endswith("…")
+    # Guam's letters are in the font.
+    png = event_image.event_card(
+        "Hagåtña Fiesta", "Sat, Dec 5, all day", "Hagåtña", "Mañagaha", "red", "Guam Headlines"
+    )
+    assert png.startswith(b"\x89PNG")
 
 
 def test_event_file(web):

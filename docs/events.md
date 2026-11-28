@@ -94,6 +94,32 @@ a place, so an event whose calendar gives no place, or only an online one
 itself which events it shows, and it can take a few weeks after the pages
 are found.
 
+Google also asks for an end time, a description, a picture, an organizer, a
+performer and a price ("offers") with each event. Search Console warns
+("Missing field") about each one it doesn't get, but it still lists the
+event. The site fills in each one only with what it knows for sure:
+
+- **End time:** the calendar's. When a calendar gives only a start time,
+  the end is given as the start time, rather than a guessed length.
+- **Description:** the calendar's. When it has none, a sentence made of the
+  event's name, time, place and organizer, all of which the page shows.
+- **Picture:** a card the site draws for each event (`/events/<number>.png`,
+  1920 × 1080): the event's name, when and where it is and who holds it, with
+  the calendar's color down its side, since calendars give no photos.
+- **Organizer and performer:** who holds the event (the calendar's
+  `organizer`, or the calendar itself). No calendar names performers, so the
+  performer is the group that holds the event.
+- **Price:** only for an event known to be free: its calendar has
+  `free_admission: true` (the Legislature and GovGuam public meetings), or
+  its name or description says so ("free and open to the public", "admission
+  is free") without giving a price. Its page then also says
+  **Admission: Free**. Other events get no price at all rather than a
+  made-up one, so Search Console keeps warning "Missing field offers" for
+  them; that warning doesn't stop Google from listing them.
+
+To see what Google reads on one event's page, paste its address into
+Google's [Rich Results Test](https://search.google.com/test/rich-results).
+
 ## Adding the events to a calendar app
 
 Under the month calendar, **Get these events in your calendar** lets a
@@ -258,7 +284,8 @@ out events whose title or organizer matches one of these patterns),
 `main_events` and `color` (`green`, `red`, `blue` or `purple`; see
 [The month calendar](#the-month-calendar)), `news_feed: true` (see
 [In the home page's news feed](#in-the-home-page-news-feed)),
-`request_delay`, `ignore_robots`, `enabled: false` to pause a calendar, and
+`free_admission: true` when every event on it is free to attend (see
+[Each event's page](#each-events-page)), `request_delay`, `ignore_robots`, `enabled: false` to pause a calendar, and
 `cannot_scrape: <reason>` to keep a calendar in the file without reading it
 (it isn't shown on the site). Try a calendar first, without saving anything,
 with:

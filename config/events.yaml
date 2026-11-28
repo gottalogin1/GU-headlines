@@ -46,6 +46,14 @@
 #                   before it (or as soon as it is found, if that's later),
 #                   linked to its page on this site, and leaves the feed when
 #                   it is over. Only its main events (see main_events).
+#   free_admission  true when every event on the calendar costs nothing to
+#                   attend, like the government's public meetings, which the
+#                   law keeps open to anyone. Each event's page then says
+#                   "Admission: Free", and Google is told the price is $0.
+#                   Leave it out when you are not sure. (An event whose own
+#                   description says it is free, like "free and open to the
+#                   public", is marked free anyway, unless it also gives a
+#                   price.)
 #   request_delay   seconds between requests to this site
 #   ignore_robots   read this site even where its robots.txt disallows it
 #   cannot_scrape   why this calendar can't be collected; it is never read and
@@ -86,6 +94,8 @@ calendars:
     exclude:
       - "presentation (notice )?(for|of) (legislative )?certificate"
     color: red
+    # Sessions and hearings are public meetings, open to anyone at no cost.
+    free_admission: true
     # guamlegislature.gov's robots.txt asks for 20 seconds between requests.
     request_delay: 20
 
@@ -101,6 +111,8 @@ calendars:
       - "call to session"
     # Routine board meetings: listed below the month calendar, not on it.
     main_events: none
+    # Public meetings, open to anyone at no cost.
+    free_admission: true
 
   - slug: gcc
     name: Guam Community College

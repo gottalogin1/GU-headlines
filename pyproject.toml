@@ -46,6 +46,7 @@ guheadlines = [
     "web/templates/*.html",
     "web/templates/*.xml",
     "web/static/*",
+    "web/fonts/*",
     "guide_starters/*.md",
 ]
 
